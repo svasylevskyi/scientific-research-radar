@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import EmailStr, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     refresh_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 
+    super_admin_email: EmailStr = "admin@example.com"
+    super_admin_full_name: str = Field(default="System Administrator", min_length=2, max_length=120)
+    super_admin_password: str = Field(default="change-me-before-production", min_length=12, max_length=128)
+
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
         if self.refresh_cookie_samesite == "none" and not self.refresh_cookie_secure:
@@ -38,6 +42,8 @@ class Settings(BaseSettings):
                 raise ValueError("JWT_SECRET must be a long random value in production")
             if not self.refresh_cookie_secure:
                 raise ValueError("REFRESH_COOKIE_SECURE must be true in production")
+            if len(self.super_admin_password) < 16 or "change-me" in self.super_admin_password.lower():
+                raise ValueError("SUPER_ADMIN_PASSWORD must be a strong, non-default value in production")
         return self
 
 

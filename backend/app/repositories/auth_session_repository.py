@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.models.auth_session import AuthSession
@@ -38,3 +39,9 @@ class AuthSessionRepository:
         if auth_session.revoked_at is None:
             auth_session.revoked_at = datetime.now(UTC)
 
+    def revoke_all_for_user(self, user_id: UUID) -> None:
+        self.db.execute(
+            update(AuthSession)
+            .where(AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None))
+            .values(revoked_at=datetime.now(UTC))
+        )
