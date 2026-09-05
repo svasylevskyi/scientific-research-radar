@@ -62,3 +62,6 @@ class Digest(Base):
     )
 
     owner: Mapped["User"] = relationship(back_populates="digests")  # noqa: F821
+    runs: Mapped[list["DigestRun"]] = relationship(  # noqa: F821
+        back_populates="digest", cascade="all, delete-orphan", passive_deletes=True
+    )

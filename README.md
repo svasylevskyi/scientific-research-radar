@@ -1,6 +1,6 @@
 # Scientific Research Radar
 
-A production-shaped foundation for the Scientific Research Radar: account authentication, role-based access, persisted research-digest configuration, and responsive user/admin management interfaces.
+A production-shaped foundation for the Scientific Research Radar: account authentication, role-based access, persisted research-digest configuration, structured radar-run orchestration, and responsive user/admin management interfaces.
 
 ## Architecture
 
@@ -34,6 +34,9 @@ The API, service, repository, and persistence layers are separate. SQLite is sel
 - A self-service profile page for updating name, email address, and password.
 - Owner-scoped digest creation, listing, editing, and confirmed deletion.
 - An admin digest panel with owner filtering and the same management operations.
+- A one-request radar pipeline that records search, relevance, paper-summary, trend, and briefing data as separate structured stages.
+- Owner-scoped digest run history with responsive briefing, trend, and paper-summary containers.
+- A deterministic dry-run client enabled by default, so the complete flow can be tested without making an OpenAI request.
 
 ## Run locally
 
@@ -56,6 +59,15 @@ uvicorn app.main:app --reload --port 8000
 API documentation is available at `http://localhost:8000/docs`.
 
 On startup, the API creates the configured super-admin if it does not exist. `SUPER_ADMIN_PASSWORD` supplies its initial password; subsequent password changes can be made from the profile page. The defaults in `.env.example` are for local development only. Set `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_FULL_NAME`, and a unique `SUPER_ADMIN_PASSWORD` before signing in. Production mode rejects the placeholder password.
+
+Radar runs use deterministic sample output by default. Keep `RADAR_DRY_RUN=true` while reviewing the workflow. When live execution is ready, provide `OPENAI_API_KEY`, choose `OPENAI_RADAR_MODEL`, and set `RADAR_DRY_RUN=false`. A live run uses one OpenAI Responses API request with web search and a strict structured-output contract; the request is not made from tests.
+
+The editable LLM prompt templates are deliberately kept outside the Python source:
+
+- `backend/app/radar/prompts/system.md`
+- `backend/app/radar/prompts/radar_run.md`
+
+Completed run summaries are retained in the database and a compact selection of recent runs is included as historical context in subsequent prompts. Historical output is labelled as context, not as evidence for new results.
 
 ### 2. Frontend
 
@@ -94,6 +106,9 @@ npm run build
 | `GET` | `/api/v1/digests/{id}` | Return one digest owned by the authenticated user |
 | `PATCH` | `/api/v1/digests/{id}` | Update a digest owned by the authenticated user |
 | `DELETE` | `/api/v1/digests/{id}` | Delete a digest owned by the authenticated user |
+| `POST` | `/api/v1/digests/{id}/runs` | Run the authenticated user's digest now |
+| `GET` | `/api/v1/digests/{id}/runs` | List stored runs for the authenticated user's digest |
+| `GET` | `/api/v1/digests/{id}/runs/{run_id}` | Return all structured stages for one stored run |
 | `GET` | `/api/v1/admin/users` | List/search users (admin only) |
 | `GET` | `/api/v1/admin/users/{id}` | Return user details (admin only) |
 | `PATCH` | `/api/v1/admin/users/{id}` | Update user details/status (admin only) |
@@ -110,6 +125,8 @@ Register and login accept JSON, which keeps the API contract natural for a React
 The admin panel is available at `/admin/users`. The super-admin cannot be deactivated, demoted, or deleted. Administrators also cannot deactivate, demote, or delete their own account; these rules are enforced by the API, with the super-admin active/admin invariant additionally protected by a database constraint.
 
 The digest administration panel is available at `/admin/digests`. Regular administrators cannot list or manage digests owned by the protected super-admin; the super-admin can manage every digest. Deleting a user also deletes their digests through a database foreign-key cascade.
+
+The digest details page can start an immediate radar run. Scheduling is intentionally disabled until its backend workflow is introduced. The history page is shown only after a run has been attempted; its three tabs are layout previews backed by the new persisted run structure and will receive final presentation templates in a later iteration.
 
 The super-admin can manage every account, including editing their own account details. The super-admin account is omitted from regular admins' user lists and cannot be opened or modified by them. Regular users have no access to administration endpoints.
 

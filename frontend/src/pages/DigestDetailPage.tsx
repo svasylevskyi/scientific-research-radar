@@ -1,5 +1,8 @@
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
+import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
+import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import {
   Alert,
   Box,
@@ -19,7 +22,7 @@ import { useEffect, useState } from "react";
 import { Link as RouterLink, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/client";
-import { adminDigestsApi, digestsApi } from "../api/digests";
+import { adminDigestsApi, digestRunsApi, digestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
 import { DigestForm, digestToFormValues } from "../components/DigestForm";
 import type { AdminDigest, Digest, DigestInput } from "../types/digest";
@@ -41,6 +44,8 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const [digest, setDigest] = useState<Digest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [hasRuns, setHasRuns] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(routeState?.success ?? null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -49,10 +54,15 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
     let active = true;
     setIsLoading(true);
     setError(null);
-    const request = admin ? adminDigestsApi.get(digestId) : digestsApi.get(digestId);
-    request
-      .then((result) => {
-        if (active) setDigest(result);
+    const digestRequest = admin ? adminDigestsApi.get(digestId) : digestsApi.get(digestId);
+    const historyRequest = admin
+      ? Promise.resolve(null)
+      : digestRunsApi.list(digestId, { offset: 0, limit: 1 });
+    Promise.all([digestRequest, historyRequest])
+      .then(([result, history]) => {
+        if (!active) return;
+        setDigest(result);
+        setHasRuns((history?.total ?? 0) > 0);
       })
       .catch((caught) => {
         if (active) {
@@ -66,6 +76,24 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
       active = false;
     };
   }, [admin, digestId]);
+
+  async function runNow() {
+    setIsRunning(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const run = await digestRunsApi.runNow(digestId);
+      setHasRuns(true);
+      navigate(`/digests/${digestId}/history?run_id=${run.id}`, {
+        state: { success: "Radar run completed." },
+      });
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 502) setHasRuns(true);
+      setError(caught instanceof ApiError ? caught.message : "Could not run the radar.");
+    } finally {
+      setIsRunning(false);
+    }
+  }
 
   async function updateDigest(input: DigestInput) {
     setIsSaving(true);
@@ -146,11 +174,54 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
             {error && <Alert severity="error" sx={{ mb: 2.5 }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 2.5 }}>{success}</Alert>}
 
+            {!admin && (
+              <Paper
+                variant="outlined"
+                sx={{ p: { xs: 2.25, sm: 3 }, mb: 3, borderRadius: 3 }}
+              >
+                <Typography variant="h6" sx={{ mb: 0.75 }}>Radar controls</Typography>
+                <Typography color="text.secondary" sx={{ mb: 2 }}>
+                  Start an immediate research run or review results from previous runs.
+                </Typography>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                  <Button
+                    variant="contained"
+                    startIcon={
+                      isRunning
+                        ? <CircularProgress size={18} color="inherit" />
+                        : <PlayArrowRoundedIcon />
+                    }
+                    disabled={isRunning || isSaving}
+                    onClick={runNow}
+                  >
+                    {isRunning ? "Running radar…" : "Run now"}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<ScheduleRoundedIcon />}
+                    disabled
+                  >
+                    Schedule runs
+                  </Button>
+                  {hasRuns && (
+                    <Button
+                      component={RouterLink}
+                      to={`/digests/${digestId}/history`}
+                      color="inherit"
+                      startIcon={<HistoryRoundedIcon />}
+                    >
+                      View history
+                    </Button>
+                  )}
+                </Stack>
+              </Paper>
+            )}
+
             <DigestForm
               key={digest.updated_at}
               initialValues={digestToFormValues(digest)}
               submitLabel="Save changes"
-              isSubmitting={isSaving}
+              isSubmitting={isSaving || isRunning}
               onSubmit={updateDigest}
             />
 
@@ -165,7 +236,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                 color="error"
                 variant="outlined"
                 startIcon={<DeleteOutlineRoundedIcon />}
-                disabled={isSaving}
+                disabled={isSaving || isRunning}
                 onClick={() => setConfirmDelete(true)}
               >
                 Delete digest

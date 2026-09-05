@@ -3,6 +3,8 @@ import type {
   Digest,
   DigestInput,
   DigestListResponse,
+  DigestRunDetail,
+  DigestRunListResponse,
   DigestUpdateInput,
 } from "../types/digest";
 import { apiRequest } from "./client";
@@ -35,6 +37,27 @@ export const digestsApi = {
 
   delete(digestId: string): Promise<void> {
     return apiRequest<void>(`/digests/${digestId}`, { method: "DELETE" });
+  },
+};
+
+export const digestRunsApi = {
+  runNow(digestId: string): Promise<DigestRunDetail> {
+    return apiRequest<DigestRunDetail>(`/digests/${digestId}/runs`, { method: "POST" });
+  },
+
+  list(
+    digestId: string,
+    params: { offset: number; limit: number },
+  ): Promise<DigestRunListResponse> {
+    const search = new URLSearchParams({
+      offset: String(params.offset),
+      limit: String(params.limit),
+    });
+    return apiRequest<DigestRunListResponse>(`/digests/${digestId}/runs?${search}`);
+  },
+
+  get(digestId: string, runId: string): Promise<DigestRunDetail> {
+    return apiRequest<DigestRunDetail>(`/digests/${digestId}/runs/${runId}`);
   },
 };
 

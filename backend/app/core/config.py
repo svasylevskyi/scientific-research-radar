@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import EmailStr, Field, model_validator
+from pydantic import EmailStr, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     refresh_cookie_secure: bool = False
     refresh_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+
+    openai_api_key: SecretStr | None = None
+    openai_radar_model: str = Field(default="gpt-6-astra", min_length=1, max_length=100)
+    radar_dry_run: bool = True
+    radar_history_runs: int = Field(default=3, ge=0, le=20)
 
     super_admin_email: EmailStr = "admin@example.com"
     super_admin_full_name: str = Field(default="System Administrator", min_length=2, max_length=120)
