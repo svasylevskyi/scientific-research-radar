@@ -31,6 +31,7 @@ The API, service, repository, and persistence layers are separate. SQLite is sel
 - `user` and `admin` roles, checked against the database on every protected request.
 - An automatically bootstrapped, always-active super-admin account.
 - An admin-only, responsive user management panel with account editing, role changes, and confirmed deletion.
+- A self-service profile page for updating name, email address, and password.
 
 ## Run locally
 
@@ -52,7 +53,7 @@ uvicorn app.main:app --reload --port 8000
 
 API documentation is available at `http://localhost:8000/docs`.
 
-On startup, the API creates the configured super-admin if it does not exist and keeps its password synchronized with `SUPER_ADMIN_PASSWORD`. The defaults in `.env.example` are for local development only. Set `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_FULL_NAME`, and a unique `SUPER_ADMIN_PASSWORD` before signing in. Production mode rejects the placeholder password.
+On startup, the API creates the configured super-admin if it does not exist. `SUPER_ADMIN_PASSWORD` supplies its initial password; subsequent password changes can be made from the profile page. The defaults in `.env.example` are for local development only. Set `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_FULL_NAME`, and a unique `SUPER_ADMIN_PASSWORD` before signing in. Production mode rejects the placeholder password.
 
 ### 2. Frontend
 
@@ -84,6 +85,8 @@ npm run build
 | `POST` | `/api/v1/auth/refresh` | Rotate the refresh token and return a new access token |
 | `POST` | `/api/v1/auth/logout` | Revoke the current refresh session |
 | `GET` | `/api/v1/users/me` | Return the authenticated user |
+| `PATCH` | `/api/v1/users/me` | Update the authenticated user's name or email |
+| `PUT` | `/api/v1/users/me/password` | Verify and change the authenticated user's password |
 | `GET` | `/api/v1/admin/users` | List/search users (admin only) |
 | `GET` | `/api/v1/admin/users/{id}` | Return user details (admin only) |
 | `PATCH` | `/api/v1/admin/users/{id}` | Update user details/status (admin only) |
@@ -94,6 +97,8 @@ npm run build
 Register and login accept JSON, which keeps the API contract natural for a React client. Access tokens are sent as `Authorization: Bearer <token>`. Refresh tokens are never exposed to frontend JavaScript.
 
 The admin panel is available at `/admin/users`. The super-admin cannot be deactivated, demoted, or deleted. Administrators also cannot deactivate, demote, or delete their own account; these rules are enforced by the API, with the super-admin active/admin invariant additionally protected by a database constraint.
+
+The super-admin can manage every account, including editing their own account details. The super-admin account is omitted from regular admins' user lists and cannot be opened or modified by them. Regular users have no access to administration endpoints.
 
 ## Before production
 

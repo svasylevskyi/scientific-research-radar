@@ -19,8 +19,17 @@ class UserRepository:
     def get_super_admin(self) -> User | None:
         return self.db.scalar(select(User).where(User.is_super_admin.is_(True)))
 
-    def list(self, *, offset: int, limit: int, query: str | None = None) -> list[User]:
+    def list(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        query: str | None = None,
+        include_super_admin: bool = True,
+    ) -> list[User]:
         statement = select(User).order_by(User.created_at.desc(), User.email)
+        if not include_super_admin:
+            statement = statement.where(User.is_super_admin.is_(False))
         if query:
             pattern = f"%{query.lower()}%"
             statement = statement.where(
@@ -28,8 +37,10 @@ class UserRepository:
             )
         return list(self.db.scalars(statement.offset(offset).limit(limit)))
 
-    def count(self, *, query: str | None = None) -> int:
+    def count(self, *, query: str | None = None, include_super_admin: bool = True) -> int:
         statement = select(func.count()).select_from(User)
+        if not include_super_admin:
+            statement = statement.where(User.is_super_admin.is_(False))
         if query:
             pattern = f"%{query.lower()}%"
             statement = statement.where(

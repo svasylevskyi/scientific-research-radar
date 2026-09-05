@@ -31,7 +31,12 @@ def list_users(
     limit: int = Query(default=25, ge=1, le=100),
     q: str | None = Query(default=None, max_length=120),
 ) -> UserListResponse:
-    users, total = service.list_users(offset=offset, limit=limit, query=q)
+    users, total = service.list_users(
+        actor=current_admin,
+        offset=offset,
+        limit=limit,
+        query=q,
+    )
     return UserListResponse(items=users, total=total, offset=offset, limit=limit)
 
 
@@ -41,7 +46,7 @@ def get_user(
     current_admin: CurrentAdmin,
     service: AdminUserServiceDep,
 ) -> UserRead:
-    return _run(lambda: service.get_user(user_id))
+    return _run(lambda: service.get_user(actor=current_admin, user_id=user_id))
 
 
 @router.patch("/{user_id}", response_model=UserRead)
@@ -87,4 +92,3 @@ def _run(operation):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except AdminActionForbiddenError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-

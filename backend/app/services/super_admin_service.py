@@ -2,7 +2,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.core.security import hash_password, verify_password
+from app.core.security import hash_password
 from app.models.user import User, UserRole
 from app.repositories.user_repository import UserRepository
 
@@ -45,12 +45,11 @@ def _ensure_super_admin(
             )
         else:
             super_admin = configured_user
+            super_admin.password_hash = hash_password(settings.super_admin_password)
 
     super_admin.role = UserRole.ADMIN
     super_admin.is_active = True
     super_admin.is_super_admin = True
-    if not verify_password(settings.super_admin_password, super_admin.password_hash):
-        super_admin.password_hash = hash_password(settings.super_admin_password)
     db.commit()
     db.refresh(super_admin)
     return super_admin

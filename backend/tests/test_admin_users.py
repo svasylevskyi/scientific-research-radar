@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
+from app.core.security import hash_password, verify_password
 from app.models.user import User
 from app.services.super_admin_service import ensure_super_admin
 
@@ -11,6 +12,7 @@ USER_PAYLOAD = {
     "email": "member@example.com",
     "full_name": "Research Member",
     "password": "correct-horse-battery-staple",
+    "password_confirmation": "correct-horse-battery-staple",
 }
 
 
@@ -55,6 +57,8 @@ def test_super_admin_bootstrap_is_idempotent_and_active(
     settings = get_settings()
     with db_session_factory() as db:
         first = ensure_super_admin(db, settings)
+        first.password_hash = hash_password("profile-managed-password")
+        db.commit()
         second = ensure_super_admin(db, settings)
         count = db.scalar(select(func.count()).select_from(User))
 
@@ -63,6 +67,7 @@ def test_super_admin_bootstrap_is_idempotent_and_active(
     assert second.role == "admin"
     assert second.is_active is True
     assert second.is_super_admin is True
+    assert verify_password("profile-managed-password", second.password_hash)
 
 
 def test_admin_can_list_view_update_promote_demote_and_delete_user(
@@ -127,6 +132,16 @@ def test_super_admin_cannot_be_deactivated_demoted_or_deleted(
     admin_access = _authorization(admin_login)
     admin_id = admin_login.json()["user"]["id"]
 
+    listed = client.get("/api/v1/admin/users", headers=admin_access)
+    assert listed.status_code == 200
+    assert any(user["id"] == admin_id for user in listed.json()["items"])
+
+    update_details = client.patch(
+        f"/api/v1/admin/users/{admin_id}",
+        json={"full_name": "Updated System Administrator"},
+        headers=admin_access,
+    )
+
     deactivate = client.patch(
         f"/api/v1/admin/users/{admin_id}",
         json={"is_active": False},
@@ -139,6 +154,8 @@ def test_super_admin_cannot_be_deactivated_demoted_or_deleted(
     )
     delete = client.delete(f"/api/v1/admin/users/{admin_id}", headers=admin_access)
 
+    assert update_details.status_code == 200
+    assert update_details.json()["full_name"] == "Updated System Administrator"
     assert deactivate.status_code == 403
     assert demote.status_code == 403
     assert delete.status_code == 403
@@ -163,6 +180,12 @@ def test_admin_cannot_remove_their_own_access(
         json={"email": "team.admin@example.com", "password": USER_PAYLOAD["password"]},
     )
     admin_access = _authorization(admin_login)
+    super_admin_id = super_admin_login.json()["user"]["id"]
+
+    listed = client.get("/api/v1/admin/users", headers=admin_access)
+    assert listed.status_code == 200
+    assert listed.json()["total"] == 1
+    assert all(user["id"] != super_admin_id for user in listed.json()["items"])
 
     assert client.patch(
         f"/api/v1/admin/users/{admin_id}",
@@ -176,4 +199,21 @@ def test_admin_cannot_remove_their_own_access(
     ).status_code == 403
     assert client.delete(
         f"/api/v1/admin/users/{admin_id}", headers=admin_access
+    ).status_code == 403
+
+    assert client.get(
+        f"/api/v1/admin/users/{super_admin_id}", headers=admin_access
+    ).status_code == 403
+    assert client.patch(
+        f"/api/v1/admin/users/{super_admin_id}",
+        json={"full_name": "Unauthorized Update"},
+        headers=admin_access,
+    ).status_code == 403
+    assert client.put(
+        f"/api/v1/admin/users/{super_admin_id}/role",
+        json={"role": "admin"},
+        headers=admin_access,
+    ).status_code == 403
+    assert client.delete(
+        f"/api/v1/admin/users/{super_admin_id}", headers=admin_access
     ).status_code == 403

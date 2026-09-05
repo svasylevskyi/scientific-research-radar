@@ -5,6 +5,7 @@ REGISTER_PAYLOAD = {
     "email": "researcher@example.com",
     "full_name": "Ada Researcher",
     "password": "correct-horse-battery-staple",
+    "password_confirmation": "correct-horse-battery-staple",
 }
 
 
@@ -28,6 +29,14 @@ def test_register_rejects_duplicate_email_case_insensitively(client: TestClient)
     duplicate = {**REGISTER_PAYLOAD, "email": "RESEARCHER@example.com"}
     response = client.post("/api/v1/auth/register", json=duplicate)
     assert response.status_code == 409
+
+
+def test_register_rejects_password_mismatch(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={**REGISTER_PAYLOAD, "password_confirmation": "different-password"},
+    )
+    assert response.status_code == 422
 
 
 def test_login_and_protected_current_user(client: TestClient) -> None:

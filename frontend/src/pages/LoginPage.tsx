@@ -15,7 +15,6 @@ import {
 import { useState, type FormEvent } from "react";
 import { Link as RouterLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { AuthLayout } from "../layouts/AuthLayout";
 
@@ -28,6 +27,9 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const passwordChanged = Boolean(
+    (location.state as { passwordChanged?: boolean } | null)?.passwordChanged,
+  );
 
   if (!isInitializing && user) return <Navigate to="/" replace />;
 
@@ -39,8 +41,8 @@ export function LoginPage() {
       await login({ email, password });
       const destination = (location.state as { from?: string } | null)?.from ?? "/";
       navigate(destination, { replace: true });
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not sign in. Please try again.");
+    } catch {
+      setError("Email or password is incorrect.");
     } finally {
       setIsSubmitting(false);
     }
@@ -56,6 +58,9 @@ export function LoginPage() {
       </Box>
 
       <Stack component="form" onSubmit={handleSubmit} spacing={2.25} noValidate>
+        {passwordChanged && (
+          <Alert severity="success">Password changed successfully. Sign in with your new password.</Alert>
+        )}
         {error && <Alert severity="error">{error}</Alert>}
         <TextField
           label="Email address"
@@ -111,4 +116,3 @@ export function LoginPage() {
     </AuthLayout>
   );
 }
-

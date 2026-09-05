@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.schemas.user import UserRead
 
@@ -7,6 +7,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=2, max_length=120)
     password: str = Field(min_length=8, max_length=128)
+    password_confirmation: str = Field(min_length=8, max_length=128)
 
     @field_validator("email", mode="before")
     @classmethod
@@ -20,6 +21,12 @@ class RegisterRequest(BaseModel):
         if len(normalized) < 2:
             raise ValueError("Full name must contain at least 2 characters")
         return normalized
+
+    @model_validator(mode="after")
+    def passwords_must_match(self) -> "RegisterRequest":
+        if self.password != self.password_confirmation:
+            raise ValueError("Passwords do not match")
+        return self
 
 
 class LoginRequest(BaseModel):
@@ -41,4 +48,3 @@ class AuthResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
-

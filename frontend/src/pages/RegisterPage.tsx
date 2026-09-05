@@ -26,6 +26,8 @@ export function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [confirmationTouched, setConfirmationTouched] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,17 +35,32 @@ export function RegisterPage() {
   if (!isInitializing && user) return <Navigate to="/" replace />;
 
   const passwordIsValid = password.length >= 8;
+  const passwordsMatch = password === passwordConfirmation;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!passwordIsValid) return;
+    setConfirmationTouched(true);
+    if (!passwordIsValid || !passwordsMatch) return;
     setError(null);
     setIsSubmitting(true);
     try {
-      await register({ full_name: fullName, email, password });
+      await register({
+        full_name: fullName,
+        email,
+        password,
+        password_confirmation: passwordConfirmation,
+      });
       navigate("/", { replace: true });
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not create the account. Please try again.");
+      if (
+        caught instanceof ApiError
+        && caught.status === 422
+        && caught.message.toLowerCase().includes("email")
+      ) {
+        setError("Email address is not valid");
+      } else {
+        setError(caught instanceof ApiError ? caught.message : "Could not create the account. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -104,11 +121,38 @@ export function RegisterPage() {
           />
           <FormHelperText sx={{ ml: 1.75 }}>Use at least 8 characters.</FormHelperText>
         </Box>
+        <TextField
+          label="Confirm password"
+          type={showPassword ? "text" : "password"}
+          autoComplete="new-password"
+          value={passwordConfirmation}
+          onChange={(event) => setPasswordConfirmation(event.target.value)}
+          onBlur={() => setConfirmationTouched(true)}
+          error={confirmationTouched && !passwordsMatch}
+          helperText={confirmationTouched && !passwordsMatch ? "Passwords do not match." : " "}
+          required
+          fullWidth
+          slotProps={{
+            input: {
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label={showPassword ? "Hide passwords" : "Show passwords"}
+                    onClick={() => setShowPassword((visible) => !visible)}
+                    edge="end"
+                  >
+                    {showPassword ? <VisibilityOffRoundedIcon /> : <VisibilityRoundedIcon />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
         <Button
           type="submit"
           variant="contained"
           size="large"
-          disabled={isSubmitting || !fullName || !email || !passwordIsValid}
+          disabled={isSubmitting || !fullName || !email || !passwordIsValid || !passwordsMatch}
           endIcon={<ArrowForwardRoundedIcon />}
           sx={{ minHeight: 52 }}
         >
@@ -125,4 +169,3 @@ export function RegisterPage() {
     </AuthLayout>
   );
 }
-
