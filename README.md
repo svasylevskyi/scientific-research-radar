@@ -98,7 +98,7 @@ Register and login accept JSON, which keeps the API contract natural for a React
 
 The admin panel is available at `/admin/users`. The super-admin cannot be deactivated, demoted, or deleted. Administrators also cannot deactivate, demote, or delete their own account; these rules are enforced by the API, with the super-admin active/admin invariant additionally protected by a database constraint.
 
-The super-admin can manage every account, including editing their own account details. Regular admins can manage user and admin accounts but cannot open or modify the super-admin account. Regular users have no access to administration endpoints.
+The super-admin can manage every account, including editing their own account details. The super-admin account is omitted from regular admins' user lists and cannot be opened or modified by them. Regular users have no access to administration endpoints.
 
 ## Before production
 

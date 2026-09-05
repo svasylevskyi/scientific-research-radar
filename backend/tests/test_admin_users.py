@@ -132,6 +132,10 @@ def test_super_admin_cannot_be_deactivated_demoted_or_deleted(
     admin_access = _authorization(admin_login)
     admin_id = admin_login.json()["user"]["id"]
 
+    listed = client.get("/api/v1/admin/users", headers=admin_access)
+    assert listed.status_code == 200
+    assert any(user["id"] == admin_id for user in listed.json()["items"])
+
     update_details = client.patch(
         f"/api/v1/admin/users/{admin_id}",
         json={"full_name": "Updated System Administrator"},
@@ -177,6 +181,11 @@ def test_admin_cannot_remove_their_own_access(
     )
     admin_access = _authorization(admin_login)
     super_admin_id = super_admin_login.json()["user"]["id"]
+
+    listed = client.get("/api/v1/admin/users", headers=admin_access)
+    assert listed.status_code == 200
+    assert listed.json()["total"] == 1
+    assert all(user["id"] != super_admin_id for user in listed.json()["items"])
 
     assert client.patch(
         f"/api/v1/admin/users/{admin_id}",
