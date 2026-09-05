@@ -27,6 +27,7 @@ import { AppHeader } from "../components/AppHeader";
 import { KeywordInput } from "../components/KeywordInput";
 
 const DESCRIPTION_LIMIT = 300;
+const MAXIMUM_PAPERS_LIMIT = 30;
 
 const audienceOptions = [
   { value: "researchers", label: "Researchers" },
@@ -36,30 +37,80 @@ const audienceOptions = [
   { value: "general", label: "General audience" },
 ] as const;
 
-const frequencyOptions = ["daily", "weekly", "monthly", "quarterly"] as const;
+const frequencyOptions = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+] as const;
+
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getDefaultReportingDates() {
+  const currentDate = new Date();
+  const twoWeeksAgo = new Date(currentDate);
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+  return {
+    from: toDateInputValue(twoWeeksAgo),
+    to: toDateInputValue(currentDate),
+  };
+}
 
 export function NewDigestPage() {
+  const [defaultReportingDates] = useState(getDefaultReportingDates);
   const [topic, setTopic] = useState("");
   const [description, setDescription] = useState("");
   const [includeKeywords, setIncludeKeywords] = useState<string[]>([]);
   const [excludeKeywords, setExcludeKeywords] = useState<string[]>([]);
-  const [targetAudience, setTargetAudience] = useState<string[]>([]);
-  const [reportingFrom, setReportingFrom] = useState("");
-  const [reportingTo, setReportingTo] = useState("");
+  const [targetAudience, setTargetAudience] = useState<string[]>(["general"]);
+  const [reportingFrom, setReportingFrom] = useState(defaultReportingDates.from);
+  const [reportingTo, setReportingTo] = useState(defaultReportingDates.to);
   const [frequency, setFrequency] = useState("weekly");
   const [maximumPapers, setMaximumPapers] = useState("20");
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const dateRangeIsInvalid = Boolean(
     reportingFrom && reportingTo && reportingFrom > reportingTo,
   );
+  const reportingToIsInFuture = Boolean(
+    reportingTo && reportingTo > defaultReportingDates.to,
+  );
+  const topicIsInvalid = submitAttempted && !topic.trim();
+  const targetAudienceIsInvalid = submitAttempted && targetAudience.length === 0;
 
   function preventSubmission(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSubmitAttempted(true);
   }
 
   function changeAudience(event: SelectChangeEvent<string[]>) {
     const value = event.target.value;
     setTargetAudience(typeof value === "string" ? value.split(",") : value);
+  }
+
+  function changeMaximumPapers(value: string) {
+    if (value === "") {
+      setMaximumPapers("");
+      return;
+    }
+
+    const parsedValue = Number(value);
+    if (!Number.isFinite(parsedValue)) {
+      return;
+    }
+
+    const limitedValue = Math.min(
+      MAXIMUM_PAPERS_LIMIT,
+      Math.max(1, Math.trunc(parsedValue)),
+    );
+    setMaximumPapers(String(limitedValue));
   }
 
   const audienceLabel = (value: string) =>
@@ -101,6 +152,9 @@ export function NewDigestPage() {
                 value={topic}
                 onChange={(event) => setTopic(event.target.value)}
                 placeholder="e.g. AI agents for software engineering"
+                error={topicIsInvalid}
+                helperText={topicIsInvalid ? "Digest topic is required." : undefined}
+                required
                 fullWidth
               />
               <Box>
@@ -139,7 +193,7 @@ export function NewDigestPage() {
                 onChange={setExcludeKeywords}
                 helperText="Add terms that should remove irrelevant papers."
               />
-              <FormControl fullWidth>
+              <FormControl fullWidth required error={targetAudienceIsInvalid}>
                 <InputLabel id="target-audience-label">Target audience</InputLabel>
                 <Select
                   labelId="target-audience-label"
@@ -160,7 +214,11 @@ export function NewDigestPage() {
                     </MenuItem>
                   ))}
                 </Select>
-                <FormHelperText>Select one or more reader groups.</FormHelperText>
+                <FormHelperText>
+                  {targetAudienceIsInvalid
+                    ? "Select at least one target audience."
+                    : "Select one or more reader groups."}
+                </FormHelperText>
               </FormControl>
             </Stack>
           </Paper>
@@ -186,10 +244,19 @@ export function NewDigestPage() {
                   type="date"
                   value={reportingTo}
                   onChange={(event) => setReportingTo(event.target.value)}
-                  error={dateRangeIsInvalid}
-                  helperText={dateRangeIsInvalid ? "End date must be on or after the start date." : " "}
+                  error={dateRangeIsInvalid || reportingToIsInFuture}
+                  helperText={
+                    reportingToIsInFuture
+                      ? "End date cannot be in the future."
+                      : dateRangeIsInvalid
+                        ? "End date must be on or after the start date."
+                        : " "
+                  }
                   fullWidth
-                  slotProps={{ inputLabel: { shrink: true } }}
+                  slotProps={{
+                    inputLabel: { shrink: true },
+                    htmlInput: { max: defaultReportingDates.to },
+                  }}
                 />
               </Stack>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
@@ -202,8 +269,8 @@ export function NewDigestPage() {
                     onChange={(event) => setFrequency(event.target.value)}
                   >
                     {frequencyOptions.map((option) => (
-                      <MenuItem key={option} value={option} sx={{ textTransform: "capitalize" }}>
-                        {option}
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
                       </MenuItem>
                     ))}
                   </Select>
@@ -212,9 +279,17 @@ export function NewDigestPage() {
                   label="Maximum papers"
                   type="number"
                   value={maximumPapers}
-                  onChange={(event) => setMaximumPapers(event.target.value)}
+                  onChange={(event) => changeMaximumPapers(event.target.value)}
+                  helperText={`Maximum ${MAXIMUM_PAPERS_LIMIT} papers.`}
                   fullWidth
-                  slotProps={{ htmlInput: { min: 1, max: 100, step: 1, inputMode: "numeric" } }}
+                  slotProps={{
+                    htmlInput: {
+                      min: 1,
+                      max: MAXIMUM_PAPERS_LIMIT,
+                      step: 1,
+                      inputMode: "numeric",
+                    },
+                  }}
                 />
               </Stack>
             </Stack>
@@ -222,7 +297,7 @@ export function NewDigestPage() {
 
           <Stack direction={{ xs: "column-reverse", sm: "row" }} spacing={1.5} justifyContent="flex-end">
             <Button component={RouterLink} to="/" color="inherit" size="large">Cancel</Button>
-            <Button type="button" variant="contained" size="large" startIcon={<AutoAwesomeRoundedIcon />}>
+            <Button type="submit" variant="contained" size="large" startIcon={<AutoAwesomeRoundedIcon />}>
               Create digest
             </Button>
           </Stack>
