@@ -15,7 +15,6 @@ import {
 import { useState, type FormEvent } from "react";
 import { Link as RouterLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { AuthLayout } from "../layouts/AuthLayout";
 
@@ -42,8 +41,8 @@ export function LoginPage() {
       await login({ email, password });
       const destination = (location.state as { from?: string } | null)?.from ?? "/";
       navigate(destination, { replace: true });
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not sign in. Please try again.");
+    } catch {
+      setError("Email or password is incorrect.");
     } finally {
       setIsSubmitting(false);
     }
