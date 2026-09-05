@@ -2,9 +2,11 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { RequireAuth } from "./auth/RequireAuth";
 import { RequireAdmin } from "./auth/RequireAdmin";
+import { AdminDigestsPage } from "./pages/AdminDigestsPage";
 import { AdminUserDetailPage } from "./pages/AdminUserDetailPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { DigestDetailPage } from "./pages/DigestDetailPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NewDigestPage } from "./pages/NewDigestPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -40,6 +42,14 @@ export default function App() {
         }
       />
       <Route
+        path="/digests/:digestId"
+        element={
+          <RequireAuth>
+            <DigestDetailPage />
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/admin/users"
         element={
           <RequireAuth>
@@ -52,6 +62,22 @@ export default function App() {
         element={
           <RequireAuth>
             <RequireAdmin><AdminUserDetailPage /></RequireAdmin>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/admin/digests"
+        element={
+          <RequireAuth>
+            <RequireAdmin><AdminDigestsPage /></RequireAdmin>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/admin/digests/:digestId"
+        element={
+          <RequireAuth>
+            <RequireAdmin><DigestDetailPage admin /></RequireAdmin>
           </RequireAuth>
         }
       />

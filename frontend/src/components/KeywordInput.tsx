@@ -5,9 +5,16 @@ interface KeywordInputProps {
   value: string[];
   onChange: (value: string[]) => void;
   helperText: string;
+  error?: boolean;
 }
 
-export function KeywordInput({ label, value, onChange, helperText }: KeywordInputProps) {
+export function KeywordInput({
+  label,
+  value,
+  onChange,
+  helperText,
+  error = false,
+}: KeywordInputProps) {
   return (
     <Autocomplete
       multiple
@@ -30,6 +37,7 @@ export function KeywordInput({ label, value, onChange, helperText }: KeywordInpu
         <TextField
           {...params}
           label={label}
+          error={error}
           helperText={helperText}
           placeholder={value.length === 0 ? "Type and press Enter" : undefined}
           slotProps={{ htmlInput: { ...params.inputProps, maxLength: 48 } }}

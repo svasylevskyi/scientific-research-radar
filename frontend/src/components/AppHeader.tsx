@@ -1,5 +1,6 @@
 import AdminPanelSettingsRoundedIcon from "@mui/icons-material/AdminPanelSettingsRounded";
 import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
+import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import { AppBar, Avatar, Box, Button, Container, IconButton, Stack, Toolbar, Tooltip } from "@mui/material";
 import { useState } from "react";
@@ -44,12 +45,20 @@ export function AppHeader() {
               </Button>
             </Tooltip>
             {user?.role === "admin" && (
-              <Tooltip title="User administration">
-                <Button component={RouterLink} to="/admin/users" color="inherit" aria-label="User administration" sx={{ minWidth: 44 }}>
-                  <AdminPanelSettingsRoundedIcon />
-                  <Box component="span" sx={{ ml: 1, display: { xs: "none", md: "inline" } }}>Users</Box>
-                </Button>
-              </Tooltip>
+              <>
+                <Tooltip title="Digest administration">
+                  <Button component={RouterLink} to="/admin/digests" color="inherit" aria-label="Digest administration" sx={{ minWidth: 44 }}>
+                    <LibraryBooksRoundedIcon />
+                    <Box component="span" sx={{ ml: 1, display: { xs: "none", lg: "inline" } }}>Digests</Box>
+                  </Button>
+                </Tooltip>
+                <Tooltip title="User administration">
+                  <Button component={RouterLink} to="/admin/users" color="inherit" aria-label="User administration" sx={{ minWidth: 44 }}>
+                    <AdminPanelSettingsRoundedIcon />
+                    <Box component="span" sx={{ ml: 1, display: { xs: "none", lg: "inline" } }}>Users</Box>
+                  </Button>
+                </Tooltip>
+              </>
             )}
             <Tooltip title="Profile">
               <IconButton component={RouterLink} to="/profile" aria-label="Profile" sx={{ ml: { xs: 0.5, sm: 1 }, p: 0.5 }}>
