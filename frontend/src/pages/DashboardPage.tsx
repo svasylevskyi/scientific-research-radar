@@ -1,5 +1,6 @@
 import TravelExploreRoundedIcon from "@mui/icons-material/TravelExploreRounded";
 import { Box, Button, Container, Typography } from "@mui/material";
+import { Link as RouterLink } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { AppHeader } from "../components/AppHeader";
@@ -16,7 +17,8 @@ export function DashboardPage() {
           Welcome, {user?.full_name.split(" ")[0]}.
         </Typography>
         <Button
-          type="button"
+          component={RouterLink}
+          to="/digests/new"
           variant="contained"
           size="large"
           startIcon={<TravelExploreRoundedIcon />}

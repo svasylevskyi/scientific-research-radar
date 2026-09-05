@@ -27,7 +27,14 @@ export function AppHeader() {
     <AppBar position="sticky" color="inherit" elevation={0} sx={{ borderBottom: "1px solid", borderColor: "divider" }}>
       <Toolbar sx={{ minHeight: { xs: 68, sm: 76 } }}>
         <Container maxWidth="lg" disableGutters sx={{ display: "flex", alignItems: "center" }}>
-          <Brand compact />
+          <Box
+            component={RouterLink}
+            to="/"
+            aria-label="Scientific Research Radar home"
+            sx={{ color: "inherit", textDecoration: "none" }}
+          >
+            <Brand compact />
+          </Box>
           <Box sx={{ flexGrow: 1 }} />
           <Stack direction="row" spacing={{ xs: 0.5, sm: 1 }} alignItems="center">
             <Tooltip title="Workspace">
