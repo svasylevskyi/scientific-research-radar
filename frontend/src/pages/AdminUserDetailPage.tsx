@@ -42,6 +42,7 @@ export function AdminUserDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [pendingRole, setPendingRole] = useState<UserRole | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
@@ -102,6 +103,7 @@ export function AdminUserDetailPage() {
       setError(caught instanceof ApiError ? caught.message : "Could not change this user's role.");
     } finally {
       setIsSaving(false);
+      setPendingRole(null);
     }
   }
 
@@ -183,7 +185,7 @@ export function AdminUserDetailPage() {
               <Button
                 variant="outlined"
                 disabled={isSaving || isProtected}
-                onClick={() => changeRole(managedUser.role === "admin" ? "user" : "admin")}
+                onClick={() => setPendingRole(managedUser.role === "admin" ? "user" : "admin")}
               >
                 {managedUser.role === "admin" ? "Demote to user" : "Promote to admin"}
               </Button>
@@ -200,6 +202,37 @@ export function AdminUserDetailPage() {
           </>
         )}
       </Container>
+
+      <Dialog
+        open={pendingRole !== null}
+        onClose={() => {
+          if (!isSaving) setPendingRole(null);
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          {pendingRole === "admin" ? "Promote this user to admin?" : "Demote this admin to user?"}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {pendingRole === "admin"
+              ? `${managedUser?.full_name ?? "This user"} will be able to view and manage all user accounts.`
+              : `${managedUser?.full_name ?? "This admin"} will lose access to the administration section and user management.`}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setPendingRole(null)} disabled={isSaving}>Cancel</Button>
+          <Button
+            color={pendingRole === "admin" ? "primary" : "warning"}
+            variant="contained"
+            onClick={() => pendingRole && changeRole(pendingRole)}
+            disabled={isSaving || pendingRole === null}
+          >
+            {pendingRole === "admin" ? "Promote to admin" : "Demote to user"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} fullWidth maxWidth="xs">
         <DialogTitle>Delete this user?</DialogTitle>
