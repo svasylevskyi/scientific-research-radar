@@ -52,7 +52,15 @@ export function RegisterPage() {
       });
       navigate("/", { replace: true });
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not create the account. Please try again.");
+      if (
+        caught instanceof ApiError
+        && caught.status === 422
+        && caught.message.toLowerCase().includes("email")
+      ) {
+        setError("Email address is not valid");
+      } else {
+        setError(caught instanceof ApiError ? caught.message : "Could not create the account. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
