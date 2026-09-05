@@ -1,7 +1,7 @@
 import AdminPanelSettingsRoundedIcon from "@mui/icons-material/AdminPanelSettingsRounded";
 import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
-import { AppBar, Avatar, Box, Button, Container, Stack, Toolbar, Tooltip } from "@mui/material";
+import { AppBar, Avatar, Box, Button, Container, IconButton, Stack, Toolbar, Tooltip } from "@mui/material";
 import { useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 
@@ -44,9 +44,13 @@ export function AppHeader() {
                 </Button>
               </Tooltip>
             )}
-            <Avatar sx={{ width: 38, height: 38, ml: { xs: 0.5, sm: 1 }, bgcolor: "primary.dark", fontSize: "0.85rem", fontWeight: 800 }}>
-              {initials}
-            </Avatar>
+            <Tooltip title="Profile">
+              <IconButton component={RouterLink} to="/profile" aria-label="Profile" sx={{ ml: { xs: 0.5, sm: 1 }, p: 0.5 }}>
+                <Avatar sx={{ width: 38, height: 38, bgcolor: "primary.dark", fontSize: "0.85rem", fontWeight: 800 }}>
+                  {initials}
+                </Avatar>
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Sign out">
               <Button color="inherit" onClick={handleLogout} disabled={isSigningOut} aria-label="Sign out" sx={{ minWidth: 44 }}>
                 <LogoutRoundedIcon />

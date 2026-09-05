@@ -19,7 +19,7 @@ def register(
     settings: AppSettings,
 ) -> AuthResponse:
     try:
-        issued = auth.register(**payload.model_dump())
+        issued = auth.register(**payload.model_dump(exclude={"password_confirmation"}))
     except EmailAlreadyRegisteredError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     _set_refresh_cookie(response, issued, settings)

@@ -28,6 +28,9 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const passwordChanged = Boolean(
+    (location.state as { passwordChanged?: boolean } | null)?.passwordChanged,
+  );
 
   if (!isInitializing && user) return <Navigate to="/" replace />;
 
@@ -56,6 +59,9 @@ export function LoginPage() {
       </Box>
 
       <Stack component="form" onSubmit={handleSubmit} spacing={2.25} noValidate>
+        {passwordChanged && (
+          <Alert severity="success">Password changed successfully. Sign in with your new password.</Alert>
+        )}
         {error && <Alert severity="error">{error}</Alert>}
         <TextField
           label="Email address"
@@ -111,4 +117,3 @@ export function LoginPage() {
     </AuthLayout>
   );
 }
-

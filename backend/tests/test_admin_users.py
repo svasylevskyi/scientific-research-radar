@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
+from app.core.security import hash_password, verify_password
 from app.models.user import User
 from app.services.super_admin_service import ensure_super_admin
 
@@ -11,6 +12,7 @@ USER_PAYLOAD = {
     "email": "member@example.com",
     "full_name": "Research Member",
     "password": "correct-horse-battery-staple",
+    "password_confirmation": "correct-horse-battery-staple",
 }
 
 
@@ -55,6 +57,8 @@ def test_super_admin_bootstrap_is_idempotent_and_active(
     settings = get_settings()
     with db_session_factory() as db:
         first = ensure_super_admin(db, settings)
+        first.password_hash = hash_password("profile-managed-password")
+        db.commit()
         second = ensure_super_admin(db, settings)
         count = db.scalar(select(func.count()).select_from(User))
 
@@ -63,6 +67,7 @@ def test_super_admin_bootstrap_is_idempotent_and_active(
     assert second.role == "admin"
     assert second.is_active is True
     assert second.is_super_admin is True
+    assert verify_password("profile-managed-password", second.password_hash)
 
 
 def test_admin_can_list_view_update_promote_demote_and_delete_user(
