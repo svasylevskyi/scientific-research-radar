@@ -234,16 +234,19 @@ def test_default_test_configuration_never_uses_the_openai_client(
     assert response.json()["model_name"] == "dry-run"
 
 
-def test_consolidated_prompt_is_versioned_and_previous_prompts_are_archived() -> None:
+def test_consolidated_prompt_is_versioned_compliant_and_archived() -> None:
     prompt = RadarPromptBuilder().build(
         digest_snapshot={"topic": "Transparent AI evaluation", "maximum_papers": 5},
         history_context=[],
     )
 
-    assert prompt.version == "2026-09-05.2"
+    assert prompt.version == "2026-09-05.3"
     assert "five connected stages" in prompt.system
     assert "untrusted data" in prompt.system
+    assert "Public accessibility does not mean" in prompt.system
+    assert "could reasonably substitute for a paper" in prompt.system
     assert "maximum number of papers returned and persisted" in prompt.user
+    assert "Do not treat a publicly reachable page" in prompt.user
     assert "Transparent AI evaluation" in prompt.user
     assert (PROMPT_DIRECTORY / "archive" / "system.v2026-09-05.1.md").is_file()
     assert (PROMPT_DIRECTORY / "archive" / "radar_run.v2026-09-05.1.md").is_file()

@@ -28,6 +28,15 @@ An empty history array means this is the first run. History is contextual memory
 
 No preferred-source list, seed papers, user feedback, custom value criteria, or custom digest goals are supplied in the current product version. Do not invent them; apply the system prompt's scholarly-source and audience rules.
 
+## Compliance gate for this run
+
+- Access sources only through the enabled tool and ordinary lawful public access. Do not bypass or work around any restriction.
+- Do not treat a publicly reachable page, PDF, abstract, or user-provided item as proof of an open license or redistribution rights.
+- Do not emit full text, copied abstracts, excerpts, figures, tables, or source-like reconstructions into any field. Only the structured response is stored.
+- For every paper, provide a canonical link, access status, source basis, license when verified, and explicit warnings when rights or access are unknown or restrictive.
+- When lawful use is ambiguous, keep only necessary bibliographic metadata and brief original analysis; never assert that an exception, commercial reuse, adaptation, redistribution, or text-and-data mining is permitted.
+- Make the final transparency note clear that readers must verify original sources and applicable permissions before reuse or consequential reliance.
+
 ## Run requirements
 
 1. Discover and deduplicate qualifying scientific or technical papers.

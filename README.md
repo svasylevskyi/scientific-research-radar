@@ -69,6 +69,8 @@ The editable LLM prompt templates are deliberately kept outside the Python sourc
 
 Previous prompt versions are retained under `backend/app/radar/prompts/archive/`. The strict response contract is defined separately in `backend/app/radar/contracts.py`, allowing the prompts to focus on research quality without embedding and paying for a duplicate JSON schema on every run.
 
+The prompts also apply conservative copyright and access safeguards: public availability is not treated as an open license, restricted access must not be bypassed, and stored output is limited to metadata, source links, short attributed facts, and original synthesis. These prompt-level controls are defense in depth, not a substitute for source-specific terms, product policy, or legal review for the deployment jurisdictions.
+
 Completed run summaries are retained in the database and a compact selection of recent runs is included as historical context in subsequent prompts. Historical output is labelled as context, not as evidence for new results.
 
 ### 2. Frontend

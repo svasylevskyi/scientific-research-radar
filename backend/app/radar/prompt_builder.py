@@ -4,7 +4,7 @@ from pathlib import Path
 from string import Template
 from typing import Any
 
-PROMPT_VERSION = "2026-09-05.2"
+PROMPT_VERSION = "2026-09-05.3"
 PROMPT_DIRECTORY = Path(__file__).resolve().parent / "prompts"
 
 
