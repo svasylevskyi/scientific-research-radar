@@ -16,9 +16,8 @@ export function Brand({ compact = false, light = false }: BrandProps) {
           borderRadius: "50%",
           display: "grid",
           placeItems: "center",
-          color: light ? "#071a2b" : "#d9fff5",
-          bgcolor: light ? "#42e6bd" : "rgba(66, 230, 189, 0.14)",
-          border: light ? "none" : "1px solid rgba(103, 244, 208, 0.35)",
+          color: "#071a2b",
+          bgcolor: "#42e6bd",
         }}
       >
         <RadarRoundedIcon fontSize={compact ? "small" : "medium"} />
@@ -53,4 +52,3 @@ export function Brand({ compact = false, light = false }: BrandProps) {
     </Box>
   );
 }
-
