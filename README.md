@@ -1,6 +1,6 @@
 # Scientific Research Radar
 
-The first production-shaped vertical slice of the Scientific Research Radar: account registration, login, rotating JWT sessions, role-based access, and a protected React workspace.
+A production-shaped foundation for the Scientific Research Radar: account authentication, role-based access, persisted research-digest configuration, and responsive user/admin management interfaces.
 
 ## Architecture
 
@@ -32,6 +32,8 @@ The API, service, repository, and persistence layers are separate. SQLite is sel
 - An automatically bootstrapped, always-active super-admin account.
 - An admin-only, responsive user management panel with account editing, role changes, and confirmed deletion.
 - A self-service profile page for updating name, email address, and password.
+- Owner-scoped digest creation, listing, editing, and confirmed deletion.
+- An admin digest panel with owner filtering and the same management operations.
 
 ## Run locally
 
@@ -87,16 +89,27 @@ npm run build
 | `GET` | `/api/v1/users/me` | Return the authenticated user |
 | `PATCH` | `/api/v1/users/me` | Update the authenticated user's name or email |
 | `PUT` | `/api/v1/users/me/password` | Verify and change the authenticated user's password |
+| `POST` | `/api/v1/digests` | Create a digest for the authenticated user |
+| `GET` | `/api/v1/digests` | List the authenticated user's digests |
+| `GET` | `/api/v1/digests/{id}` | Return one digest owned by the authenticated user |
+| `PATCH` | `/api/v1/digests/{id}` | Update a digest owned by the authenticated user |
+| `DELETE` | `/api/v1/digests/{id}` | Delete a digest owned by the authenticated user |
 | `GET` | `/api/v1/admin/users` | List/search users (admin only) |
 | `GET` | `/api/v1/admin/users/{id}` | Return user details (admin only) |
 | `PATCH` | `/api/v1/admin/users/{id}` | Update user details/status (admin only) |
 | `PUT` | `/api/v1/admin/users/{id}/role` | Promote or demote a user (admin only) |
 | `DELETE` | `/api/v1/admin/users/{id}` | Delete a user and their sessions (admin only) |
+| `GET` | `/api/v1/admin/digests` | List digests, optionally filtered by owner (admin only) |
+| `GET` | `/api/v1/admin/digests/{id}` | Return any accessible digest (admin only) |
+| `PATCH` | `/api/v1/admin/digests/{id}` | Update any accessible digest (admin only) |
+| `DELETE` | `/api/v1/admin/digests/{id}` | Delete any accessible digest (admin only) |
 | `GET` | `/health` | Liveness check |
 
 Register and login accept JSON, which keeps the API contract natural for a React client. Access tokens are sent as `Authorization: Bearer <token>`. Refresh tokens are never exposed to frontend JavaScript.
 
 The admin panel is available at `/admin/users`. The super-admin cannot be deactivated, demoted, or deleted. Administrators also cannot deactivate, demote, or delete their own account; these rules are enforced by the API, with the super-admin active/admin invariant additionally protected by a database constraint.
+
+The digest administration panel is available at `/admin/digests`. Regular administrators cannot list or manage digests owned by the protected super-admin; the super-admin can manage every digest. Deleting a user also deletes their digests through a database foreign-key cascade.
 
 The super-admin can manage every account, including editing their own account details. The super-admin account is omitted from regular admins' user lists and cannot be opened or modified by them. Regular users have no access to administration endpoints.
 

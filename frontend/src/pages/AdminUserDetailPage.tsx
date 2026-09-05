@@ -1,5 +1,6 @@
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import {
   Alert,
@@ -161,6 +162,14 @@ export function AdminUserDetailPage() {
                   <Typography>{new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(managedUser.created_at))}</Typography>
                 </Box>
               </Stack>
+              <Button
+                component={RouterLink}
+                to={`/admin/digests?owner_id=${managedUser.id}`}
+                startIcon={<LibraryBooksRoundedIcon />}
+                sx={{ mt: 2 }}
+              >
+                View user's digests
+              </Button>
             </Paper>
 
             <Paper component="form" onSubmit={saveDetails} variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
@@ -195,7 +204,7 @@ export function AdminUserDetailPage() {
               <Divider sx={{ my: 3.5 }} />
               <Typography variant="h6" color="error.main" sx={{ mb: 0.75 }}>Delete account</Typography>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
-                Permanently removes the user and all of their active sessions.
+                Permanently removes the user, their digests, and all active sessions.
               </Typography>
               <Button color="error" variant="outlined" startIcon={<DeleteOutlineRoundedIcon />} disabled={isSaving || isProtected} onClick={() => setConfirmDelete(true)}>
                 Delete user

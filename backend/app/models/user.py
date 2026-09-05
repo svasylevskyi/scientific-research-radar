@@ -46,3 +46,6 @@ class User(Base):
     auth_sessions: Mapped[list["AuthSession"]] = relationship(  # noqa: F821
         back_populates="user", cascade="all, delete-orphan", passive_deletes=True
     )
+    digests: Mapped[list["Digest"]] = relationship(  # noqa: F821
+        back_populates="owner", cascade="all, delete-orphan", passive_deletes=True
+    )
