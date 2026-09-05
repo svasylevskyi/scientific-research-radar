@@ -180,7 +180,9 @@ export function AdminUserDetailPage() {
               <Divider sx={{ my: 3.5 }} />
               <Typography variant="h6" sx={{ mb: 0.75 }}>Access level</Typography>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
-                Admins can view and manage all user accounts.
+                {currentUser?.is_super_admin
+                  ? "Super-admins can manage every account."
+                  : "Admins can manage user and admin accounts, but not the super-admin."}
               </Typography>
               <Button
                 variant="outlined"

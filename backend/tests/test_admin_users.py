@@ -132,6 +132,12 @@ def test_super_admin_cannot_be_deactivated_demoted_or_deleted(
     admin_access = _authorization(admin_login)
     admin_id = admin_login.json()["user"]["id"]
 
+    update_details = client.patch(
+        f"/api/v1/admin/users/{admin_id}",
+        json={"full_name": "Updated System Administrator"},
+        headers=admin_access,
+    )
+
     deactivate = client.patch(
         f"/api/v1/admin/users/{admin_id}",
         json={"is_active": False},
@@ -144,6 +150,8 @@ def test_super_admin_cannot_be_deactivated_demoted_or_deleted(
     )
     delete = client.delete(f"/api/v1/admin/users/{admin_id}", headers=admin_access)
 
+    assert update_details.status_code == 200
+    assert update_details.json()["full_name"] == "Updated System Administrator"
     assert deactivate.status_code == 403
     assert demote.status_code == 403
     assert delete.status_code == 403
@@ -168,6 +176,7 @@ def test_admin_cannot_remove_their_own_access(
         json={"email": "team.admin@example.com", "password": USER_PAYLOAD["password"]},
     )
     admin_access = _authorization(admin_login)
+    super_admin_id = super_admin_login.json()["user"]["id"]
 
     assert client.patch(
         f"/api/v1/admin/users/{admin_id}",
@@ -181,4 +190,21 @@ def test_admin_cannot_remove_their_own_access(
     ).status_code == 403
     assert client.delete(
         f"/api/v1/admin/users/{admin_id}", headers=admin_access
+    ).status_code == 403
+
+    assert client.get(
+        f"/api/v1/admin/users/{super_admin_id}", headers=admin_access
+    ).status_code == 403
+    assert client.patch(
+        f"/api/v1/admin/users/{super_admin_id}",
+        json={"full_name": "Unauthorized Update"},
+        headers=admin_access,
+    ).status_code == 403
+    assert client.put(
+        f"/api/v1/admin/users/{super_admin_id}/role",
+        json={"role": "admin"},
+        headers=admin_access,
+    ).status_code == 403
+    assert client.delete(
+        f"/api/v1/admin/users/{super_admin_id}", headers=admin_access
     ).status_code == 403

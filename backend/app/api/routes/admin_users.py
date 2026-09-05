@@ -41,7 +41,7 @@ def get_user(
     current_admin: CurrentAdmin,
     service: AdminUserServiceDep,
 ) -> UserRead:
-    return _run(lambda: service.get_user(user_id))
+    return _run(lambda: service.get_user(actor=current_admin, user_id=user_id))
 
 
 @router.patch("/{user_id}", response_model=UserRead)
@@ -87,4 +87,3 @@ def _run(operation):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except AdminActionForbiddenError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-

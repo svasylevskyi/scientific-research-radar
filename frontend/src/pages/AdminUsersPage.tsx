@@ -25,6 +25,7 @@ import { Link as RouterLink } from "react-router-dom";
 
 import { adminApi } from "../api/admin";
 import { ApiError } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { AppHeader } from "../components/AppHeader";
 import { UserRoleChip } from "../components/UserRoleChip";
 import type { User } from "../types/auth";
@@ -32,6 +33,7 @@ import type { User } from "../types/auth";
 const PAGE_SIZE = 20;
 
 export function AdminUsersPage() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -69,6 +71,8 @@ export function AdminUsersPage() {
   }
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const canManage = (listedUser: User) =>
+    !listedUser.is_super_admin || Boolean(currentUser?.is_super_admin);
 
   return (
     <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
@@ -121,7 +125,11 @@ export function AdminUsersPage() {
                       <TableCell><UserRoleChip user={listedUser} /></TableCell>
                       <TableCell>{listedUser.is_active ? "Active" : "Inactive"}</TableCell>
                       <TableCell align="right">
-                        <Button component={RouterLink} to={`/admin/users/${listedUser.id}`} endIcon={<ChevronRightRoundedIcon />}>View</Button>
+                        {canManage(listedUser) ? (
+                          <Button component={RouterLink} to={`/admin/users/${listedUser.id}`} endIcon={<ChevronRightRoundedIcon />}>View</Button>
+                        ) : (
+                          <Button disabled>Protected</Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -143,9 +151,13 @@ export function AdminUsersPage() {
                         </Typography>
                       </Stack>
                     </Box>
-                    <Button component={RouterLink} to={`/admin/users/${listedUser.id}`} aria-label={`View ${listedUser.full_name}`} sx={{ minWidth: 40 }}>
-                      <ChevronRightRoundedIcon />
-                    </Button>
+                    {canManage(listedUser) ? (
+                      <Button component={RouterLink} to={`/admin/users/${listedUser.id}`} aria-label={`View ${listedUser.full_name}`} sx={{ minWidth: 40 }}>
+                        <ChevronRightRoundedIcon />
+                      </Button>
+                    ) : (
+                      <Button disabled size="small">Protected</Button>
+                    )}
                   </Stack>
                 </Paper>
               ))}
