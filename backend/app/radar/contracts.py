@@ -1,7 +1,8 @@
 from datetime import date
 from typing import Literal
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Confidence = Literal["low", "medium", "high"]
 Priority = Literal["low", "medium", "high"]
@@ -18,9 +19,20 @@ class RadarContract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+def validate_http_url(value: str | None) -> str | None:
+    if value is None:
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("URL must use HTTP or HTTPS and include a host")
+    return value
+
+
 class SourceCitation(RadarContract):
     title: str
     url: str
+
+    _validate_url = field_validator("url")(validate_http_url)
 
 
 class SearchPaper(RadarContract):
@@ -46,6 +58,8 @@ class SearchPaper(RadarContract):
     factual_note: str
     warnings: list[str]
     citations: list[SourceCitation]
+
+    _validate_urls = field_validator("url", "pdf_url")(validate_http_url)
 
 
 class SearchStage(RadarContract):

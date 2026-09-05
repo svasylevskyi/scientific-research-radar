@@ -1,7 +1,4 @@
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
-import ArticleRoundedIcon from "@mui/icons-material/ArticleRounded";
-import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
-import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import {
   Alert,
   Box,
@@ -22,6 +19,11 @@ import { Link as RouterLink, useLocation, useParams, useSearchParams } from "rea
 import { ApiError } from "../api/client";
 import { digestRunsApi, digestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
+import {
+  DigestBriefingResult,
+  PaperSummariesResult,
+  TrendAnalysisResult,
+} from "../components/DigestRunResults";
 import type { Digest, DigestRunDetail, DigestRunStatus, DigestRunSummary } from "../types/digest";
 
 function formatDateTime(value: string) {
@@ -40,93 +42,6 @@ function statusColor(status: DigestRunStatus): "default" | "success" | "error" |
 function TabPanel({ active, children }: { active: boolean; children: ReactNode }) {
   if (!active) return null;
   return <Box role="tabpanel" sx={{ pt: 3 }}>{children}</Box>;
-}
-
-function BriefingPreview({ run }: { run: DigestRunDetail }) {
-  return (
-    <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
-      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 2 }}>
-        <AutoStoriesRoundedIcon color="primary" />
-        <Typography variant="h5">{run.briefing?.title ?? "Digest briefing"}</Typography>
-      </Stack>
-      <Typography color="text.secondary" paragraph>
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt
-        ut labore et dolore magna aliqua.
-      </Typography>
-      <Typography color="text.secondary">
-        Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea
-        commodo consequat. This container will later render the persisted briefing data.
-      </Typography>
-    </Paper>
-  );
-}
-
-function TrendPreview() {
-  return (
-    <Stack spacing={2}>
-      {["Trend overview", "Emerging signals", "Recommendations"].map((title) => (
-        <Paper key={title} variant="outlined" sx={{ p: { xs: 2.25, sm: 3 }, borderRadius: 3 }}>
-          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1.25 }}>
-            <InsightsRoundedIcon color="primary" />
-            <Typography variant="h6">{title}</Typography>
-          </Stack>
-          <Typography color="text.secondary">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
-            incididunt ut labore et dolore magna aliqua.
-          </Typography>
-        </Paper>
-      ))}
-    </Stack>
-  );
-}
-
-function PaperSummariesPreview({ run }: { run: DigestRunDetail }) {
-  const papers = run.paper_results;
-  if (papers.length === 0) {
-    return (
-      <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
-        <Typography variant="h6">No paper results stored for this run</Typography>
-        <Typography color="text.secondary">
-          Paper summary containers will appear here when a run returns papers.
-        </Typography>
-      </Paper>
-    );
-  }
-
-  return (
-    <Stack spacing={2}>
-      {papers.map((result) => (
-        <Paper key={result.paper.id} variant="outlined" sx={{ p: { xs: 2.25, sm: 3 }, borderRadius: 3 }}>
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            justifyContent="space-between"
-            spacing={1.5}
-            sx={{ mb: 1.5 }}
-          >
-            <Box>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                <ArticleRoundedIcon color="primary" />
-                <Typography variant="h6">{result.paper.title}</Typography>
-              </Stack>
-              <Typography variant="body2" color="text.secondary">
-                {result.paper.authors.join(", ")} · {result.paper.source_name}
-              </Typography>
-            </Box>
-            <Chip
-              color="primary"
-              label={`${Math.round(result.relevance_score)} relevance`}
-              sx={{ alignSelf: { xs: "flex-start", sm: "center" } }}
-            />
-          </Stack>
-          <Typography color="text.secondary">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. This container will later
-            show the stored search rationale, relevance assessment, findings, limitations, and
-            recommendations for this paper.
-          </Typography>
-        </Paper>
-      ))}
-    </Stack>
-  );
 }
 
 export function DigestHistoryPage() {
@@ -220,10 +135,6 @@ export function DigestHistoryPage() {
           {digest?.topic ?? "Review previous radar runs and their stored output stages."}
         </Typography>
         {routeState?.success && <Alert severity="success" sx={{ mb: 2.5 }}>{routeState.success}</Alert>}
-        <Alert severity="info" sx={{ mb: 3 }}>
-          These tabs are layout previews. Detailed rendering from the stored stage data will be
-          connected in a later iteration.
-        </Alert>
         {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
         {isLoading ? (
@@ -276,27 +187,34 @@ export function DigestHistoryPage() {
                 </Box>
               ) : (
                 <>
-                  <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
-                    <Tabs
-                      value={tab}
-                      onChange={(_event, nextTab) => setTab(nextTab)}
-                      variant="scrollable"
-                      scrollButtons="auto"
-                      aria-label="Digest run output stages"
-                    >
-                      <Tab label="Digest Briefing" />
-                      <Tab label="Trend Analysis" />
-                      <Tab label="Paper Summaries" />
-                    </Tabs>
-                  </Paper>
                   {selectedRun.status === "failed" && (
-                    <Alert severity="error" sx={{ mt: 3 }}>
+                    <Alert severity="error">
                       {selectedRun.error_message ?? "This radar run failed."}
                     </Alert>
                   )}
-                  <TabPanel active={tab === 0}><BriefingPreview run={selectedRun} /></TabPanel>
-                  <TabPanel active={tab === 1}><TrendPreview /></TabPanel>
-                  <TabPanel active={tab === 2}><PaperSummariesPreview run={selectedRun} /></TabPanel>
+                  {selectedRun.status === "running" && (
+                    <Alert severity="info">This radar run is still in progress.</Alert>
+                  )}
+                  {selectedRun.status === "completed" && (
+                    <>
+                      <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
+                        <Tabs
+                          value={tab}
+                          onChange={(_event, nextTab) => setTab(nextTab)}
+                          variant="scrollable"
+                          scrollButtons="auto"
+                          aria-label="Digest run output stages"
+                        >
+                          <Tab label="Digest Briefing" />
+                          <Tab label="Trend Analysis" />
+                          <Tab label="Paper Summaries" />
+                        </Tabs>
+                      </Paper>
+                      <TabPanel active={tab === 0}><DigestBriefingResult run={selectedRun} /></TabPanel>
+                      <TabPanel active={tab === 1}><TrendAnalysisResult run={selectedRun} /></TabPanel>
+                      <TabPanel active={tab === 2}><PaperSummariesResult run={selectedRun} /></TabPanel>
+                    </>
+                  )}
                 </>
               )}
             </Box>

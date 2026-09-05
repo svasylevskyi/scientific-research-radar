@@ -31,7 +31,9 @@ class Settings(BaseSettings):
 
     openai_api_key: SecretStr | None = None
     openai_radar_model: str = Field(default="gpt-6-astra", min_length=1, max_length=100)
-    radar_dry_run: bool = True
+    openai_radar_reasoning_effort: Literal["low", "medium", "high", "xhigh"] = "high"
+    openai_request_timeout_seconds: float = Field(default=600, ge=30, le=1800)
+    openai_radar_max_output_tokens: int = Field(default=60000, ge=1000, le=128000)
     radar_history_runs: int = Field(default=3, ge=0, le=20)
 
     super_admin_email: EmailStr = "admin@example.com"

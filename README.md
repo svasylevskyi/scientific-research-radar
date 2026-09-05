@@ -35,8 +35,8 @@ The API, service, repository, and persistence layers are separate. SQLite is sel
 - Owner-scoped digest creation, listing, editing, and confirmed deletion.
 - An admin digest panel with owner filtering and the same management operations.
 - A one-request radar pipeline that records search, relevance, paper-summary, trend, and briefing data as separate structured stages.
-- Owner-scoped digest run history with responsive briefing, trend, and paper-summary containers.
-- A deterministic dry-run client enabled by default, so the complete flow can be tested without making an OpenAI request.
+- Owner-scoped digest run history with responsive, data-driven briefing, trend, and paper-summary views.
+- Live OpenAI Responses API execution with hosted web search and a strict Pydantic output contract.
 
 ## Run locally
 
@@ -51,7 +51,8 @@ source .venv/bin/activate        # Windows PowerShell: .venv\Scripts\Activate.ps
 pip install -e ".[dev]"
 cp .env.example .env
 python -c "import secrets; print(secrets.token_urlsafe(64))"
-# Put the generated value in JWT_SECRET in .env, and change SUPER_ADMIN_PASSWORD.
+# Put the generated value in JWT_SECRET in .env, change SUPER_ADMIN_PASSWORD,
+# and add OPENAI_API_KEY before using Run now.
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
@@ -60,7 +61,9 @@ API documentation is available at `http://localhost:8000/docs`.
 
 On startup, the API creates the configured super-admin if it does not exist. `SUPER_ADMIN_PASSWORD` supplies its initial password; subsequent password changes can be made from the profile page. The defaults in `.env.example` are for local development only. Set `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_FULL_NAME`, and a unique `SUPER_ADMIN_PASSWORD` before signing in. Production mode rejects the placeholder password.
 
-Radar runs use deterministic sample output by default. Keep `RADAR_DRY_RUN=true` while reviewing the workflow. When live execution is ready, provide `OPENAI_API_KEY`, choose `OPENAI_RADAR_MODEL`, and set `RADAR_DRY_RUN=false`. A live run uses one OpenAI Responses API request with web search and a strict structured-output contract; the request is not made from tests.
+`Run now` makes one synchronous OpenAI Responses API request using the configured `OPENAI_RADAR_MODEL`, hosted web search, and the strict structured-output contract. No OpenAI request is made while viewing or editing a digest, loading history, starting the API, or using the disabled scheduling control. Set `OPENAI_API_KEY` in `backend/.env`; without it, the run endpoint returns `503 Service Unavailable`. Tests inject local clients and never contact OpenAI.
+
+The live-run controls can be tuned through `OPENAI_RADAR_REASONING_EFFORT`, `OPENAI_REQUEST_TIMEOUT_SECONDS`, and `OPENAI_RADAR_MAX_OUTPUT_TOKENS`. Automatic SDK retries are disabled so each explicit click produces at most one OpenAI API request. A failed attempt is recorded in digest history and can be retried only through another explicit click.
 
 The editable LLM prompt templates are deliberately kept outside the Python source:
 
@@ -130,7 +133,7 @@ The admin panel is available at `/admin/users`. The super-admin cannot be deacti
 
 The digest administration panel is available at `/admin/digests`. Regular administrators cannot list or manage digests owned by the protected super-admin; the super-admin can manage every digest. Deleting a user also deletes their digests through a database foreign-key cascade.
 
-The digest details page can start an immediate radar run. Scheduling is intentionally disabled until its backend workflow is introduced. The history page is shown only after a run has been attempted; its three tabs are layout previews backed by the new persisted run structure and will receive final presentation templates in a later iteration.
+The digest details page can start an immediate radar run. Scheduling is intentionally disabled until its backend workflow is introduced. The history page is shown only after a run has been attempted. Its briefing, trend-analysis, and paper-summary tabs use stable presentation sections populated from the structured data stored for the selected run; failed and in-progress runs show status information instead of empty result templates.
 
 The super-admin can manage every account, including editing their own account details. The super-admin account is omitted from regular admins' user lists and cannot be opened or modified by them. Regular users have no access to administration endpoints.
 
@@ -140,4 +143,5 @@ The super-admin can manage every account, including editing their own account de
 - Set `REFRESH_COOKIE_SECURE=true` and consider `REFRESH_COOKIE_SAMESITE=none` only if the frontend and API are truly cross-site.
 - Move to PostgreSQL by changing `DATABASE_URL` and installing its SQLAlchemy driver.
 - Put the API behind a reverse proxy or managed platform with TLS, rate limiting, request-size limits, and centralized logs.
+- Configure OpenAI project spend/rate limits and monitor radar request duration, failures, and token usage.
 - Add email verification, password reset, MFA/passkeys, abuse protection, audit events, and key rotation when product requirements reach those areas.

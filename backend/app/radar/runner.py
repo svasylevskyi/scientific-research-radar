@@ -1,13 +1,16 @@
+import logging
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.radar.client import RadarClient, RadarClientError
-from app.radar.prompt_builder import RadarPromptBuilder
+from app.models.digest_run import DigestRun
 from app.repositories.digest_repository import DigestRepository
 from app.repositories.digest_run_repository import DigestRunRepository
+from app.radar.client import RadarClient, RadarClientError
+from app.radar.prompt_builder import RadarPromptBuilder
 from app.schemas.digest import DigestRead
-from app.models.digest_run import DigestRun
+
+logger = logging.getLogger(__name__)
 
 
 class RadarDigestNotFoundError(ValueError):
@@ -80,6 +83,11 @@ class RadarRunner:
             )
             self.db.commit()
         except Exception as exc:
+            logger.exception(
+                "Radar run %s failed for digest %s",
+                run_id,
+                digest.id,
+            )
             self.db.rollback()
             failed_run = self.runs.get(run_id)
             if failed_run is not None:
