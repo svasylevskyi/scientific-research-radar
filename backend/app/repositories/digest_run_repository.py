@@ -85,6 +85,18 @@ class DigestRunRepository:
             paper = self._upsert_paper(search_paper)
             relevance = relevance_by_id[search_paper.external_id]
             summary = summary_by_id[search_paper.external_id]
+            search_data = search_paper.model_dump(mode="json")
+            for persisted_column in (
+                "source_name",
+                "external_id",
+                "title",
+                "authors",
+                "abstract",
+                "published_date",
+                "url",
+                "doi",
+            ):
+                search_data.pop(persisted_column)
             self.db.add(
                 DigestRunPaper(
                     id=uuid4(),
@@ -92,10 +104,7 @@ class DigestRunRepository:
                     paper_id=paper.id,
                     rank=rank,
                     relevance_score=relevance.score,
-                    search_data=search_paper.model_dump(
-                        mode="json",
-                        include={"discovery_reason", "matched_keywords", "citations"},
-                    ),
+                    search_data=search_data,
                     relevance_data=relevance.model_dump(
                         mode="json", exclude={"external_id", "score"}
                     ),

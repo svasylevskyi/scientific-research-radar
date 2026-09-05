@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from typing import Annotated
 
+import pytest
 from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -18,7 +19,12 @@ from app.models.digest_run import (
     Paper,
 )
 from app.radar.client import DryRunRadarClient, OpenAIRadarClient, RadarClientResult
-from app.radar.prompt_builder import RadarPrompt, RadarPromptBuilder
+from app.radar.contracts import RadarOutput
+from app.radar.prompt_builder import (
+    PROMPT_DIRECTORY,
+    RadarPrompt,
+    RadarPromptBuilder,
+)
 from app.radar.runner import RadarRunner
 
 PASSWORD = "correct-horse-battery-staple"
@@ -122,7 +128,10 @@ def test_run_now_uses_one_client_call_and_persists_each_stage(
     assert result["paper_count"] == 1
     assert result["search_data"]["queries"]
     assert result["relevance_data"]["methodology"]
+    assert result["paper_results"][0]["search_data"]["access_status"] == "metadata_only"
+    assert result["paper_results"][0]["relevance_data"]["topic_relevance_score"] == 8
     assert result["paper_results"][0]["summary_data"]["concise_summary"]
+    assert result["paper_results"][0]["summary_data"]["summary_basis"] == "metadata_only"
     assert result["trend_analysis"]["overview"]
     assert result["briefing"]["executive_summary"]
 
@@ -223,3 +232,29 @@ def test_default_test_configuration_never_uses_the_openai_client(
     )
     assert response.status_code == 201
     assert response.json()["model_name"] == "dry-run"
+
+
+def test_consolidated_prompt_is_versioned_and_previous_prompts_are_archived() -> None:
+    prompt = RadarPromptBuilder().build(
+        digest_snapshot={"topic": "Transparent AI evaluation", "maximum_papers": 5},
+        history_context=[],
+    )
+
+    assert prompt.version == "2026-09-05.2"
+    assert "five connected stages" in prompt.system
+    assert "untrusted data" in prompt.system
+    assert "maximum number of papers returned and persisted" in prompt.user
+    assert "Transparent AI evaluation" in prompt.user
+    assert (PROMPT_DIRECTORY / "archive" / "system.v2026-09-05.1.md").is_file()
+    assert (PROMPT_DIRECTORY / "archive" / "radar_run.v2026-09-05.1.md").is_file()
+
+
+def test_radar_contract_rejects_unknown_cross_stage_paper_references() -> None:
+    output = DryRunRadarClient().execute(
+        RadarPrompt(system="test", user="test", version="test")
+    ).output
+    invalid = output.model_dump()
+    invalid["digest_briefing"]["top_paper_external_ids"] = ["unknown-paper"]
+
+    with pytest.raises(ValueError, match="unknown papers"):
+        RadarOutput.model_validate(invalid)
