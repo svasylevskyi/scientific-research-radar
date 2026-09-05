@@ -1,8 +1,12 @@
+export type UserRole = "user" | "admin";
+
 export interface User {
   id: string;
   email: string;
   full_name: string;
   is_active: boolean;
+  role: UserRole;
+  is_super_admin: boolean;
   created_at: string;
 }
 
@@ -23,4 +27,3 @@ export interface LoginInput {
   email: string;
   password: string;
 }
-

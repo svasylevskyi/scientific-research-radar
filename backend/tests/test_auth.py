@@ -17,6 +17,7 @@ def test_register_sets_session_and_returns_user(client: TestClient) -> None:
     assert response.status_code == 201
     body = response.json()
     assert body["user"]["email"] == REGISTER_PAYLOAD["email"]
+    assert body["user"]["role"] == "user"
     assert body["token_type"] == "bearer"
     assert body["access_token"]
     assert "research_radar_refresh" in response.cookies
@@ -70,4 +71,3 @@ def test_refresh_rotates_token_and_logout_revokes_session(client: TestClient) ->
 def test_protected_route_requires_access_token(client: TestClient) -> None:
     response = client.get("/api/v1/users/me")
     assert response.status_code == 401
-

@@ -1,60 +1,15 @@
-import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import SecurityRoundedIcon from "@mui/icons-material/SecurityRounded";
-import { AppBar, Avatar, Box, Button, Chip, Container, Paper, Stack, Toolbar, Typography } from "@mui/material";
-import { useState } from "react";
+import { Box, Chip, Container, Paper, Stack, Typography } from "@mui/material";
 
 import { useAuth } from "../auth/AuthContext";
-import { Brand } from "../components/Brand";
+import { AppHeader } from "../components/AppHeader";
 
 export function DashboardPage() {
-  const { user, logout } = useAuth();
-  const [isSigningOut, setIsSigningOut] = useState(false);
-
-  async function handleLogout() {
-    setIsSigningOut(true);
-    await logout();
-  }
-
-  const initials = user?.full_name
-    .split(" ")
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
+  const { user } = useAuth();
 
   return (
     <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
-      <AppBar position="sticky" color="inherit" elevation={0} sx={{ borderBottom: "1px solid", borderColor: "divider" }}>
-        <Toolbar sx={{ minHeight: { xs: 68, sm: 76 } }}>
-          <Container maxWidth="lg" disableGutters sx={{ display: "flex", alignItems: "center" }}>
-            <Brand compact />
-            <Box sx={{ flexGrow: 1 }} />
-            <Stack direction="row" spacing={1.5} alignItems="center">
-              <Avatar sx={{ width: 38, height: 38, bgcolor: "primary.dark", fontSize: "0.85rem", fontWeight: 800 }}>
-                {initials}
-              </Avatar>
-              <Button
-                color="inherit"
-                onClick={handleLogout}
-                disabled={isSigningOut}
-                startIcon={<LogoutRoundedIcon />}
-                sx={{ display: { xs: "none", sm: "inline-flex" } }}
-              >
-                Sign out
-              </Button>
-              <Button
-                color="inherit"
-                onClick={handleLogout}
-                disabled={isSigningOut}
-                aria-label="Sign out"
-                sx={{ display: { xs: "inline-flex", sm: "none" }, minWidth: 44 }}
-              >
-                <LogoutRoundedIcon />
-              </Button>
-            </Stack>
-          </Container>
-        </Toolbar>
-      </AppBar>
+      <AppHeader />
 
       <Container component="main" maxWidth="lg" sx={{ py: { xs: 5, sm: 8 } }}>
         <Chip label="Foundation ready" color="primary" size="small" sx={{ mb: 2, fontWeight: 750 }} />
@@ -101,4 +56,3 @@ export function DashboardPage() {
     </Box>
   );
 }
-

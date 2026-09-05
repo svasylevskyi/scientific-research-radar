@@ -1,6 +1,6 @@
 # Scientific Research Radar
 
-The first production-shaped vertical slice of the Scientific Research Radar: account registration, login, rotating JWT sessions, and a protected React workspace.
+The first production-shaped vertical slice of the Scientific Research Radar: account registration, login, rotating JWT sessions, role-based access, and a protected React workspace.
 
 ## Architecture
 
@@ -28,6 +28,9 @@ The API, service, repository, and persistence layers are separate. SQLite is sel
 - Automatic access-token renewal after a page reload or one unauthorized API response.
 - Protected `/api/v1/users/me` endpoint and protected React route.
 - Logout revokes the refresh session and clears the cookie.
+- `user` and `admin` roles, checked against the database on every protected request.
+- An automatically bootstrapped, always-active super-admin account.
+- An admin-only, responsive user management panel with account editing, role changes, and confirmed deletion.
 
 ## Run locally
 
@@ -42,12 +45,14 @@ source .venv/bin/activate        # Windows PowerShell: .venv\Scripts\Activate.ps
 pip install -e ".[dev]"
 cp .env.example .env
 python -c "import secrets; print(secrets.token_urlsafe(64))"
-# Put the generated value in JWT_SECRET in .env
+# Put the generated value in JWT_SECRET in .env, and change SUPER_ADMIN_PASSWORD.
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
 API documentation is available at `http://localhost:8000/docs`.
+
+On startup, the API creates the configured super-admin if it does not exist and keeps its password synchronized with `SUPER_ADMIN_PASSWORD`. The defaults in `.env.example` are for local development only. Set `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_FULL_NAME`, and a unique `SUPER_ADMIN_PASSWORD` before signing in. Production mode rejects the placeholder password.
 
 ### 2. Frontend
 
@@ -79,15 +84,21 @@ npm run build
 | `POST` | `/api/v1/auth/refresh` | Rotate the refresh token and return a new access token |
 | `POST` | `/api/v1/auth/logout` | Revoke the current refresh session |
 | `GET` | `/api/v1/users/me` | Return the authenticated user |
+| `GET` | `/api/v1/admin/users` | List/search users (admin only) |
+| `GET` | `/api/v1/admin/users/{id}` | Return user details (admin only) |
+| `PATCH` | `/api/v1/admin/users/{id}` | Update user details/status (admin only) |
+| `PUT` | `/api/v1/admin/users/{id}/role` | Promote or demote a user (admin only) |
+| `DELETE` | `/api/v1/admin/users/{id}` | Delete a user and their sessions (admin only) |
 | `GET` | `/health` | Liveness check |
 
 Register and login accept JSON, which keeps the API contract natural for a React client. Access tokens are sent as `Authorization: Bearer <token>`. Refresh tokens are never exposed to frontend JavaScript.
 
+The admin panel is available at `/admin/users`. The super-admin cannot be deactivated, demoted, or deleted. Administrators also cannot deactivate, demote, or delete their own account; these rules are enforced by the API, with the super-admin active/admin invariant additionally protected by a database constraint.
+
 ## Before production
 
-- Set `ENVIRONMENT=production`, a long random `JWT_SECRET`, the real `CORS_ORIGINS`, and HTTPS.
+- Set `ENVIRONMENT=production`, a long random `JWT_SECRET`, a unique super-admin password, the real `CORS_ORIGINS`, and HTTPS.
 - Set `REFRESH_COOKIE_SECURE=true` and consider `REFRESH_COOKIE_SAMESITE=none` only if the frontend and API are truly cross-site.
 - Move to PostgreSQL by changing `DATABASE_URL` and installing its SQLAlchemy driver.
 - Put the API behind a reverse proxy or managed platform with TLS, rate limiting, request-size limits, and centralized logs.
 - Add email verification, password reset, MFA/passkeys, abuse protection, audit events, and key rotation when product requirements reach those areas.
-
