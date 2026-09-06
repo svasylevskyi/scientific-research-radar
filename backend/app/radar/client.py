@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import time
+from collections.abc import Callable
 from typing import Generic, Protocol, TypeVar
 
 from pydantic import BaseModel
@@ -53,6 +54,10 @@ class RadarClient(Protocol):
         response_format: type[OutputT],
         use_web_search: bool,
         reasoning_effort: str,
+        existing_response_id: str | None = None,
+        on_response_started: Callable[[str], None] | None = None,
+        on_response_lost: Callable[[], None] | None = None,
+        on_poll: Callable[[], None] | None = None,
     ) -> RadarClientResult[OutputT]: ...
 
 
@@ -85,6 +90,10 @@ class OpenAIRadarClient:
         response_format: type[OutputT],
         use_web_search: bool,
         reasoning_effort: str,
+        existing_response_id: str | None = None,
+        on_response_started: Callable[[str], None] | None = None,
+        on_response_lost: Callable[[], None] | None = None,
+        on_poll: Callable[[], None] | None = None,
     ) -> RadarClientResult[OutputT]:
         try:
             from openai import OpenAI
@@ -119,7 +128,19 @@ class OpenAIRadarClient:
                     max_tool_calls=self.max_search_tool_calls,
                 )
 
-            response = client.responses.parse(**request)
+            response = None
+            if existing_response_id:
+                try:
+                    response = client.responses.retrieve(existing_response_id)
+                except Exception as exc:
+                    if getattr(exc, "status_code", None) != 404:
+                        raise
+                    if on_response_lost:
+                        on_response_lost()
+            if response is None:
+                response = client.responses.parse(**request)
+                if on_response_started:
+                    on_response_started(response.id)
             deadline = time.monotonic() + self.background_poll_timeout_seconds
             transient_poll_failures = 0
             while response.status in {"queued", "in_progress"}:
@@ -128,6 +149,8 @@ class OpenAIRadarClient:
                         f"OpenAI {prompt.stage.value} exceeded the background time limit"
                     )
                 time.sleep(self.background_poll_interval_seconds)
+                if on_poll:
+                    on_poll()
                 try:
                     response = client.responses.retrieve(response.id)
                     transient_poll_failures = 0
@@ -138,6 +161,8 @@ class OpenAIRadarClient:
 
             if response.status != "completed":
                 detail = self._response_failure_detail(response)
+                if on_response_lost:
+                    on_response_lost()
                 raise RadarClientError(
                     f"OpenAI {prompt.stage.value} ended with status "
                     f"{response.status}: {detail}"
@@ -147,10 +172,17 @@ class OpenAIRadarClient:
             if parsed is None:
                 output_text = getattr(response, "output_text", "")
                 if not output_text:
+                    if on_response_lost:
+                        on_response_lost()
                     raise RadarClientError(
                         f"OpenAI {prompt.stage.value} returned no structured data"
                     )
-                parsed = response_format.model_validate_json(output_text)
+                try:
+                    parsed = response_format.model_validate_json(output_text)
+                except Exception:
+                    if on_response_lost:
+                        on_response_lost()
+                    raise
         except RadarClientError:
             raise
         except Exception as exc:

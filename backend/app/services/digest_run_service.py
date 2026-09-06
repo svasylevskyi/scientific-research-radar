@@ -2,7 +2,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.digest_run import DigestRun, DigestRunStageStatus
+from app.models.digest_run import DigestRun
 from app.models.user import User
 from app.repositories.digest_repository import DigestRepository
 from app.repositories.digest_run_repository import DigestRunRepository
@@ -53,38 +53,3 @@ class DigestRunHistoryService:
     def _require_digest(self, *, owner: User, digest_id: UUID) -> None:
         if self.digests.get_for_owner(digest_id=digest_id, owner_id=owner.id) is None:
             raise DigestRunNotFoundError("Digest not found")
-
-
-def fail_interrupted_development_runs(db: Session) -> int:
-    repository = DigestRunRepository(db)
-    interrupted = repository.list_running()
-    for run in interrupted:
-        stage = next(
-            (
-                item
-                for item in run.stages
-                if item.status == DigestRunStageStatus.RUNNING
-            ),
-            next(
-                (
-                    item
-                    for item in run.stages
-                    if item.status == DigestRunStageStatus.PENDING
-                ),
-                None,
-            ),
-        )
-        if stage is not None:
-            repository.mark_failed(
-                run=run,
-                stage=stage,
-                message=(
-                    "Radar execution was interrupted by an API restart. "
-                    "Completed stages remain available; start a new run when ready."
-                ),
-            )
-        else:
-            repository.mark_completed(run=run)
-    if interrupted:
-        db.commit()
-    return len(interrupted)

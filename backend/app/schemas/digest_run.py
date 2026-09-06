@@ -83,6 +83,7 @@ class DigestRunSummaryRead(BaseModel):
     model_name: str
     prompt_version: str
     paper_count: int
+    request_count: int
     error_message: str | None
     started_at: datetime
     completed_at: datetime | None

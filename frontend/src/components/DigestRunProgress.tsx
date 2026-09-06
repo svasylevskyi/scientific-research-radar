@@ -77,6 +77,9 @@ export function DigestRunProgress({ run }: { run: DigestRunDetail }) {
 
   return (
     <Stack spacing={1.25} aria-label="Radar run progress">
+      <Typography variant="caption" color="text.secondary">
+        OpenAI response jobs created: {run.request_count}. Paper-summary batches can make the total exceed four.
+      </Typography>
       {sortedStages.map((stage) => (
         <Paper
           key={stage.stage}
@@ -123,6 +126,11 @@ export function DigestRunProgress({ run }: { run: DigestRunDetail }) {
       {run.status === "running" && (
         <Alert severity="info" icon={<HourglassEmptyRoundedIcon />}>
           Only one radar run can be active for your account. Other application pages remain available.
+        </Alert>
+      )}
+      {run.status === "queued" && (
+        <Alert severity="info" icon={<HourglassEmptyRoundedIcon />}>
+          This run is queued. A radar worker will start it shortly; other application pages remain available.
         </Alert>
       )}
     </Stack>

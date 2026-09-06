@@ -57,6 +57,7 @@ export function DigestHistoryPage() {
   const [tab, setTab] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingRun, setIsLoadingRun] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -116,7 +117,7 @@ export function DigestHistoryPage() {
   }, [digestId, selectedRunId]);
 
   useEffect(() => {
-    if (!selectedRun || selectedRun.status !== "running") return;
+    if (!selectedRun || !["queued", "running"].includes(selectedRun.status)) return;
     let active = true;
     const runId = selectedRun.id;
 
@@ -137,6 +138,21 @@ export function DigestHistoryPage() {
       window.clearInterval(interval);
     };
   }, [digestId, selectedRun?.id, selectedRun?.status]);
+
+  async function retryRun() {
+    if (!selectedRun) return;
+    setIsRetrying(true);
+    setError(null);
+    try {
+      const retried = await digestRunsApi.retry(digestId, selectedRun.id);
+      setSelectedRun(retried);
+      setRuns((current) => current.map((run) => run.id === retried.id ? retried : run));
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "Could not retry this radar run.");
+    } finally {
+      setIsRetrying(false);
+    }
+  }
 
   useEffect(() => {
     if (!selectedRun) return;
@@ -228,6 +244,15 @@ export function DigestHistoryPage() {
                   {selectedRun.status === "failed" && (
                     <Alert severity="error">
                       {selectedRun.error_message ?? "This radar run failed."}
+                      <Button
+                        color="inherit"
+                        size="small"
+                        disabled={isRetrying}
+                        onClick={() => void retryRun()}
+                        sx={{ ml: 1 }}
+                      >
+                        {isRetrying ? "Retrying…" : "Retry failed stage"}
+                      </Button>
                     </Alert>
                   )}
                   <Box>

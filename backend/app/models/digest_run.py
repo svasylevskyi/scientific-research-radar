@@ -24,6 +24,7 @@ from app.db.base import Base
 
 
 class DigestRunStatus(StrEnum):
+    QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -60,7 +61,7 @@ class DigestRun(Base):
     __tablename__ = "digest_runs"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('running', 'completed', 'failed')",
+            "status IN ('queued', 'running', 'completed', 'failed')",
             name="ck_digest_runs_status",
         ),
         CheckConstraint(
@@ -71,11 +72,11 @@ class DigestRun(Base):
         Index("idx_digest_runs_owner_created_at", "owner_id", "created_at"),
         Index("idx_digest_runs_status", "status"),
         Index(
-            "uq_digest_runs_owner_running",
+            "uq_digest_runs_owner_active",
             "owner_id",
             unique=True,
-            sqlite_where=text("status = 'running'"),
-            postgresql_where=text("status = 'running'"),
+            sqlite_where=text("status IN ('queued', 'running')"),
+            postgresql_where=text("status IN ('queued', 'running')"),
         ).ddl_if(dialect=("sqlite", "postgresql")),
     )
 
@@ -98,6 +99,9 @@ class DigestRun(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    worker_id: Mapped[str | None] = mapped_column(String(100))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    request_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -137,7 +141,7 @@ class DigestRun(Base):
 
     @property
     def current_stage(self) -> DigestRunStageType | None:
-        if self.status != DigestRunStatus.RUNNING:
+        if self.status not in {DigestRunStatus.QUEUED, DigestRunStatus.RUNNING}:
             return None
         for stage in self.stages:
             if stage.status == DigestRunStageStatus.RUNNING:
@@ -183,6 +187,7 @@ class DigestRunStage(Base):
     result_data: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     error_message: Mapped[str | None] = mapped_column(Text)
     response_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    active_response_id: Mapped[str | None] = mapped_column(String(255))
     usage_data: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False, default=dict)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
     prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)

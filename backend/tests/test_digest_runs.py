@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Annotated
 from uuid import UUID
@@ -39,6 +39,7 @@ from app.radar.prompt_builder import (
     RadarPromptBuilder,
 )
 from app.radar.runner import RadarRunner
+from app.repositories.digest_run_repository import DigestRunRepository
 
 PASSWORD = "correct-horse-battery-staple"
 
@@ -259,6 +260,10 @@ class RecordingRadarClient:
         response_format,
         use_web_search: bool,
         reasoning_effort: str,
+        existing_response_id=None,
+        on_response_started=None,
+        on_response_lost=None,
+        on_poll=None,
     ) -> RadarClientResult:
         self.calls.append(
             {
@@ -270,15 +275,20 @@ class RecordingRadarClient:
         )
         if prompt.stage == self.fail_stage:
             raise RuntimeError("Deliberate test failure")
+        response_id = existing_response_id or f"recorded-response-{len(self.calls)}"
+        if not existing_response_id and on_response_started:
+            on_response_started(response_id)
+        if on_poll:
+            on_poll()
         return RadarClientResult(
             output=_stage_output(response_format),
-            response_id=f"recorded-response-{len(self.calls)}",
+            response_id=response_id,
             model_name=self.model_name,
             usage=RadarTokenUsage(input_tokens=100, output_tokens=50),
         )
 
 
-def _runner(db: Session, radar_client) -> RadarRunner:
+def _runner(db: Session, radar_client, *, worker_id: str | None = None) -> RadarRunner:
     return RadarRunner(
         db,
         client=radar_client,
@@ -291,7 +301,19 @@ def _runner(db: Session, radar_client) -> RadarRunner:
             DigestRunStageType.TREND_ANALYSIS: "medium",
             DigestRunStageType.DIGEST_BRIEFING: "low",
         },
+        worker_id=worker_id,
     )
+
+
+def _execute_next(db_session_factory, radar_client) -> None:
+    with db_session_factory() as db:
+        worker_id = "test-worker"
+        run = DigestRunRepository(db).claim_next(
+            worker_id=worker_id,
+            lease_expires_at=datetime.now(timezone.utc) + timedelta(minutes=1),
+        )
+        assert run is not None
+        _runner(db, radar_client, worker_id=worker_id).execute_run(run_id=run.id)
 
 
 def _override_runner(radar_client):
@@ -318,8 +340,10 @@ def test_run_now_executes_four_stages_and_persists_progress(
     )
 
     assert response.status_code == 202
-    assert response.json()["status"] == "running"
+    assert response.json()["status"] == "queued"
     assert len(response.json()["stages"]) == 4
+    assert radar_client.calls == []
+    _execute_next(db_session_factory, radar_client)
     assert len(radar_client.calls) == 4
     assert radar_client.calls[0]["use_web_search"] is True
     assert all(not call["use_web_search"] for call in radar_client.calls[1:])
@@ -331,6 +355,8 @@ def test_run_now_executes_four_stages_and_persists_progress(
     assert detail.status_code == 200
     result = detail.json()
     assert result["status"] == "completed"
+    assert result["request_count"] == 4
+    assert all(len(stage["response_ids"]) == 1 for stage in result["stages"])
     assert result["current_stage"] is None
     assert [stage["status"] for stage in result["stages"]] == ["completed"] * 4
     assert result["paper_results"][0]["summary_data"]["concise_summary"]
@@ -348,6 +374,7 @@ def test_run_now_executes_four_stages_and_persists_progress(
 
 def test_completed_history_is_added_only_to_relevant_later_stages(
     client: TestClient,
+    db_session_factory: sessionmaker[Session],
 ) -> None:
     user = _register(client, "history@example.com", "History Owner")
     authorization = _authorization(user)
@@ -356,7 +383,9 @@ def test_completed_history_is_added_only_to_relevant_later_stages(
     _override_runner(radar_client)
 
     first = client.post(f"/api/v1/digests/{digest['id']}/runs", headers=authorization)
+    _execute_next(db_session_factory, radar_client)
     second = client.post(f"/api/v1/digests/{digest['id']}/runs", headers=authorization)
+    _execute_next(db_session_factory, radar_client)
 
     assert first.status_code == 202
     assert second.status_code == 202
@@ -375,6 +404,7 @@ def test_completed_history_is_added_only_to_relevant_later_stages(
 
 def test_failed_stage_preserves_completed_and_pending_stage_history(
     client: TestClient,
+    db_session_factory: sessionmaker[Session],
 ) -> None:
     user = _register(client, "failure@example.com", "Failure Owner")
     authorization = _authorization(user)
@@ -386,6 +416,7 @@ def test_failed_stage_preserves_completed_and_pending_stage_history(
         f"/api/v1/digests/{digest['id']}/runs", headers=authorization
     )
     assert response.status_code == 202
+    _execute_next(db_session_factory, radar_client)
 
     detail = client.get(
         f"/api/v1/digests/{digest['id']}/runs/{response.json()['id']}",
@@ -403,6 +434,68 @@ def test_failed_stage_preserves_completed_and_pending_stage_history(
     assert detail["paper_results"][0]["summary_data"] is None
     assert detail["trend_analysis"] is None
     assert detail["briefing"] is None
+
+
+def test_failed_run_retries_from_failed_stage_without_repeating_completed_work(
+    client: TestClient,
+    db_session_factory: sessionmaker[Session],
+) -> None:
+    user = _register(client, "retry@example.com", "Retry Owner")
+    authorization = _authorization(user)
+    digest = _create_digest(client, authorization)
+    radar_client = RecordingRadarClient(DigestRunStageType.PAPER_SUMMARIES)
+    _override_runner(radar_client)
+
+    created = client.post(
+        f"/api/v1/digests/{digest['id']}/runs", headers=authorization
+    )
+    _execute_next(db_session_factory, radar_client)
+    assert [call["prompt"].stage for call in radar_client.calls] == [
+        DigestRunStageType.DISCOVERY_RELEVANCE,
+        DigestRunStageType.PAPER_SUMMARIES,
+    ]
+
+    radar_client.fail_stage = None
+    retried = client.post(
+        f"/api/v1/digests/{digest['id']}/runs/{created.json()['id']}/retry",
+        headers=authorization,
+    )
+    assert retried.status_code == 202
+    assert retried.json()["status"] == "queued"
+    _execute_next(db_session_factory, radar_client)
+
+    detail = client.get(
+        f"/api/v1/digests/{digest['id']}/runs/{created.json()['id']}",
+        headers=authorization,
+    ).json()
+    assert detail["status"] == "completed"
+    assert [call["prompt"].stage for call in radar_client.calls] == [
+        DigestRunStageType.DISCOVERY_RELEVANCE,
+        DigestRunStageType.PAPER_SUMMARIES,
+        DigestRunStageType.PAPER_SUMMARIES,
+        DigestRunStageType.TREND_ANALYSIS,
+        DigestRunStageType.DIGEST_BRIEFING,
+    ]
+    assert detail["request_count"] == 4
+
+
+def test_retry_is_owner_scoped(client: TestClient, db_session_factory) -> None:
+    owner = _register(client, "retry.owner@example.com", "Retry Owner")
+    other = _register(client, "retry.other@example.com", "Other User")
+    owner_access = _authorization(owner)
+    digest = _create_digest(client, owner_access)
+    radar_client = RecordingRadarClient(DigestRunStageType.PAPER_SUMMARIES)
+    _override_runner(radar_client)
+    run = client.post(
+        f"/api/v1/digests/{digest['id']}/runs", headers=owner_access
+    ).json()
+    _execute_next(db_session_factory, radar_client)
+
+    response = client.post(
+        f"/api/v1/digests/{digest['id']}/runs/{run['id']}/retry",
+        headers=_authorization(other),
+    )
+    assert response.status_code == 404
 
 
 def test_one_active_run_per_user_is_enforced_across_digests(
@@ -444,6 +537,44 @@ def test_one_active_run_per_user_is_enforced_across_digests(
     assert client.post(
         f"/api/v1/digests/{other_digest['id']}/runs", headers=other_access
     ).status_code == 202
+
+
+def test_expired_worker_lease_is_reclaimed_without_allowing_stale_renewal(
+    client: TestClient,
+    db_session_factory: sessionmaker[Session],
+) -> None:
+    user = _register(client, "lease@example.com", "Lease Owner")
+    authorization = _authorization(user)
+    digest = _create_digest(client, authorization)
+    radar_client = RecordingRadarClient()
+    _override_runner(radar_client)
+    queued = client.post(
+        f"/api/v1/digests/{digest['id']}/runs", headers=authorization
+    )
+    assert queued.status_code == 202
+
+    with db_session_factory() as first_db:
+        first_repository = DigestRunRepository(first_db)
+        claimed = first_repository.claim_next(
+            worker_id="expired-worker",
+            lease_expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+        )
+        assert claimed is not None
+
+    with db_session_factory() as second_db:
+        replacement = DigestRunRepository(second_db).claim_next(
+            worker_id="replacement-worker",
+            lease_expires_at=datetime.now(timezone.utc) + timedelta(minutes=1),
+        )
+        assert replacement is not None
+        assert str(replacement.id) == queued.json()["id"]
+
+    with db_session_factory() as stale_db:
+        assert not DigestRunRepository(stale_db).renew_lease(
+            run_id=UUID(queued.json()["id"]),
+            worker_id="expired-worker",
+            lease_expires_at=datetime.now(timezone.utc) + timedelta(minutes=1),
+        )
 
 
 def test_run_history_is_owner_scoped(client: TestClient) -> None:
@@ -489,6 +620,7 @@ def test_missing_openai_configuration_prevents_a_run(client: TestClient) -> None
 def test_openai_client_starts_background_structured_response(monkeypatch) -> None:
     calls: list[dict] = []
     retrieved: list[str] = []
+    started: list[str] = []
     output = _stage_output(DiscoveryRelevanceOutput)
 
     class FakeResponses:
@@ -542,11 +674,13 @@ def test_openai_client_starts_background_structured_response(monkeypatch) -> Non
         response_format=DiscoveryRelevanceOutput,
         use_web_search=True,
         reasoning_effort="medium",
+        on_response_started=started.append,
     )
 
     assert result.output == output
     assert result.response_id == "response-123"
     assert retrieved == ["response-123"]
+    assert started == ["response-123"]
     assert calls[0]["background"] is True
     assert calls[0]["reasoning"] == {"effort": "medium"}
     assert calls[0]["tools"] == [

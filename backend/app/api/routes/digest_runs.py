@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.dependencies import AppSettings, CurrentUser, DbSession
 from app.models.digest_run import DigestRunStageType
@@ -10,6 +10,7 @@ from app.radar.prompt_builder import RadarPromptBuilder
 from app.radar.runner import (
     RadarDigestNotFoundError,
     RadarRunAlreadyActiveError,
+    RadarRunNotRetryableError,
     RadarRunner,
 )
 from app.schemas.digest_run import (
@@ -62,7 +63,6 @@ def run_digest_now(
     digest_id: UUID,
     current_user: CurrentUser,
     runner: RadarRunnerDep,
-    background_tasks: BackgroundTasks,
 ) -> DigestRunDetailRead:
     try:
         run = runner.start_digest(digest_id=digest_id, owner_id=current_user.id)
@@ -70,7 +70,32 @@ def run_digest_now(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RadarRunAlreadyActiveError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    background_tasks.add_task(runner.make_background_task(run_id=run.id))
+    return DigestRunDetailRead.model_validate(run)
+
+
+@router.post(
+    "/{run_id}/retry",
+    response_model=DigestRunDetailRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def retry_digest_run(
+    digest_id: UUID,
+    run_id: UUID,
+    current_user: CurrentUser,
+    runner: RadarRunnerDep,
+) -> DigestRunDetailRead:
+    try:
+        run = runner.retry_digest(
+            digest_id=digest_id, run_id=run_id, owner_id=current_user.id
+        )
+    except RadarDigestNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RadarRunAlreadyActiveError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except RadarRunNotRetryableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
     return DigestRunDetailRead.model_validate(run)
 
 

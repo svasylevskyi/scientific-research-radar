@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     openai_radar_search_context_size: Literal["low", "medium", "high"] = "medium"
     openai_radar_summary_batch_size: int = Field(default=5, ge=1, le=10)
     radar_history_runs: int = Field(default=3, ge=0, le=20)
+    radar_worker_poll_interval_seconds: float = Field(default=1, ge=0.2, le=30)
+    radar_worker_lease_seconds: int = Field(default=120, ge=30, le=600)
 
     super_admin_email: EmailStr = "admin@example.com"
     super_admin_full_name: str = Field(default="System Administrator", min_length=2, max_length=120)
@@ -59,6 +61,11 @@ class Settings(BaseSettings):
                 raise ValueError("REFRESH_COOKIE_SECURE must be true in production")
             if len(self.super_admin_password) < 16 or "change-me" in self.super_admin_password.lower():
                 raise ValueError("SUPER_ADMIN_PASSWORD must be a strong, non-default value in production")
+        if self.radar_worker_lease_seconds < self.openai_request_timeout_seconds + 15:
+            raise ValueError(
+                "RADAR_WORKER_LEASE_SECONDS must be at least 15 seconds longer "
+                "than OPENAI_REQUEST_TIMEOUT_SECONDS"
+            )
         return self
 
 
