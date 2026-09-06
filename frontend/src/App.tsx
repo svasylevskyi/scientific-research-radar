@@ -7,6 +7,7 @@ import { AdminUserDetailPage } from "./pages/AdminUserDetailPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DigestDetailPage } from "./pages/DigestDetailPage";
+import { DigestHistoryPage } from "./pages/DigestHistoryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NewDigestPage } from "./pages/NewDigestPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -46,6 +47,14 @@ export default function App() {
         element={
           <RequireAuth>
             <DigestDetailPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/digests/:digestId/history"
+        element={
+          <RequireAuth>
+            <DigestHistoryPage />
           </RequireAuth>
         }
       />

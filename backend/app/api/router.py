@@ -1,11 +1,21 @@
 from fastapi import APIRouter
 
-from app.api.routes import admin_digests, admin_users, auth, digests, users
+from app.api.routes import admin_digests, admin_users, auth, digest_runs, digests, users
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(digests.router, prefix="/digests", tags=["digests"])
+api_router.include_router(
+    digest_runs.router,
+    prefix="/digests/{digest_id}/runs",
+    tags=["digest runs"],
+)
+api_router.include_router(
+    digest_runs.active_router,
+    prefix="/digest-runs",
+    tags=["digest runs"],
+)
 api_router.include_router(admin_users.router, prefix="/admin/users", tags=["administration"])
 api_router.include_router(
     admin_digests.router,

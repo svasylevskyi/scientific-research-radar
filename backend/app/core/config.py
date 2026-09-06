@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import EmailStr, Field, model_validator
+from pydantic import EmailStr, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +28,21 @@ class Settings(BaseSettings):
     refresh_cookie_secure: bool = False
     refresh_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+
+    openai_api_key: SecretStr | None = None
+    openai_radar_model: str = Field(default="gpt-6-astra", min_length=1, max_length=100)
+    openai_radar_discovery_reasoning_effort: Literal["low", "medium", "high", "xhigh"] = "medium"
+    openai_radar_summary_reasoning_effort: Literal["low", "medium", "high", "xhigh"] = "low"
+    openai_radar_trend_reasoning_effort: Literal["low", "medium", "high", "xhigh"] = "medium"
+    openai_radar_briefing_reasoning_effort: Literal["low", "medium", "high", "xhigh"] = "low"
+    openai_request_timeout_seconds: float = Field(default=60, ge=15, le=300)
+    openai_background_poll_timeout_seconds: float = Field(default=900, ge=60, le=3600)
+    openai_background_poll_interval_seconds: float = Field(default=2, ge=0.5, le=10)
+    openai_radar_max_output_tokens: int = Field(default=30000, ge=1000, le=128000)
+    openai_radar_max_search_tool_calls: int = Field(default=8, ge=1, le=20)
+    openai_radar_search_context_size: Literal["low", "medium", "high"] = "medium"
+    openai_radar_summary_batch_size: int = Field(default=5, ge=1, le=10)
+    radar_history_runs: int = Field(default=3, ge=0, le=20)
 
     super_admin_email: EmailStr = "admin@example.com"
     super_admin_full_name: str = Field(default="System Administrator", min_length=2, max_length=120)
