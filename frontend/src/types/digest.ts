@@ -45,7 +45,7 @@ export interface DigestListResponse<TDigest extends Digest = Digest> {
   limit: number;
 }
 
-export type DigestRunStatus = "running" | "completed" | "failed";
+export type DigestRunStatus = "queued" | "running" | "completed" | "failed";
 export type DigestRunTrigger = "manual" | "scheduled";
 export type DigestRunStageType =
   | "discovery_relevance"
@@ -270,6 +270,7 @@ export interface DigestRunSummary {
   model_name: string;
   prompt_version: string;
   paper_count: number;
+  request_count: number;
   error_message: string | null;
   started_at: string;
   completed_at: string | null;

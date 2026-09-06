@@ -57,15 +57,23 @@ alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
+Start the durable radar worker in a second terminal using the same virtual
+environment and `.env` file:
+
+```bash
+cd backend
+python -m app.radar.worker
+```
+
 API documentation is available at `http://localhost:8000/docs`.
 
 On startup, the API creates the configured super-admin if it does not exist. `SUPER_ADMIN_PASSWORD` supplies its initial password; subsequent password changes can be made from the profile page. The defaults in `.env.example` are for local development only. Set `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_FULL_NAME`, and a unique `SUPER_ADMIN_PASSWORD` before signing in. Production mode rejects the placeholder password.
 
-`Run now` creates a persisted run, returns `202 Accepted`, and starts four stages: discovery/relevance, batched paper summaries, trend analysis, and briefing preparation. OpenAI Background mode is used for each stage so browser and reverse-proxy request timeouts do not terminate model work. Hosted web search is enabled only for discovery; later stages consume compact structured handoffs from the database. No OpenAI request is made while viewing or editing a digest, loading history, starting the API, or using the disabled scheduling control. Set `OPENAI_API_KEY` in `backend/.env`; without it, the run endpoint returns `503 Service Unavailable`. Tests inject local clients and never contact OpenAI.
+`Run now` creates a queued, persisted run and immediately returns `202 Accepted`. The separate worker claims that explicitly requested run and executes four stages: discovery/relevance, batched paper summaries, trend analysis, and briefing preparation. OpenAI Background mode is used for each request so browser and reverse-proxy timeouts do not terminate model work. Hosted web search is enabled only for discovery; later stages consume compact structured handoffs from the database. No OpenAI request is made while viewing or editing a digest, loading history, starting the API, or using the disabled scheduling control. Set `OPENAI_API_KEY` in `backend/.env`; without it, the run endpoint returns `503 Service Unavailable`. Tests inject local clients and never contact OpenAI.
 
-Stage reasoning effort, output limits, web-search context/tool calls, background polling, and summary batch size are configurable through the `OPENAI_*` settings shown in `backend/.env.example`. Automatic response-creation retries are disabled to avoid accidentally duplicating paid work after an ambiguous network timeout; retrieval polling tolerates transient failures. Token usage is stored per stage. A failed stage is recorded without removing completed stages or partial summary batches.
+Stage reasoning effort, output limits, web-search context/tool calls, background polling, and summary batch size are configurable through the settings shown in `backend/.env.example`. Automatic response-creation retries are disabled to avoid accidentally duplicating paid work after an ambiguous network timeout; each OpenAI response ID is persisted as soon as creation succeeds, allowing a replacement worker to resume polling it. Token usage and the number of successfully created response jobs are stored per stage/run. The four logical stages normally use `3 + ceil(selected papers / summary batch size)` OpenAI response jobs. A failed stage can be retried without removing completed stages or saved summary batches.
 
-Only one run may be active per user, across all of their digests. This is enforced by the database as well as the API; it does not prevent other users from running their own digests. The current development dispatcher uses FastAPI's in-process background tasks. If the development API restarts, an interrupted run is marked failed on startup so it cannot leave the account permanently blocked. Replace that dispatch boundary with a durable worker queue before running multiple production API workers or requiring restart-safe execution.
+Only one queued or running run may be active per user, across all of their digests. This is enforced by the database as well as the API; it does not prevent other users from running their own digests. Workers use renewable database leases, so an expired claim can be recovered after a worker restart. Run the worker as a supervised service in production; multiple workers may safely compete for queued or expired work.
 
 The editable LLM prompt templates are deliberately kept outside the Python source:
 
@@ -119,6 +127,7 @@ npm run build
 | `PATCH` | `/api/v1/digests/{id}` | Update a digest owned by the authenticated user |
 | `DELETE` | `/api/v1/digests/{id}` | Delete a digest owned by the authenticated user |
 | `POST` | `/api/v1/digests/{id}/runs` | Start the authenticated user's digest run and return `202` |
+| `POST` | `/api/v1/digests/{id}/runs/{run_id}/retry` | Requeue the failed stage of an owned run and return `202` |
 | `GET` | `/api/v1/digests/{id}/runs` | List stored runs for the authenticated user's digest |
 | `GET` | `/api/v1/digests/{id}/runs/{run_id}` | Return all structured stages for one stored run |
 | `GET` | `/api/v1/digest-runs/active` | Return the authenticated user's active run, if any |

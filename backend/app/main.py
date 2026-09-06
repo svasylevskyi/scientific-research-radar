@@ -8,7 +8,6 @@ from app.api.router import api_router
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.services.super_admin_service import ensure_super_admin
-from app.services.digest_run_service import fail_interrupted_development_runs
 
 settings = get_settings()
 
@@ -19,8 +18,6 @@ async def lifespan(_app: FastAPI):
         try:
             with SessionLocal() as db:
                 ensure_super_admin(db, settings)
-                if settings.environment == "development":
-                    fail_interrupted_development_runs(db)
         except OperationalError as exc:
             raise RuntimeError(
                 "Database schema is not ready. Run `alembic upgrade head` before starting the API."

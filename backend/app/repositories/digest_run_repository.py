@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.digest_run import (
@@ -35,14 +35,14 @@ class DigestRunRepository:
     def has_running_for_owner(self, *, owner_id: UUID) -> bool:
         statement = select(DigestRun.id).where(
             DigestRun.owner_id == owner_id,
-            DigestRun.status == DigestRunStatus.RUNNING,
+            DigestRun.status.in_((DigestRunStatus.QUEUED, DigestRunStatus.RUNNING)),
         )
         return self.db.scalar(statement) is not None
 
     def has_running_for_digest(self, *, digest_id: UUID) -> bool:
         statement = select(DigestRun.id).where(
             DigestRun.digest_id == digest_id,
-            DigestRun.status == DigestRunStatus.RUNNING,
+            DigestRun.status.in_((DigestRunStatus.QUEUED, DigestRunStatus.RUNNING)),
         )
         return self.db.scalar(statement) is not None
 
@@ -60,7 +60,7 @@ class DigestRunRepository:
             id=uuid4(),
             digest_id=digest_id,
             owner_id=owner_id,
-            status=DigestRunStatus.RUNNING,
+            status=DigestRunStatus.QUEUED,
             trigger=DigestRunTrigger.MANUAL,
             digest_snapshot=digest_snapshot,
             history_context=history_context,
@@ -99,6 +99,15 @@ class DigestRunRepository:
         stage.error_message = None
         stage.started_at = datetime.now(timezone.utc)
         stage.completed_at = None
+
+    def record_response_started(
+        self, *, run: DigestRun, stage: DigestRunStage, response_id: str
+    ) -> None:
+        stage.active_response_id = response_id
+        run.request_count += 1
+
+    def clear_active_response(self, *, stage: DigestRunStage) -> None:
+        stage.active_response_id = None
 
     def save_discovery_relevance(
         self,
@@ -251,6 +260,8 @@ class DigestRunRepository:
         run.status = DigestRunStatus.COMPLETED
         run.error_message = None
         run.completed_at = datetime.now(timezone.utc)
+        run.worker_id = None
+        run.lease_expires_at = None
 
     def mark_failed(
         self,
@@ -266,6 +277,8 @@ class DigestRunRepository:
         run.status = DigestRunStatus.FAILED
         run.error_message = message[:2000]
         run.completed_at = now
+        run.worker_id = None
+        run.lease_expires_at = None
 
     def get(self, run_id: UUID) -> DigestRun | None:
         statement = select(DigestRun).where(DigestRun.id == run_id).options(
@@ -300,7 +313,7 @@ class DigestRunRepository:
             select(DigestRun)
             .where(
                 DigestRun.owner_id == owner_id,
-                DigestRun.status == DigestRunStatus.RUNNING,
+                DigestRun.status.in_((DigestRunStatus.QUEUED, DigestRunStatus.RUNNING)),
             )
             .options(
                 selectinload(DigestRun.stages),
@@ -315,10 +328,70 @@ class DigestRunRepository:
     def list_running(self) -> list[DigestRun]:
         statement = (
             select(DigestRun)
-            .where(DigestRun.status == DigestRunStatus.RUNNING)
+            .where(DigestRun.status.in_((DigestRunStatus.QUEUED, DigestRunStatus.RUNNING)))
             .options(selectinload(DigestRun.stages))
         )
         return list(self.db.scalars(statement))
+
+    def claim_next(self, *, worker_id: str, lease_expires_at: datetime) -> DigestRun | None:
+        now = datetime.now(timezone.utc)
+        candidate = self.db.scalar(
+            select(DigestRun.id)
+            .where(
+                DigestRun.status.in_((DigestRunStatus.QUEUED, DigestRunStatus.RUNNING)),
+                or_(DigestRun.lease_expires_at.is_(None), DigestRun.lease_expires_at < now),
+            )
+            .order_by(DigestRun.created_at)
+            .limit(1)
+        )
+        if candidate is None:
+            return None
+        claimed = self.db.execute(
+            update(DigestRun)
+            .where(
+                DigestRun.id == candidate,
+                DigestRun.status.in_((DigestRunStatus.QUEUED, DigestRunStatus.RUNNING)),
+                or_(DigestRun.lease_expires_at.is_(None), DigestRun.lease_expires_at < now),
+            )
+            .values(
+                status=DigestRunStatus.RUNNING,
+                worker_id=worker_id,
+                lease_expires_at=lease_expires_at,
+            )
+        )
+        self.db.commit()
+        return self.get(candidate) if claimed.rowcount == 1 else None
+
+    def renew_lease(
+        self, *, run_id: UUID, worker_id: str, lease_expires_at: datetime
+    ) -> bool:
+        result = self.db.execute(
+            update(DigestRun)
+            .where(
+                DigestRun.id == run_id,
+                DigestRun.worker_id == worker_id,
+                DigestRun.status == DigestRunStatus.RUNNING,
+            )
+            .values(lease_expires_at=lease_expires_at)
+            .execution_options(synchronize_session=False)
+        )
+        return result.rowcount == 1
+
+    def requeue_failed(self, *, run: DigestRun) -> None:
+        failed = next(
+            (stage for stage in run.stages if stage.status == DigestRunStageStatus.FAILED),
+            None,
+        )
+        if failed is None:
+            raise ValueError("This run has no failed stage to retry")
+        failed.status = DigestRunStageStatus.PENDING
+        failed.error_message = None
+        failed.completed_at = None
+        run.status = DigestRunStatus.QUEUED
+        run.error_message = None
+        run.completed_at = None
+        run.worker_id = None
+        run.lease_expires_at = None
 
     def list_owned(
         self, *, digest_id: UUID, owner_id: UUID, offset: int, limit: int
@@ -392,6 +465,7 @@ class DigestRunRepository:
         if result.response_id:
             stage.response_ids = [*stage.response_ids, result.response_id]
             run.openai_response_id = result.response_id
+        stage.active_response_id = None
         stage.model_name = result.model_name
         stage.usage_data = self._merge_usage(stage.usage_data, result.usage)
         run.model_name = result.model_name

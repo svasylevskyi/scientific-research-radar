@@ -60,6 +60,12 @@ export const digestRunsApi = {
     return apiRequest<DigestRunDetail>(`/digests/${digestId}/runs/${runId}`);
   },
 
+  retry(digestId: string, runId: string): Promise<DigestRunDetail> {
+    return apiRequest<DigestRunDetail>(`/digests/${digestId}/runs/${runId}/retry`, {
+      method: "POST",
+    });
+  },
+
   active(): Promise<DigestRunDetail | null> {
     return apiRequest<DigestRunDetail | null>("/digest-runs/active");
   },

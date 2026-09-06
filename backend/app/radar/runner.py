@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 import logging
 from typing import Any
 from uuid import UUID
@@ -36,6 +36,10 @@ class RadarRunAlreadyActiveError(ValueError):
     pass
 
 
+class RadarRunNotRetryableError(ValueError):
+    pass
+
+
 class RadarRunner:
     def __init__(
         self,
@@ -46,6 +50,8 @@ class RadarRunner:
         history_limit: int,
         summary_batch_size: int,
         reasoning_efforts: dict[DigestRunStageType, str],
+        worker_id: str | None = None,
+        lease_seconds: int = 60,
     ) -> None:
         self.db = db
         self.client = client
@@ -53,6 +59,8 @@ class RadarRunner:
         self.history_limit = history_limit
         self.summary_batch_size = summary_batch_size
         self.reasoning_efforts = reasoning_efforts
+        self.worker_id = worker_id
+        self.lease_seconds = lease_seconds
         self.digests = DigestRepository(db)
         self.runs = DigestRunRepository(db)
 
@@ -94,26 +102,30 @@ class RadarRunner:
             raise
         return self.runs.get(run.id) or run
 
-    def make_background_task(self, *, run_id: UUID) -> Callable[[], None]:
-        bind = self.db.get_bind()
-        client = self.client
-        prompt_builder = self.prompt_builder
-        history_limit = self.history_limit
-        summary_batch_size = self.summary_batch_size
-        reasoning_efforts = self.reasoning_efforts
-
-        def execute() -> None:
-            with Session(bind=bind, autoflush=False, expire_on_commit=False) as db:
-                RadarRunner(
-                    db,
-                    client=client,
-                    prompt_builder=prompt_builder,
-                    history_limit=history_limit,
-                    summary_batch_size=summary_batch_size,
-                    reasoning_efforts=reasoning_efforts,
-                ).execute_run(run_id=run_id)
-
-        return execute
+    def retry_digest(
+        self, *, digest_id: UUID, run_id: UUID, owner_id: UUID
+    ) -> DigestRun:
+        run = self.runs.get_owned(
+            digest_id=digest_id, run_id=run_id, owner_id=owner_id
+        )
+        if run is None:
+            raise RadarDigestNotFoundError("Digest run not found")
+        if run.status != DigestRunStatus.FAILED:
+            raise RadarRunNotRetryableError("Only a failed radar run can be retried")
+        if self.runs.has_running_for_owner(owner_id=owner_id):
+            raise RadarRunAlreadyActiveError(
+                "Another digest run is already in progress for your account. "
+                "Wait for it to finish before retrying this run."
+            )
+        self.runs.requeue_failed(run=run)
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise RadarRunAlreadyActiveError(
+                "Another digest run is already in progress for your account."
+            ) from exc
+        return self.runs.get(run_id) or run
 
     def execute_run(self, *, run_id: UUID) -> None:
         run = self.runs.get(run_id)
@@ -152,6 +164,13 @@ class RadarRunner:
             failed_run = self.runs.get(run_id)
             if failed_run is None or active_stage is None:
                 return
+            if self.worker_id is not None and failed_run.worker_id != self.worker_id:
+                logger.warning(
+                    "Worker %s no longer owns radar run %s; leaving recovery to its current worker",
+                    self.worker_id,
+                    run_id,
+                )
+                return
             failed_stage = self._stage(failed_run, active_stage)
             message = f"{self._stage_label(active_stage)} failed: {exc}"
             self.runs.mark_failed(
@@ -172,8 +191,10 @@ class RadarRunner:
             digest_snapshot=run.digest_snapshot,
             history_context=run.history_context,
         )
-        result = self.client.execute(
-            prompt,
+        result = self._execute_client(
+            run=run,
+            stage=stage,
+            prompt=prompt,
             response_format=DiscoveryRelevanceOutput,
             use_web_search=True,
             reasoning_effort=self.reasoning_efforts[stage.stage],
@@ -199,18 +220,24 @@ class RadarRunner:
             return PaperSummariesOutput.model_validate(stage.result_data)
 
         papers = self._summary_input(discovery)
+        existing = list((stage.result_data or {}).get("paper_summaries", []))
+        completed_ids = {item["external_id"] for item in existing}
+        remaining = [paper for paper in papers if paper["external_id"] not in completed_ids]
         self.runs.mark_stage_running(stage=stage, progress_total=len(papers))
-        stage.result_data = {"paper_summaries": []}
+        stage.result_data = {"paper_summaries": existing}
+        stage.progress_current = len(existing)
         self.db.commit()
 
-        for start in range(0, len(papers), self.summary_batch_size):
-            batch = papers[start : start + self.summary_batch_size]
+        for start in range(0, len(remaining), self.summary_batch_size):
+            batch = remaining[start : start + self.summary_batch_size]
             prompt = self.prompt_builder.build_paper_summaries(
                 digest_snapshot=run.digest_snapshot,
                 papers=batch,
             )
-            result = self.client.execute(
-                prompt,
+            result = self._execute_client(
+                run=run,
+                stage=stage,
+                prompt=prompt,
                 response_format=PaperSummariesOutput,
                 use_web_search=False,
                 reasoning_effort=self.reasoning_efforts[stage.stage],
@@ -254,8 +281,10 @@ class RadarRunner:
             history_context=run.history_context,
             papers=self._trend_input(discovery, summaries),
         )
-        result = self.client.execute(
-            prompt,
+        result = self._execute_client(
+            run=run,
+            stage=stage,
+            prompt=prompt,
             response_format=TrendAnalysisOutput,
             use_web_search=False,
             reasoning_effort=self.reasoning_efforts[stage.stage],
@@ -289,8 +318,10 @@ class RadarRunner:
             papers=self._briefing_input(discovery, summaries),
             trend_analysis=trend.trend_analysis.model_dump(mode="json"),
         )
-        result = self.client.execute(
-            prompt,
+        result = self._execute_client(
+            run=run,
+            stage=stage,
+            prompt=prompt,
             response_format=DigestBriefingOutput,
             use_web_search=False,
             reasoning_effort=self.reasoning_efforts[stage.stage],
@@ -303,6 +334,56 @@ class RadarRunner:
         self.runs.save_digest_briefing(run=run, stage=stage, result=result)
         self.db.commit()
         return result.output
+
+    def _execute_client(
+        self,
+        *,
+        run: DigestRun,
+        stage: DigestRunStage,
+        prompt,
+        response_format: type,
+        use_web_search: bool,
+        reasoning_effort: str,
+    ):
+        def persist_response_id(response_id: str) -> None:
+            self._renew_lease(run)
+            self.runs.record_response_started(
+                run=run, stage=stage, response_id=response_id
+            )
+            self.db.commit()
+
+        def clear_lost_response() -> None:
+            self.runs.clear_active_response(stage=stage)
+            self.db.commit()
+
+        return self.client.execute(
+            prompt,
+            response_format=response_format,
+            use_web_search=use_web_search,
+            reasoning_effort=reasoning_effort,
+            existing_response_id=stage.active_response_id,
+            on_response_started=persist_response_id,
+            on_response_lost=clear_lost_response,
+            on_poll=lambda: self._heartbeat(run),
+        )
+
+    def _heartbeat(self, run: DigestRun) -> None:
+        self._renew_lease(run)
+        self.db.commit()
+
+    def _renew_lease(self, run: DigestRun) -> None:
+        if self.worker_id is not None:
+            renewed = self.runs.renew_lease(
+                run_id=run.id,
+                worker_id=self.worker_id,
+                lease_expires_at=datetime.now(timezone.utc)
+                + timedelta(seconds=self.lease_seconds),
+            )
+            if not renewed:
+                self.db.rollback()
+                raise RadarClientError(
+                    "This worker lost its radar run lease; another worker may resume it"
+                )
 
     def _reload(self, run_id: UUID) -> DigestRun:
         self.db.expire_all()
