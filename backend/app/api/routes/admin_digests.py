@@ -11,6 +11,7 @@ from app.schemas.digest import (
 )
 from app.services.digest_service import (
     DigestNotFoundError,
+    DigestRunActiveError,
     DigestService,
     DigestValidationError,
 )
@@ -86,3 +87,5 @@ def _run(operation):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
+    except DigestRunActiveError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc

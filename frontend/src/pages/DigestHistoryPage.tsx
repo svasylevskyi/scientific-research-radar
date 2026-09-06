@@ -19,6 +19,7 @@ import { Link as RouterLink, useLocation, useParams, useSearchParams } from "rea
 import { ApiError } from "../api/client";
 import { digestRunsApi, digestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
+import { DigestRunProgress } from "../components/DigestRunProgress";
 import {
   DigestBriefingResult,
   PaperSummariesResult,
@@ -114,6 +115,42 @@ export function DigestHistoryPage() {
     };
   }, [digestId, selectedRunId]);
 
+  useEffect(() => {
+    if (!selectedRun || selectedRun.status !== "running") return;
+    let active = true;
+    const runId = selectedRun.id;
+
+    async function refreshRun() {
+      try {
+        const result = await digestRunsApi.get(digestId, runId);
+        if (!active) return;
+        setSelectedRun(result);
+        setRuns((current) => current.map((run) => (run.id === result.id ? result : run)));
+      } catch {
+        // Preserve the last known state and retry on the next polling interval.
+      }
+    }
+
+    const interval = window.setInterval(() => void refreshRun(), 2500);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [digestId, selectedRun?.id, selectedRun?.status]);
+
+  useEffect(() => {
+    if (!selectedRun) return;
+    const availability = [
+      Boolean(selectedRun.briefing),
+      Boolean(selectedRun.trend_analysis),
+      Boolean(selectedRun.search_data || selectedRun.relevance_data || selectedRun.paper_results.length),
+    ];
+    if (!availability[tab]) {
+      const firstAvailable = availability.findIndex(Boolean);
+      if (firstAvailable >= 0) setTab(firstAvailable);
+    }
+  }, [selectedRun, tab]);
+
   return (
     <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
       <AppHeader />
@@ -186,36 +223,52 @@ export function DigestHistoryPage() {
                   <CircularProgress size={32} />
                 </Box>
               ) : (
-                <>
+                <Stack spacing={3}>
+                  <DigestRunProgress run={selectedRun} />
                   {selectedRun.status === "failed" && (
                     <Alert severity="error">
                       {selectedRun.error_message ?? "This radar run failed."}
                     </Alert>
                   )}
-                  {selectedRun.status === "running" && (
-                    <Alert severity="info">This radar run is still in progress.</Alert>
-                  )}
-                  {selectedRun.status === "completed" && (
-                    <>
-                      <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
-                        <Tabs
-                          value={tab}
-                          onChange={(_event, nextTab) => setTab(nextTab)}
-                          variant="scrollable"
-                          scrollButtons="auto"
-                          aria-label="Digest run output stages"
-                        >
-                          <Tab label="Digest Briefing" />
-                          <Tab label="Trend Analysis" />
-                          <Tab label="Paper Summaries" />
-                        </Tabs>
-                      </Paper>
-                      <TabPanel active={tab === 0}><DigestBriefingResult run={selectedRun} /></TabPanel>
-                      <TabPanel active={tab === 1}><TrendAnalysisResult run={selectedRun} /></TabPanel>
-                      <TabPanel active={tab === 2}><PaperSummariesResult run={selectedRun} /></TabPanel>
-                    </>
-                  )}
-                </>
+                  <Box>
+                    <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
+                      <Tabs
+                        value={tab}
+                        onChange={(_event, nextTab) => setTab(nextTab)}
+                        variant="scrollable"
+                        scrollButtons="auto"
+                        aria-label="Digest run output stages"
+                      >
+                        <Tab label="Digest Briefing" disabled={!selectedRun.briefing} />
+                        <Tab label="Trend Analysis" disabled={!selectedRun.trend_analysis} />
+                        <Tab
+                          label="Paper Summaries"
+                          disabled={!selectedRun.search_data && !selectedRun.relevance_data && selectedRun.paper_results.length === 0}
+                        />
+                      </Tabs>
+                    </Paper>
+                    <TabPanel active={tab === 0 && Boolean(selectedRun.briefing)}>
+                      <DigestBriefingResult run={selectedRun} />
+                    </TabPanel>
+                    <TabPanel active={tab === 1 && Boolean(selectedRun.trend_analysis)}>
+                      <TrendAnalysisResult run={selectedRun} />
+                    </TabPanel>
+                    <TabPanel
+                      active={
+                        tab === 2 &&
+                        Boolean(selectedRun.search_data || selectedRun.relevance_data || selectedRun.paper_results.length)
+                      }
+                    >
+                      <PaperSummariesResult run={selectedRun} />
+                    </TabPanel>
+                    {!selectedRun.briefing && !selectedRun.trend_analysis && !selectedRun.search_data &&
+                      !selectedRun.relevance_data && selectedRun.paper_results.length === 0 && (
+                        <Alert severity="info" sx={{ mt: 2 }}>
+                          Results will appear here as stages complete.
+                        </Alert>
+                      )}
+                  </Box>
+                </Stack>
               )}
             </Box>
           </Stack>

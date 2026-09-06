@@ -4,7 +4,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.digest_run import DigestRunStatus, DigestRunTrigger
+from app.models.digest_run import (
+    DigestRunStageStatus,
+    DigestRunStageType,
+    DigestRunStatus,
+    DigestRunTrigger,
+)
 
 
 class PaperRead(BaseModel):
@@ -28,8 +33,26 @@ class DigestRunPaperRead(BaseModel):
     relevance_score: float
     search_data: dict[str, Any]
     relevance_data: dict[str, Any]
-    summary_data: dict[str, Any]
+    summary_data: dict[str, Any] | None
     paper: PaperRead
+
+
+class DigestRunStageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    stage: DigestRunStageType
+    position: int
+    status: DigestRunStageStatus
+    progress_current: int
+    progress_total: int
+    result_data: dict[str, Any] | None
+    error_message: str | None
+    response_ids: list[str]
+    usage_data: dict[str, int]
+    model_name: str
+    prompt_version: str
+    started_at: datetime | None
+    completed_at: datetime | None
 
 
 class DigestRunTrendAnalysisRead(BaseModel):
@@ -53,7 +76,9 @@ class DigestRunSummaryRead(BaseModel):
 
     id: UUID
     digest_id: UUID
+    owner_id: UUID
     status: DigestRunStatus
+    current_stage: DigestRunStageType | None
     trigger: DigestRunTrigger
     model_name: str
     prompt_version: str
@@ -67,6 +92,7 @@ class DigestRunSummaryRead(BaseModel):
 class DigestRunDetailRead(DigestRunSummaryRead):
     digest_snapshot: dict[str, Any]
     history_context: list[dict[str, Any]]
+    stages: list[DigestRunStageRead]
     search_data: dict[str, Any] | None
     relevance_data: dict[str, Any] | None
     openai_response_id: str | None

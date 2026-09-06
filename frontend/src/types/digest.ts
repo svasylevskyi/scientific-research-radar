@@ -47,6 +47,12 @@ export interface DigestListResponse<TDigest extends Digest = Digest> {
 
 export type DigestRunStatus = "running" | "completed" | "failed";
 export type DigestRunTrigger = "manual" | "scheduled";
+export type DigestRunStageType =
+  | "discovery_relevance"
+  | "paper_summaries"
+  | "trend_analysis"
+  | "digest_briefing";
+export type DigestRunStageStatus = "pending" | "running" | "completed" | "failed";
 export type Confidence = "low" | "medium" | "high";
 export type Priority = "low" | "medium" | "high";
 
@@ -257,7 +263,9 @@ export interface DigestBriefingData {
 export interface DigestRunSummary {
   id: string;
   digest_id: string;
+  owner_id: string;
   status: DigestRunStatus;
+  current_stage: DigestRunStageType | null;
   trigger: DigestRunTrigger;
   model_name: string;
   prompt_version: string;
@@ -273,7 +281,7 @@ export interface DigestRunPaper {
   relevance_score: number;
   search_data: PaperSearchData;
   relevance_data: PaperRelevanceData;
-  summary_data: PaperSummaryData;
+  summary_data: PaperSummaryData | null;
   paper: {
     id: string;
     source_name: string;
@@ -287,9 +295,31 @@ export interface DigestRunPaper {
   };
 }
 
+export interface DigestRunStage {
+  stage: DigestRunStageType;
+  position: number;
+  status: DigestRunStageStatus;
+  progress_current: number;
+  progress_total: number;
+  result_data: Record<string, unknown> | null;
+  error_message: string | null;
+  response_ids: string[];
+  usage_data: {
+    input_tokens: number;
+    cached_input_tokens: number;
+    output_tokens: number;
+    reasoning_tokens: number;
+  };
+  model_name: string;
+  prompt_version: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
 export interface DigestRunDetail extends DigestRunSummary {
   digest_snapshot: Record<string, unknown>;
   history_context: Record<string, unknown>[];
+  stages: DigestRunStage[];
   search_data: DigestRunSearchData | null;
   relevance_data: DigestRunRelevanceData | null;
   openai_response_id: string | null;

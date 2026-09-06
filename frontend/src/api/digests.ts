@@ -59,6 +59,10 @@ export const digestRunsApi = {
   get(digestId: string, runId: string): Promise<DigestRunDetail> {
     return apiRequest<DigestRunDetail>(`/digests/${digestId}/runs/${runId}`);
   },
+
+  active(): Promise<DigestRunDetail | null> {
+    return apiRequest<DigestRunDetail | null>("/digest-runs/active");
+  },
 };
 
 export const adminDigestsApi = {

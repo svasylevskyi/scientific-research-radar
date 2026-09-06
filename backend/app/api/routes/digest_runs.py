@@ -1,14 +1,14 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
 from app.api.dependencies import AppSettings, CurrentUser, DbSession
+from app.models.digest_run import DigestRunStageType
 from app.radar.client import RadarNotConfiguredError, build_radar_client
 from app.radar.prompt_builder import RadarPromptBuilder
 from app.radar.runner import (
     RadarDigestNotFoundError,
-    RadarExecutionError,
     RadarRunAlreadyActiveError,
     RadarRunner,
 )
@@ -22,6 +22,7 @@ from app.services.digest_run_service import (
 )
 
 router = APIRouter()
+active_router = APIRouter()
 
 
 def get_radar_runner(db: DbSession, settings: AppSettings) -> RadarRunner:
@@ -36,6 +37,13 @@ def get_radar_runner(db: DbSession, settings: AppSettings) -> RadarRunner:
         client=client,
         prompt_builder=RadarPromptBuilder(),
         history_limit=settings.radar_history_runs,
+        summary_batch_size=settings.openai_radar_summary_batch_size,
+        reasoning_efforts={
+            DigestRunStageType.DISCOVERY_RELEVANCE: settings.openai_radar_discovery_reasoning_effort,
+            DigestRunStageType.PAPER_SUMMARIES: settings.openai_radar_summary_reasoning_effort,
+            DigestRunStageType.TREND_ANALYSIS: settings.openai_radar_trend_reasoning_effort,
+            DigestRunStageType.DIGEST_BRIEFING: settings.openai_radar_briefing_reasoning_effort,
+        },
     )
 
 
@@ -49,21 +57,30 @@ DigestRunHistoryServiceDep = Annotated[
 ]
 
 
-@router.post("", response_model=DigestRunDetailRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=DigestRunDetailRead, status_code=status.HTTP_202_ACCEPTED)
 def run_digest_now(
     digest_id: UUID,
     current_user: CurrentUser,
     runner: RadarRunnerDep,
+    background_tasks: BackgroundTasks,
 ) -> DigestRunDetailRead:
     try:
-        run = runner.run_digest(digest_id=digest_id, owner_id=current_user.id)
+        run = runner.start_digest(digest_id=digest_id, owner_id=current_user.id)
     except RadarDigestNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RadarRunAlreadyActiveError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except RadarExecutionError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    background_tasks.add_task(runner.make_background_task(run_id=run.id))
     return DigestRunDetailRead.model_validate(run)
+
+
+@active_router.get("/active", response_model=DigestRunDetailRead | None)
+def get_active_digest_run(
+    current_user: CurrentUser,
+    service: DigestRunHistoryServiceDep,
+) -> DigestRunDetailRead | None:
+    run = service.get_active(owner=current_user)
+    return DigestRunDetailRead.model_validate(run) if run is not None else None
 
 
 @router.get("", response_model=DigestRunListResponse)

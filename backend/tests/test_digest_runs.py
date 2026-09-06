@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from types import SimpleNamespace
 from typing import Annotated
+from uuid import UUID
 
 import openai
 import pytest
@@ -17,12 +18,21 @@ from app.models.digest_run import (
     DigestRun,
     DigestRunBriefing,
     DigestRunPaper,
+    DigestRunStage,
+    DigestRunStageStatus,
+    DigestRunStageType,
     DigestRunStatus,
     DigestRunTrendAnalysis,
     Paper,
 )
-from app.radar.client import OpenAIRadarClient, RadarClientResult
-from app.radar.contracts import RadarOutput
+from app.radar.client import OpenAIRadarClient, RadarClientResult, RadarTokenUsage
+from app.radar.contracts import (
+    DigestBriefingOutput,
+    DiscoveryRelevanceOutput,
+    PaperSummariesOutput,
+    RadarOutput,
+    TrendAnalysisOutput,
+)
 from app.radar.prompt_builder import (
     PROMPT_DIRECTORY,
     RadarPrompt,
@@ -222,44 +232,78 @@ def _create_digest(client: TestClient, authorization: dict[str, str]):
     return response.json()
 
 
+def _stage_output(response_format):
+    output = _radar_output()
+    if response_format is DiscoveryRelevanceOutput:
+        return DiscoveryRelevanceOutput(search=output.search, relevance=output.relevance)
+    if response_format is PaperSummariesOutput:
+        return PaperSummariesOutput(paper_summaries=output.paper_summaries)
+    if response_format is TrendAnalysisOutput:
+        return TrendAnalysisOutput(trend_analysis=output.trend_analysis)
+    if response_format is DigestBriefingOutput:
+        return DigestBriefingOutput(digest_briefing=output.digest_briefing)
+    raise AssertionError(f"Unexpected response format: {response_format}")
+
+
 class RecordingRadarClient:
     model_name = "recording-test-model"
 
-    def __init__(self) -> None:
-        self.prompts: list[RadarPrompt] = []
+    def __init__(self, fail_stage: DigestRunStageType | None = None) -> None:
+        self.calls: list[dict] = []
+        self.fail_stage = fail_stage
 
-    def execute(self, prompt: RadarPrompt) -> RadarClientResult:
-        self.prompts.append(prompt)
+    def execute(
+        self,
+        prompt: RadarPrompt,
+        *,
+        response_format,
+        use_web_search: bool,
+        reasoning_effort: str,
+    ) -> RadarClientResult:
+        self.calls.append(
+            {
+                "prompt": prompt,
+                "response_format": response_format,
+                "use_web_search": use_web_search,
+                "reasoning_effort": reasoning_effort,
+            }
+        )
+        if prompt.stage == self.fail_stage:
+            raise RuntimeError("Deliberate test failure")
         return RadarClientResult(
-            output=_radar_output(),
-            response_id=f"recorded-response-{len(self.prompts)}",
+            output=_stage_output(response_format),
+            response_id=f"recorded-response-{len(self.calls)}",
             model_name=self.model_name,
+            usage=RadarTokenUsage(input_tokens=100, output_tokens=50),
         )
 
 
-class FailingRadarClient:
-    model_name = "failing-test-client"
-
-    def execute(self, prompt: RadarPrompt) -> RadarClientResult:
-        del prompt
-        raise RuntimeError("Deliberate test failure")
+def _runner(db: Session, radar_client) -> RadarRunner:
+    return RadarRunner(
+        db,
+        client=radar_client,
+        prompt_builder=RadarPromptBuilder(),
+        history_limit=3,
+        summary_batch_size=5,
+        reasoning_efforts={
+            DigestRunStageType.DISCOVERY_RELEVANCE: "medium",
+            DigestRunStageType.PAPER_SUMMARIES: "low",
+            DigestRunStageType.TREND_ANALYSIS: "medium",
+            DigestRunStageType.DIGEST_BRIEFING: "low",
+        },
+    )
 
 
 def _override_runner(radar_client):
     def dependency(
         db: Annotated[Session, Depends(get_db)],
     ) -> RadarRunner:
-        return RadarRunner(
-            db,
-            client=radar_client,
-            prompt_builder=RadarPromptBuilder(),
-            history_limit=3,
-        )
+        return _runner(db, radar_client)
 
     app.dependency_overrides[get_radar_runner] = dependency
 
 
-def test_run_now_uses_one_client_call_and_persists_each_stage(
+def test_run_now_executes_four_stages_and_persists_progress(
     client: TestClient,
     db_session_factory: sessionmaker[Session],
 ) -> None:
@@ -273,31 +317,36 @@ def test_run_now_uses_one_client_call_and_persists_each_stage(
         f"/api/v1/digests/{digest['id']}/runs", headers=authorization
     )
 
-    assert response.status_code == 201
-    result = response.json()
-    assert len(radar_client.prompts) == 1
-    assert digest["topic"] in radar_client.prompts[0].user
+    assert response.status_code == 202
+    assert response.json()["status"] == "running"
+    assert len(response.json()["stages"]) == 4
+    assert len(radar_client.calls) == 4
+    assert radar_client.calls[0]["use_web_search"] is True
+    assert all(not call["use_web_search"] for call in radar_client.calls[1:])
+
+    detail = client.get(
+        f"/api/v1/digests/{digest['id']}/runs/{response.json()['id']}",
+        headers=authorization,
+    )
+    assert detail.status_code == 200
+    result = detail.json()
     assert result["status"] == "completed"
-    assert result["model_name"] == "recording-test-model"
-    assert result["paper_count"] == 1
-    assert result["search_data"]["queries"]
-    assert result["relevance_data"]["methodology"]
-    assert result["paper_results"][0]["search_data"]["access_status"] == "metadata_only"
-    assert result["paper_results"][0]["relevance_data"]["topic_relevance_score"] == 9
+    assert result["current_stage"] is None
+    assert [stage["status"] for stage in result["stages"]] == ["completed"] * 4
     assert result["paper_results"][0]["summary_data"]["concise_summary"]
-    assert result["paper_results"][0]["summary_data"]["summary_basis"] == "metadata_only"
     assert result["trend_analysis"]["overview"]
     assert result["briefing"]["executive_summary"]
 
     with db_session_factory() as db:
         assert db.scalar(select(func.count()).select_from(DigestRun)) == 1
+        assert db.scalar(select(func.count()).select_from(DigestRunStage)) == 4
         assert db.scalar(select(func.count()).select_from(Paper)) == 1
         assert db.scalar(select(func.count()).select_from(DigestRunPaper)) == 1
         assert db.scalar(select(func.count()).select_from(DigestRunTrendAnalysis)) == 1
         assert db.scalar(select(func.count()).select_from(DigestRunBriefing)) == 1
 
 
-def test_completed_history_is_added_to_the_next_single_request(
+def test_completed_history_is_added_only_to_relevant_later_stages(
     client: TestClient,
 ) -> None:
     user = _register(client, "history@example.com", "History Owner")
@@ -309,42 +358,92 @@ def test_completed_history_is_added_to_the_next_single_request(
     first = client.post(f"/api/v1/digests/{digest['id']}/runs", headers=authorization)
     second = client.post(f"/api/v1/digests/{digest['id']}/runs", headers=authorization)
 
-    assert first.status_code == 201
-    assert second.status_code == 201
-    assert len(radar_client.prompts) == 2
-    assert second.json()["history_context"][0]["run_id"] == first.json()["id"]
-    assert first.json()["id"] in radar_client.prompts[1].user
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert len(radar_client.calls) == 8
+    second_discovery = radar_client.calls[4]["prompt"]
+    assert first.json()["id"] in second_discovery.user
+    assert "Previous completed runs" in second_discovery.user
+    assert "Previous completed runs" not in radar_client.calls[5]["prompt"].user
 
     listed = client.get(
         f"/api/v1/digests/{digest['id']}/runs", headers=authorization
     )
     assert listed.status_code == 200
     assert listed.json()["total"] == 2
-    detail = client.get(
-        f"/api/v1/digests/{digest['id']}/runs/{first.json()['id']}",
-        headers=authorization,
-    )
-    assert detail.status_code == 200
 
 
-def test_failed_execution_is_recorded_in_history(client: TestClient) -> None:
+def test_failed_stage_preserves_completed_and_pending_stage_history(
+    client: TestClient,
+) -> None:
     user = _register(client, "failure@example.com", "Failure Owner")
     authorization = _authorization(user)
     digest = _create_digest(client, authorization)
-    _override_runner(FailingRadarClient())
+    radar_client = RecordingRadarClient(DigestRunStageType.PAPER_SUMMARIES)
+    _override_runner(radar_client)
 
     response = client.post(
         f"/api/v1/digests/{digest['id']}/runs", headers=authorization
     )
-    assert response.status_code == 502
+    assert response.status_code == 202
 
-    history = client.get(
-        f"/api/v1/digests/{digest['id']}/runs", headers=authorization
+    detail = client.get(
+        f"/api/v1/digests/{digest['id']}/runs/{response.json()['id']}",
+        headers=authorization,
+    ).json()
+    assert detail["status"] == DigestRunStatus.FAILED
+    assert [stage["status"] for stage in detail["stages"]] == [
+        DigestRunStageStatus.COMPLETED,
+        DigestRunStageStatus.FAILED,
+        DigestRunStageStatus.PENDING,
+        DigestRunStageStatus.PENDING,
+    ]
+    assert "Deliberate test failure" in detail["stages"][1]["error_message"]
+    assert detail["search_data"]["queries"]
+    assert detail["paper_results"][0]["summary_data"] is None
+    assert detail["trend_analysis"] is None
+    assert detail["briefing"] is None
+
+
+def test_one_active_run_per_user_is_enforced_across_digests(
+    client: TestClient,
+    db_session_factory: sessionmaker[Session],
+) -> None:
+    first_user = _register(client, "active@example.com", "Active Owner")
+    first_access = _authorization(first_user)
+    first_digest = _create_digest(client, first_access)
+    second_digest = _create_digest(client, first_access)
+    radar_client = RecordingRadarClient()
+    _override_runner(radar_client)
+
+    with db_session_factory() as db:
+        active = _runner(db, radar_client).start_digest(
+            digest_id=UUID(first_digest["id"]),
+            owner_id=UUID(first_user.json()["user"]["id"]),
+        )
+        active_id = str(active.id)
+
+    blocked = client.post(
+        f"/api/v1/digests/{second_digest['id']}/runs", headers=first_access
     )
-    assert history.status_code == 200
-    assert history.json()["total"] == 1
-    assert history.json()["items"][0]["status"] == DigestRunStatus.FAILED
-    assert "Deliberate test failure" in history.json()["items"][0]["error_message"]
+    assert blocked.status_code == 409
+    assert "Only one" not in blocked.json()["detail"]
+    assert "already in progress" in blocked.json()["detail"]
+    active_response = client.get("/api/v1/digest-runs/active", headers=first_access)
+    assert active_response.status_code == 200
+    assert active_response.json()["id"] == active_id
+    delete_active = client.delete(
+        f"/api/v1/digests/{first_digest['id']}", headers=first_access
+    )
+    assert delete_active.status_code == 409
+    assert "while its radar run is in progress" in delete_active.json()["detail"]
+
+    other_user = _register(client, "other.active@example.com", "Other Owner")
+    other_access = _authorization(other_user)
+    other_digest = _create_digest(client, other_access)
+    assert client.post(
+        f"/api/v1/digests/{other_digest['id']}/runs", headers=other_access
+    ).status_code == 202
 
 
 def test_run_history_is_owner_scoped(client: TestClient) -> None:
@@ -369,15 +468,7 @@ def test_run_history_is_owner_scoped(client: TestClient) -> None:
     ).status_code == 404
 
 
-def test_missing_openai_configuration_prevents_a_run(
-    client: TestClient,
-    monkeypatch,
-) -> None:
-    def fail_if_called(self, prompt):
-        del self, prompt
-        raise AssertionError("A live OpenAI client must not run in tests")
-
-    monkeypatch.setattr(OpenAIRadarClient, "execute", fail_if_called)
+def test_missing_openai_configuration_prevents_a_run(client: TestClient) -> None:
     app.dependency_overrides[get_settings] = lambda: Settings(
         environment="test",
         openai_api_key=None,
@@ -395,25 +486,35 @@ def test_missing_openai_configuration_prevents_a_run(
     )
 
 
-def test_openai_client_makes_one_responses_request_with_structured_output(
-    monkeypatch,
-) -> None:
+def test_openai_client_starts_background_structured_response(monkeypatch) -> None:
     calls: list[dict] = []
-    output = _radar_output()
+    retrieved: list[str] = []
+    output = _stage_output(DiscoveryRelevanceOutput)
 
     class FakeResponses:
         def parse(self, **kwargs):
             calls.append(kwargs)
             return SimpleNamespace(
-                output_parsed=output,
+                output_parsed=None,
                 id="response-123",
+                status="queued",
+                usage=None,
+            )
+
+        def retrieve(self, response_id):
+            retrieved.append(response_id)
+            return SimpleNamespace(
+                output_text=output.model_dump_json(),
+                id=response_id,
+                status="completed",
+                usage=None,
             )
 
     class FakeOpenAI:
         def __init__(self, **kwargs):
             assert kwargs == {
                 "api_key": "test-key",
-                "timeout": 600,
+                "timeout": 60,
                 "max_retries": 0,
             }
             self.responses = FakeResponses()
@@ -422,44 +523,70 @@ def test_openai_client_makes_one_responses_request_with_structured_output(
     radar_client = OpenAIRadarClient(
         api_key="test-key",
         model_name="gpt-6-astra",
-        reasoning_effort="high",
-        timeout_seconds=600,
-        max_output_tokens=60000,
+        request_timeout_seconds=60,
+        background_poll_timeout_seconds=900,
+        background_poll_interval_seconds=0,
+        max_output_tokens=30000,
+        max_search_tool_calls=8,
+        search_context_size="medium",
+    )
+    prompt = RadarPrompt(
+        stage=DigestRunStageType.DISCOVERY_RELEVANCE,
+        system="System prompt",
+        user="Run prompt",
+        version="test",
     )
 
     result = radar_client.execute(
-        RadarPrompt(system="System prompt", user="Run prompt", version="test")
+        prompt,
+        response_format=DiscoveryRelevanceOutput,
+        use_web_search=True,
+        reasoning_effort="medium",
     )
 
     assert result.output == output
     assert result.response_id == "response-123"
-    assert len(calls) == 1
-    assert calls[0]["model"] == "gpt-6-astra"
-    assert calls[0]["reasoning"] == {"effort": "high"}
+    assert retrieved == ["response-123"]
+    assert calls[0]["background"] is True
+    assert calls[0]["reasoning"] == {"effort": "medium"}
     assert calls[0]["tools"] == [
-        {"type": "web_search", "search_context_size": "high"}
+        {"type": "web_search", "search_context_size": "medium"}
     ]
-    assert calls[0]["tool_choice"] == "required"
+    assert calls[0]["max_tool_calls"] == 8
     assert calls[0]["store"] is False
-    assert calls[0]["text_format"] is RadarOutput
+    assert calls[0]["text_format"] is DiscoveryRelevanceOutput
 
 
-def test_consolidated_prompt_is_versioned_compliant_and_archived() -> None:
-    prompt = RadarPromptBuilder().build(
+def test_stage_prompts_are_versioned_compact_and_compliant() -> None:
+    builder = RadarPromptBuilder()
+    discovery = builder.build_discovery_relevance(
         digest_snapshot={"topic": "Transparent AI evaluation", "maximum_papers": 5},
         history_context=[],
     )
+    summaries = builder.build_paper_summaries(
+        digest_snapshot={"topic": "Transparent AI evaluation"},
+        papers=[],
+    )
 
-    assert prompt.version == "2026-09-05.3"
-    assert "five connected stages" in prompt.system
-    assert "untrusted data" in prompt.system
-    assert "Public accessibility does not mean" in prompt.system
-    assert "could reasonably substitute for a paper" in prompt.system
-    assert "maximum number of papers returned and persisted" in prompt.user
-    assert "Do not treat a publicly reachable page" in prompt.user
-    assert "Transparent AI evaluation" in prompt.user
-    assert (PROMPT_DIRECTORY / "archive" / "system.v2026-09-05.1.md").is_file()
-    assert (PROMPT_DIRECTORY / "archive" / "radar_run.v2026-09-05.1.md").is_file()
+    assert discovery.version == "2026-09-06.1"
+    assert "untrusted data" in discovery.system
+    assert "Public accessibility does not establish" in discovery.system
+    assert "could substitute for a source" in discovery.system
+    assert "Stage 1 of 4" in discovery.user
+    assert "Web search is enabled only for this stage" in discovery.user
+    assert "Stage 2 of 4" in summaries.user
+    assert "Do not search for or add papers" in summaries.user
+    assert "Transparent AI evaluation" in discovery.user
+    for filename in (
+        "shared_system.md",
+        "discovery_relevance.md",
+        "paper_summaries.md",
+        "trend_analysis.md",
+        "digest_briefing.md",
+        "system.md",
+        "radar_run.md",
+    ):
+        assert (PROMPT_DIRECTORY / filename).is_file()
 
 
 def test_radar_contract_rejects_unknown_cross_stage_paper_references() -> None:
@@ -469,3 +596,13 @@ def test_radar_contract_rejects_unknown_cross_stage_paper_references() -> None:
 
     with pytest.raises(ValueError, match="unknown papers"):
         RadarOutput.model_validate(invalid)
+
+
+def test_stage_briefing_contract_rejects_overlapping_paper_selections() -> None:
+    briefing = _radar_output().digest_briefing.model_dump()
+    briefing["secondary_paper_external_ids"] = briefing[
+        "top_paper_external_ids"
+    ].copy()
+
+    with pytest.raises(ValueError, match="must not overlap"):
+        DigestBriefingOutput.model_validate({"digest_briefing": briefing})

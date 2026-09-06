@@ -34,7 +34,7 @@ The API, service, repository, and persistence layers are separate. SQLite is sel
 - A self-service profile page for updating name, email address, and password.
 - Owner-scoped digest creation, listing, editing, and confirmed deletion.
 - An admin digest panel with owner filtering and the same management operations.
-- A one-request radar pipeline that records search, relevance, paper-summary, trend, and briefing data as separate structured stages.
+- A request-triggered, four-stage radar workflow with persisted progress, partial results, and failure details.
 - Owner-scoped digest run history with responsive, data-driven briefing, trend, and paper-summary views.
 - Live OpenAI Responses API execution with hosted web search and a strict Pydantic output contract.
 
@@ -61,16 +61,21 @@ API documentation is available at `http://localhost:8000/docs`.
 
 On startup, the API creates the configured super-admin if it does not exist. `SUPER_ADMIN_PASSWORD` supplies its initial password; subsequent password changes can be made from the profile page. The defaults in `.env.example` are for local development only. Set `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_FULL_NAME`, and a unique `SUPER_ADMIN_PASSWORD` before signing in. Production mode rejects the placeholder password.
 
-`Run now` makes one synchronous OpenAI Responses API request using the configured `OPENAI_RADAR_MODEL`, hosted web search, and the strict structured-output contract. No OpenAI request is made while viewing or editing a digest, loading history, starting the API, or using the disabled scheduling control. Set `OPENAI_API_KEY` in `backend/.env`; without it, the run endpoint returns `503 Service Unavailable`. Tests inject local clients and never contact OpenAI.
+`Run now` creates a persisted run, returns `202 Accepted`, and starts four stages: discovery/relevance, batched paper summaries, trend analysis, and briefing preparation. OpenAI Background mode is used for each stage so browser and reverse-proxy request timeouts do not terminate model work. Hosted web search is enabled only for discovery; later stages consume compact structured handoffs from the database. No OpenAI request is made while viewing or editing a digest, loading history, starting the API, or using the disabled scheduling control. Set `OPENAI_API_KEY` in `backend/.env`; without it, the run endpoint returns `503 Service Unavailable`. Tests inject local clients and never contact OpenAI.
 
-The live-run controls can be tuned through `OPENAI_RADAR_REASONING_EFFORT`, `OPENAI_REQUEST_TIMEOUT_SECONDS`, and `OPENAI_RADAR_MAX_OUTPUT_TOKENS`. Automatic SDK retries are disabled so each explicit click produces at most one OpenAI API request. A failed attempt is recorded in digest history and can be retried only through another explicit click.
+Stage reasoning effort, output limits, web-search context/tool calls, background polling, and summary batch size are configurable through the `OPENAI_*` settings shown in `backend/.env.example`. Automatic response-creation retries are disabled to avoid accidentally duplicating paid work after an ambiguous network timeout; retrieval polling tolerates transient failures. Token usage is stored per stage. A failed stage is recorded without removing completed stages or partial summary batches.
+
+Only one run may be active per user, across all of their digests. This is enforced by the database as well as the API; it does not prevent other users from running their own digests. The current development dispatcher uses FastAPI's in-process background tasks. If the development API restarts, an interrupted run is marked failed on startup so it cannot leave the account permanently blocked. Replace that dispatch boundary with a durable worker queue before running multiple production API workers or requiring restart-safe execution.
 
 The editable LLM prompt templates are deliberately kept outside the Python source:
 
-- `backend/app/radar/prompts/system.md`
-- `backend/app/radar/prompts/radar_run.md`
+- `backend/app/radar/prompts/shared_system.md`
+- `backend/app/radar/prompts/discovery_relevance.md`
+- `backend/app/radar/prompts/paper_summaries.md`
+- `backend/app/radar/prompts/trend_analysis.md`
+- `backend/app/radar/prompts/digest_briefing.md`
 
-Previous prompt versions are retained under `backend/app/radar/prompts/archive/`. The strict response contract is defined separately in `backend/app/radar/contracts.py`, allowing the prompts to focus on research quality without embedding and paying for a duplicate JSON schema on every run.
+The previous consolidated `system.md` and `radar_run.md` files remain in the same folder as a legacy backup, and older versions are retained under `prompts/archive/`. Strict stage response contracts are defined separately in `backend/app/radar/contracts.py`, allowing prompts to focus on research quality without embedding and paying for duplicate JSON schemas.
 
 The prompts also apply conservative copyright and access safeguards: public availability is not treated as an open license, restricted access must not be bypassed, and stored output is limited to metadata, source links, short attributed facts, and original synthesis. These prompt-level controls are defense in depth, not a substitute for source-specific terms, product policy, or legal review for the deployment jurisdictions.
 
@@ -113,9 +118,10 @@ npm run build
 | `GET` | `/api/v1/digests/{id}` | Return one digest owned by the authenticated user |
 | `PATCH` | `/api/v1/digests/{id}` | Update a digest owned by the authenticated user |
 | `DELETE` | `/api/v1/digests/{id}` | Delete a digest owned by the authenticated user |
-| `POST` | `/api/v1/digests/{id}/runs` | Run the authenticated user's digest now |
+| `POST` | `/api/v1/digests/{id}/runs` | Start the authenticated user's digest run and return `202` |
 | `GET` | `/api/v1/digests/{id}/runs` | List stored runs for the authenticated user's digest |
 | `GET` | `/api/v1/digests/{id}/runs/{run_id}` | Return all structured stages for one stored run |
+| `GET` | `/api/v1/digest-runs/active` | Return the authenticated user's active run, if any |
 | `GET` | `/api/v1/admin/users` | List/search users (admin only) |
 | `GET` | `/api/v1/admin/users/{id}` | Return user details (admin only) |
 | `PATCH` | `/api/v1/admin/users/{id}` | Update user details/status (admin only) |
@@ -133,7 +139,7 @@ The admin panel is available at `/admin/users`. The super-admin cannot be deacti
 
 The digest administration panel is available at `/admin/digests`. Regular administrators cannot list or manage digests owned by the protected super-admin; the super-admin can manage every digest. Deleting a user also deletes their digests through a database foreign-key cascade.
 
-The digest details page can start an immediate radar run. Scheduling is intentionally disabled until its backend workflow is introduced. The history page is shown only after a run has been attempted. Its briefing, trend-analysis, and paper-summary tabs use stable presentation sections populated from the structured data stored for the selected run; failed and in-progress runs show status information instead of empty result templates.
+The digest details page can start an immediate radar run and continues polling its persisted progress while the user remains free to navigate. Scheduling is intentionally disabled until its backend workflow is introduced. The history page records completed, running, failed, and pending stages; completed and partial output remains available in the stable briefing, trend-analysis, and paper-summary views.
 
 The super-admin can manage every account, including editing their own account details. The super-admin account is omitted from regular admins' user lists and cannot be opened or modified by them. Regular users have no access to administration endpoints.
 

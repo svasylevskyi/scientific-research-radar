@@ -11,6 +11,11 @@ api_router.include_router(
     prefix="/digests/{digest_id}/runs",
     tags=["digest runs"],
 )
+api_router.include_router(
+    digest_runs.active_router,
+    prefix="/digest-runs",
+    tags=["digest runs"],
+)
 api_router.include_router(admin_users.router, prefix="/admin/users", tags=["administration"])
 api_router.include_router(
     admin_digests.router,

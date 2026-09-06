@@ -476,24 +476,32 @@ function PaperResult({ result }: { result: DigestRunPaper }) {
           <Typography fontWeight={700}>Summary</Typography>
         </AccordionSummary>
         <AccordionDetails>
-          <Stack spacing={2}>
-            <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
-              <Chip size="small" label={label(summary.paper_type)} />
-              <Chip size="small" variant="outlined" label={label(summary.summary_basis)} />
-              <Chip size="small" variant="outlined" label={`${summary.confidence_score}/10 confidence`} />
+          {summary ? (
+            <Stack spacing={2}>
+              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                <Chip size="small" label={label(summary.paper_type)} />
+                <Chip size="small" variant="outlined" label={label(summary.summary_basis)} />
+                <Chip size="small" variant="outlined" label={`${summary.confidence_score}/10 confidence`} />
+              </Stack>
+              <Typography color="text.secondary">{summary.concise_summary}</Typography>
+              <TextBlock title="Digest-ready bullet">{summary.suggested_digest_bullet}</TextBlock>
+              <Box><Typography variant="subtitle2">Why this paper matters</Typography><BulletList items={summary.why_this_paper_matters} /></Box>
+              <Box><Typography variant="subtitle2">Key findings</Typography><BulletList items={summary.key_findings} emptyText="No findings were verified." /></Box>
+              <Box><Typography variant="subtitle2">Methods</Typography><BulletList items={summary.methods} emptyText="Methods were not available." /></Box>
+              <Box><Typography variant="subtitle2">Limitations</Typography><BulletList items={summary.limitations} emptyText="No limitations were reported." /></Box>
+              <Box><Typography variant="subtitle2">Implications</Typography><BulletList items={summary.implications} emptyText="No implications were identified." /></Box>
+              <Box><Typography variant="subtitle2">Recommendations</Typography><BulletList items={summary.recommendations} emptyText="No recommendations were produced." /></Box>
+              <Box><Typography variant="subtitle2">Follow-up questions</Typography><BulletList items={summary.follow_up_questions} emptyText="No follow-up questions were produced." /></Box>
+              <Box><Typography variant="subtitle2">Related search terms</Typography><BulletList items={summary.related_search_terms} emptyText="No related search terms were produced." /></Box>
+              <Box><Typography variant="subtitle2">Summary warnings</Typography><BulletList items={summary.warnings} emptyText="No summary warnings were reported." /></Box>
             </Stack>
-            <Typography color="text.secondary">{summary.concise_summary}</Typography>
-            <TextBlock title="Digest-ready bullet">{summary.suggested_digest_bullet}</TextBlock>
-            <Box><Typography variant="subtitle2">Why this paper matters</Typography><BulletList items={summary.why_this_paper_matters} /></Box>
-            <Box><Typography variant="subtitle2">Key findings</Typography><BulletList items={summary.key_findings} emptyText="No findings were verified." /></Box>
-            <Box><Typography variant="subtitle2">Methods</Typography><BulletList items={summary.methods} emptyText="Methods were not available." /></Box>
-            <Box><Typography variant="subtitle2">Limitations</Typography><BulletList items={summary.limitations} emptyText="No limitations were reported." /></Box>
-            <Box><Typography variant="subtitle2">Implications</Typography><BulletList items={summary.implications} emptyText="No implications were identified." /></Box>
-            <Box><Typography variant="subtitle2">Recommendations</Typography><BulletList items={summary.recommendations} emptyText="No recommendations were produced." /></Box>
-            <Box><Typography variant="subtitle2">Follow-up questions</Typography><BulletList items={summary.follow_up_questions} emptyText="No follow-up questions were produced." /></Box>
-            <Box><Typography variant="subtitle2">Related search terms</Typography><BulletList items={summary.related_search_terms} emptyText="No related search terms were produced." /></Box>
-            <Box><Typography variant="subtitle2">Summary warnings</Typography><BulletList items={summary.warnings} emptyText="No summary warnings were reported." /></Box>
-          </Stack>
+          ) : (
+            <Alert severity="info">
+              {relevance.recommended_status === "archive" || relevance.recommended_status === "reject"
+                ? "This paper was assessed but was not selected for summarization."
+                : "This paper was selected, but its summary has not completed."}
+            </Alert>
+          )}
         </AccordionDetails>
       </Accordion>
 

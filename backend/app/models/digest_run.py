@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +34,28 @@ class DigestRunTrigger(StrEnum):
     SCHEDULED = "scheduled"
 
 
+class DigestRunStageType(StrEnum):
+    DISCOVERY_RELEVANCE = "discovery_relevance"
+    PAPER_SUMMARIES = "paper_summaries"
+    TREND_ANALYSIS = "trend_analysis"
+    DIGEST_BRIEFING = "digest_briefing"
+
+
+class DigestRunStageStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+RADAR_STAGE_ORDER = (
+    DigestRunStageType.DISCOVERY_RELEVANCE,
+    DigestRunStageType.PAPER_SUMMARIES,
+    DigestRunStageType.TREND_ANALYSIS,
+    DigestRunStageType.DIGEST_BRIEFING,
+)
+
+
 class DigestRun(Base):
     __tablename__ = "digest_runs"
     __table_args__ = (
@@ -45,12 +68,23 @@ class DigestRun(Base):
             name="ck_digest_runs_trigger",
         ),
         Index("idx_digest_runs_digest_created_at", "digest_id", "created_at"),
+        Index("idx_digest_runs_owner_created_at", "owner_id", "created_at"),
         Index("idx_digest_runs_status", "status"),
+        Index(
+            "uq_digest_runs_owner_running",
+            "owner_id",
+            unique=True,
+            sqlite_where=text("status = 'running'"),
+            postgresql_where=text("status = 'running'"),
+        ).ddl_if(dialect=("sqlite", "postgresql")),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
     digest_id: Mapped[UUID] = mapped_column(
         ForeignKey("digests.id", ondelete="CASCADE"), nullable=False
+    )
+    owner_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[DigestRunStatus] = mapped_column(String(16), nullable=False)
     trigger: Mapped[DigestRunTrigger] = mapped_column(String(16), nullable=False)
@@ -90,10 +124,78 @@ class DigestRun(Base):
         passive_deletes=True,
         uselist=False,
     )
+    stages: Mapped[list["DigestRunStage"]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="DigestRunStage.position",
+    )
 
     @property
     def paper_count(self) -> int:
         return len(self.paper_results)
+
+    @property
+    def current_stage(self) -> DigestRunStageType | None:
+        if self.status != DigestRunStatus.RUNNING:
+            return None
+        for stage in self.stages:
+            if stage.status == DigestRunStageStatus.RUNNING:
+                return stage.stage
+        for stage in self.stages:
+            if stage.status == DigestRunStageStatus.PENDING:
+                return stage.stage
+        return None
+
+
+class DigestRunStage(Base):
+    __tablename__ = "digest_run_stages"
+    __table_args__ = (
+        UniqueConstraint("run_id", "stage", name="uq_digest_run_stages_run_stage"),
+        UniqueConstraint("run_id", "position", name="uq_digest_run_stages_run_position"),
+        CheckConstraint(
+            "stage IN ('discovery_relevance', 'paper_summaries', "
+            "'trend_analysis', 'digest_briefing')",
+            name="ck_digest_run_stages_stage",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'running', 'completed', 'failed')",
+            name="ck_digest_run_stages_status",
+        ),
+        CheckConstraint("position BETWEEN 1 AND 4", name="ck_digest_run_stages_position"),
+        CheckConstraint(
+            "progress_current >= 0 AND progress_total >= 0 "
+            "AND progress_current <= progress_total",
+            name="ck_digest_run_stages_progress",
+        ),
+        Index("idx_digest_run_stages_run_position", "run_id", "position"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("digest_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    stage: Mapped[DigestRunStageType] = mapped_column(String(32), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[DigestRunStageStatus] = mapped_column(String(16), nullable=False)
+    progress_current: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    progress_total: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    result_data: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    response_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    usage_data: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False, default=dict)
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    run: Mapped[DigestRun] = relationship(back_populates="stages")
 
 
 class Paper(Base):
@@ -148,7 +250,7 @@ class DigestRunPaper(Base):
     relevance_score: Mapped[float] = mapped_column(Float, nullable=False)
     search_data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     relevance_data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    summary_data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    summary_data: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

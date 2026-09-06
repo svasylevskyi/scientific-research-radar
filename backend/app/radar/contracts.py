@@ -287,6 +287,56 @@ class DigestBriefing(RadarContract):
     content_markdown: str
 
 
+class DiscoveryRelevanceOutput(RadarContract):
+    search: SearchStage
+    relevance: RelevanceStage
+
+    @model_validator(mode="after")
+    def validate_assessments(self) -> "DiscoveryRelevanceOutput":
+        paper_ids = [paper.external_id for paper in self.search.papers]
+        assessment_ids = [
+            assessment.external_id for assessment in self.relevance.assessments
+        ]
+        if len(paper_ids) != len(set(paper_ids)):
+            raise ValueError("Search results must use unique external paper identifiers")
+        if len(assessment_ids) != len(set(assessment_ids)):
+            raise ValueError("Relevance assessments must use unique paper identifiers")
+        if set(assessment_ids) != set(paper_ids):
+            raise ValueError("Every searched paper must have one relevance assessment")
+        return self
+
+
+class PaperSummariesOutput(RadarContract):
+    paper_summaries: list[PaperSummary]
+
+    @model_validator(mode="after")
+    def validate_unique_papers(self) -> "PaperSummariesOutput":
+        paper_ids = [summary.external_id for summary in self.paper_summaries]
+        if len(paper_ids) != len(set(paper_ids)):
+            raise ValueError("Paper summaries must use unique paper identifiers")
+        return self
+
+
+class TrendAnalysisOutput(RadarContract):
+    trend_analysis: TrendAnalysis
+
+
+class DigestBriefingOutput(RadarContract):
+    digest_briefing: DigestBriefing
+
+    @model_validator(mode="after")
+    def validate_paper_selections(self) -> "DigestBriefingOutput":
+        top_ids = self.digest_briefing.top_paper_external_ids
+        secondary_ids = self.digest_briefing.secondary_paper_external_ids
+        if len(top_ids) != len(set(top_ids)) or len(secondary_ids) != len(
+            set(secondary_ids)
+        ):
+            raise ValueError("Briefing paper selections must not contain duplicates")
+        if set(top_ids) & set(secondary_ids):
+            raise ValueError("Top and secondary briefing papers must not overlap")
+        return self
+
+
 class RadarOutput(RadarContract):
     search: SearchStage
     relevance: RelevanceStage
@@ -296,17 +346,12 @@ class RadarOutput(RadarContract):
 
     @model_validator(mode="after")
     def validate_paper_references(self) -> "RadarOutput":
-        paper_ids = [paper.external_id for paper in self.search.papers]
-        if len(paper_ids) != len(set(paper_ids)):
-            raise ValueError("Search results must use unique external paper identifiers")
-
-        expected_ids = set(paper_ids)
-        relevance_ids = [
-            assessment.external_id for assessment in self.relevance.assessments
-        ]
+        discovery = DiscoveryRelevanceOutput(
+            search=self.search,
+            relevance=self.relevance,
+        )
+        expected_ids = {paper.external_id for paper in discovery.search.papers}
         summary_ids = [summary.external_id for summary in self.paper_summaries]
-        if len(relevance_ids) != len(set(relevance_ids)) or set(relevance_ids) != expected_ids:
-            raise ValueError("Every searched paper must have one relevance assessment")
         if len(summary_ids) != len(set(summary_ids)) or set(summary_ids) != expected_ids:
             raise ValueError("Every searched paper must have one paper summary")
 

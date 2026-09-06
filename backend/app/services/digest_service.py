@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.digest import Digest
 from app.models.user import User
 from app.repositories.digest_repository import DigestRepository
+from app.repositories.digest_run_repository import DigestRunRepository
 from app.schemas.digest import DigestCreate, DigestUpdate
 
 
@@ -17,10 +18,15 @@ class DigestValidationError(ValueError):
     pass
 
 
+class DigestRunActiveError(ValueError):
+    pass
+
+
 class DigestService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.digests = DigestRepository(db)
+        self.runs = DigestRunRepository(db)
 
     def create(self, *, owner: User, values: DigestCreate) -> Digest:
         digest = self.digests.create(owner_id=owner.id, values=values.model_dump())
@@ -117,6 +123,10 @@ class DigestService:
         return self._commit(digest)
 
     def _delete(self, digest: Digest) -> None:
+        if self.runs.has_running_for_digest(digest_id=digest.id):
+            raise DigestRunActiveError(
+                "This digest cannot be deleted while its radar run is in progress."
+            )
         self.digests.delete(digest)
         self.db.commit()
 

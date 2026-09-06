@@ -5,24 +5,41 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.models.digest import Digest
 from app.models.digest_run import (
+    RADAR_STAGE_ORDER,
     DigestRun,
     DigestRunBriefing,
     DigestRunPaper,
+    DigestRunStage,
+    DigestRunStageStatus,
+    DigestRunStageType,
     DigestRunStatus,
     DigestRunTrendAnalysis,
     DigestRunTrigger,
     Paper,
 )
-from app.radar.contracts import RadarOutput, SearchPaper
+from app.radar.client import RadarClientResult, RadarTokenUsage
+from app.radar.contracts import (
+    DigestBriefingOutput,
+    DiscoveryRelevanceOutput,
+    PaperSummariesOutput,
+    SearchPaper,
+    TrendAnalysisOutput,
+)
 
 
 class DigestRunRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def has_running(self, *, digest_id: UUID) -> bool:
+    def has_running_for_owner(self, *, owner_id: UUID) -> bool:
+        statement = select(DigestRun.id).where(
+            DigestRun.owner_id == owner_id,
+            DigestRun.status == DigestRunStatus.RUNNING,
+        )
+        return self.db.scalar(statement) is not None
+
+    def has_running_for_digest(self, *, digest_id: UUID) -> bool:
         statement = select(DigestRun.id).where(
             DigestRun.digest_id == digest_id,
             DigestRun.status == DigestRunStatus.RUNNING,
@@ -33,6 +50,7 @@ class DigestRunRepository:
         self,
         *,
         digest_id: UUID,
+        owner_id: UUID,
         digest_snapshot: dict[str, Any],
         history_context: list[dict[str, Any]],
         model_name: str,
@@ -41,6 +59,7 @@ class DigestRunRepository:
         run = DigestRun(
             id=uuid4(),
             digest_id=digest_id,
+            owner_id=owner_id,
             status=DigestRunStatus.RUNNING,
             trigger=DigestRunTrigger.MANUAL,
             digest_snapshot=digest_snapshot,
@@ -49,33 +68,54 @@ class DigestRunRepository:
             prompt_version=prompt_version,
             started_at=datetime.now(timezone.utc),
         )
+        run.stages = [
+            DigestRunStage(
+                id=uuid4(),
+                stage=stage_type,
+                position=position,
+                status=DigestRunStageStatus.PENDING,
+                progress_current=0,
+                progress_total=1,
+                response_ids=[],
+                usage_data=self._empty_usage(),
+                model_name=model_name,
+                prompt_version=prompt_version,
+            )
+            for position, stage_type in enumerate(RADAR_STAGE_ORDER, start=1)
+        ]
         self.db.add(run)
         self.db.flush()
         return run
 
-    def save_output(
+    def mark_stage_running(
+        self,
+        *,
+        stage: DigestRunStage,
+        progress_total: int = 1,
+    ) -> None:
+        stage.status = DigestRunStageStatus.RUNNING
+        stage.progress_current = 0
+        stage.progress_total = progress_total
+        stage.error_message = None
+        stage.started_at = datetime.now(timezone.utc)
+        stage.completed_at = None
+
+    def save_discovery_relevance(
         self,
         *,
         run: DigestRun,
-        output: RadarOutput,
-        response_id: str | None,
-        model_name: str,
+        stage: DigestRunStage,
+        result: RadarClientResult[DiscoveryRelevanceOutput],
     ) -> None:
+        output = result.output
         relevance_by_id = {
             assessment.external_id: assessment
             for assessment in output.relevance.assessments
         }
-        summary_by_id = {
-            summary.external_id: summary for summary in output.paper_summaries
-        }
-
         run.search_data = output.search.model_dump(mode="json", exclude={"papers"})
         run.relevance_data = output.relevance.model_dump(
             mode="json", exclude={"assessments"}
         )
-        run.openai_response_id = response_id
-        run.model_name = model_name
-
         ranked_papers = sorted(
             output.search.papers,
             key=lambda paper: relevance_by_id[paper.external_id].score,
@@ -84,7 +124,6 @@ class DigestRunRepository:
         for rank, search_paper in enumerate(ranked_papers, start=1):
             paper = self._upsert_paper(search_paper)
             relevance = relevance_by_id[search_paper.external_id]
-            summary = summary_by_id[search_paper.external_id]
             search_data = search_paper.model_dump(mode="json")
             for persisted_column in (
                 "source_name",
@@ -108,13 +147,63 @@ class DigestRunRepository:
                     relevance_data=relevance.model_dump(
                         mode="json", exclude={"external_id", "score"}
                     ),
-                    summary_data=summary.model_dump(
-                        mode="json", exclude={"external_id"}
-                    ),
+                    summary_data=None,
                 )
             )
+        self._complete_stage(
+            run=run,
+            stage=stage,
+            result_data=output.model_dump(mode="json"),
+            result=result,
+            progress_current=1,
+            progress_total=1,
+        )
 
-        trend = output.trend_analysis
+    def save_summary_batch(
+        self,
+        *,
+        run: DigestRun,
+        stage: DigestRunStage,
+        result: RadarClientResult[PaperSummariesOutput],
+        progress_total: int,
+    ) -> None:
+        summaries = result.output.paper_summaries
+        results_by_id = self._paper_results_by_external_id(run_id=run.id)
+        for summary in summaries:
+            results_by_id[summary.external_id].summary_data = summary.model_dump(
+                mode="json", exclude={"external_id"}
+            )
+
+        existing = list((stage.result_data or {}).get("paper_summaries", []))
+        existing.extend(
+            summary.model_dump(mode="json") for summary in summaries
+        )
+        stage.result_data = {"paper_summaries": existing}
+        stage.progress_current = len(existing)
+        stage.progress_total = progress_total
+        self._record_result_metadata(run=run, stage=stage, result=result)
+
+    def complete_summary_stage(
+        self,
+        *,
+        stage: DigestRunStage,
+        progress_total: int,
+    ) -> None:
+        stage.status = DigestRunStageStatus.COMPLETED
+        stage.progress_current = progress_total
+        stage.progress_total = progress_total
+        stage.completed_at = datetime.now(timezone.utc)
+        if stage.result_data is None:
+            stage.result_data = {"paper_summaries": []}
+
+    def save_trend_analysis(
+        self,
+        *,
+        run: DigestRun,
+        stage: DigestRunStage,
+        result: RadarClientResult[TrendAnalysisOutput],
+    ) -> None:
+        trend = result.output.trend_analysis
         self.db.add(
             DigestRunTrendAnalysis(
                 id=uuid4(),
@@ -123,7 +212,21 @@ class DigestRunRepository:
                 data=trend.model_dump(mode="json", exclude={"overview"}),
             )
         )
-        briefing = output.digest_briefing
+        self._complete_stage(
+            run=run,
+            stage=stage,
+            result_data=result.output.model_dump(mode="json"),
+            result=result,
+        )
+
+    def save_digest_briefing(
+        self,
+        *,
+        run: DigestRun,
+        stage: DigestRunStage,
+        result: RadarClientResult[DigestBriefingOutput],
+    ) -> None:
+        briefing = result.output.digest_briefing
         self.db.add(
             DigestRunBriefing(
                 id=uuid4(),
@@ -137,29 +240,54 @@ class DigestRunRepository:
                 ),
             )
         )
+        self._complete_stage(
+            run=run,
+            stage=stage,
+            result_data=result.output.model_dump(mode="json"),
+            result=result,
+        )
+
+    def mark_completed(self, *, run: DigestRun) -> None:
         run.status = DigestRunStatus.COMPLETED
+        run.error_message = None
         run.completed_at = datetime.now(timezone.utc)
 
-    def mark_failed(self, *, run: DigestRun, message: str) -> None:
+    def mark_failed(
+        self,
+        *,
+        run: DigestRun,
+        stage: DigestRunStage,
+        message: str,
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        stage.status = DigestRunStageStatus.FAILED
+        stage.error_message = message[:2000]
+        stage.completed_at = now
         run.status = DigestRunStatus.FAILED
         run.error_message = message[:2000]
-        run.completed_at = datetime.now(timezone.utc)
+        run.completed_at = now
 
     def get(self, run_id: UUID) -> DigestRun | None:
-        return self.db.get(DigestRun, run_id)
+        statement = select(DigestRun).where(DigestRun.id == run_id).options(
+            selectinload(DigestRun.stages),
+            selectinload(DigestRun.paper_results).joinedload(DigestRunPaper.paper),
+            joinedload(DigestRun.trend_analysis),
+            joinedload(DigestRun.briefing),
+        )
+        return self.db.scalar(statement)
 
     def get_owned(
         self, *, digest_id: UUID, run_id: UUID, owner_id: UUID
     ) -> DigestRun | None:
         statement = (
             select(DigestRun)
-            .join(DigestRun.digest)
             .where(
                 DigestRun.id == run_id,
                 DigestRun.digest_id == digest_id,
-                Digest.owner_id == owner_id,
+                DigestRun.owner_id == owner_id,
             )
             .options(
+                selectinload(DigestRun.stages),
                 selectinload(DigestRun.paper_results).joinedload(DigestRunPaper.paper),
                 joinedload(DigestRun.trend_analysis),
                 joinedload(DigestRun.briefing),
@@ -167,14 +295,41 @@ class DigestRunRepository:
         )
         return self.db.scalar(statement)
 
+    def get_active_owned(self, *, owner_id: UUID) -> DigestRun | None:
+        statement = (
+            select(DigestRun)
+            .where(
+                DigestRun.owner_id == owner_id,
+                DigestRun.status == DigestRunStatus.RUNNING,
+            )
+            .options(
+                selectinload(DigestRun.stages),
+                selectinload(DigestRun.paper_results).joinedload(DigestRunPaper.paper),
+                joinedload(DigestRun.trend_analysis),
+                joinedload(DigestRun.briefing),
+            )
+            .order_by(DigestRun.created_at.desc())
+        )
+        return self.db.scalar(statement)
+
+    def list_running(self) -> list[DigestRun]:
+        statement = (
+            select(DigestRun)
+            .where(DigestRun.status == DigestRunStatus.RUNNING)
+            .options(selectinload(DigestRun.stages))
+        )
+        return list(self.db.scalars(statement))
+
     def list_owned(
         self, *, digest_id: UUID, owner_id: UUID, offset: int, limit: int
     ) -> list[DigestRun]:
         statement = (
             select(DigestRun)
-            .join(DigestRun.digest)
-            .where(DigestRun.digest_id == digest_id, Digest.owner_id == owner_id)
-            .options(selectinload(DigestRun.paper_results))
+            .where(DigestRun.digest_id == digest_id, DigestRun.owner_id == owner_id)
+            .options(
+                selectinload(DigestRun.stages),
+                selectinload(DigestRun.paper_results),
+            )
             .order_by(DigestRun.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -182,11 +337,9 @@ class DigestRunRepository:
         return list(self.db.scalars(statement))
 
     def count_owned(self, *, digest_id: UUID, owner_id: UUID) -> int:
-        statement = (
-            select(func.count())
-            .select_from(DigestRun)
-            .join(DigestRun.digest)
-            .where(DigestRun.digest_id == digest_id, Digest.owner_id == owner_id)
+        statement = select(func.count()).select_from(DigestRun).where(
+            DigestRun.digest_id == digest_id,
+            DigestRun.owner_id == owner_id,
         )
         return self.db.scalar(statement) or 0
 
@@ -211,6 +364,50 @@ class DigestRunRepository:
         )
         runs = list(self.db.scalars(statement))
         return [self._history_item(run) for run in reversed(runs)]
+
+    def _complete_stage(
+        self,
+        *,
+        run: DigestRun,
+        stage: DigestRunStage,
+        result_data: dict[str, Any],
+        result: RadarClientResult,
+        progress_current: int = 1,
+        progress_total: int = 1,
+    ) -> None:
+        stage.result_data = result_data
+        stage.progress_current = progress_current
+        stage.progress_total = progress_total
+        stage.status = DigestRunStageStatus.COMPLETED
+        stage.completed_at = datetime.now(timezone.utc)
+        self._record_result_metadata(run=run, stage=stage, result=result)
+
+    def _record_result_metadata(
+        self,
+        *,
+        run: DigestRun,
+        stage: DigestRunStage,
+        result: RadarClientResult,
+    ) -> None:
+        if result.response_id:
+            stage.response_ids = [*stage.response_ids, result.response_id]
+            run.openai_response_id = result.response_id
+        stage.model_name = result.model_name
+        stage.usage_data = self._merge_usage(stage.usage_data, result.usage)
+        run.model_name = result.model_name
+
+    def _paper_results_by_external_id(
+        self, *, run_id: UUID
+    ) -> dict[str, DigestRunPaper]:
+        statement = (
+            select(DigestRunPaper)
+            .join(DigestRunPaper.paper)
+            .where(DigestRunPaper.run_id == run_id)
+            .options(joinedload(DigestRunPaper.paper))
+        )
+        return {
+            result.paper.external_id: result for result in self.db.scalars(statement)
+        }
 
     def _upsert_paper(self, values: SearchPaper) -> Paper:
         statement = select(Paper).where(
@@ -241,6 +438,20 @@ class DigestRunRepository:
         paper.url = values.url
         paper.doi = values.doi
         return paper
+
+    @staticmethod
+    def _empty_usage() -> dict[str, int]:
+        return RadarTokenUsage().as_dict()
+
+    @staticmethod
+    def _merge_usage(
+        current: dict[str, int], usage: RadarTokenUsage
+    ) -> dict[str, int]:
+        incoming = usage.as_dict()
+        return {
+            key: int(current.get(key, 0)) + value
+            for key, value in incoming.items()
+        }
 
     @staticmethod
     def _history_item(run: DigestRun) -> dict[str, Any]:
