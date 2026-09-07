@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 
 import { RequireAuth } from "./auth/RequireAuth";
 import { RequireAdmin } from "./auth/RequireAdmin";
@@ -12,6 +12,12 @@ import { LoginPage } from "./pages/LoginPage";
 import { NewDigestPage } from "./pages/NewDigestPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { RegisterPage } from "./pages/RegisterPage";
+
+function LegacyDigestHistoryRedirect() {
+  const { digestId } = useParams();
+  const location = useLocation();
+  return <Navigate to={`/digests/${digestId}${location.search}`} state={location.state} replace />;
+}
 
 export default function App() {
   return (
@@ -54,7 +60,7 @@ export default function App() {
         path="/digests/:digestId/history"
         element={
           <RequireAuth>
-            <DigestHistoryPage />
+            <LegacyDigestHistoryRedirect />
           </RequireAuth>
         }
       />

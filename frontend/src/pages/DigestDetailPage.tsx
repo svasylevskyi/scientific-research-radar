@@ -21,7 +21,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
-import { Link as RouterLink, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi, digestsApi } from "../api/digests";
@@ -29,7 +29,9 @@ import { AppHeader } from "../components/AppHeader";
 import { DigestForm, digestToFormValues } from "../components/DigestForm";
 import { DigestRunFeedback } from "../components/DigestRunFeedback";
 import { DigestRunProgress } from "../components/DigestRunProgress";
-import type { AdminDigest, Digest, DigestInput, DigestRunDetail } from "../types/digest";
+import { DigestWorkspace } from "../components/DigestWorkspace";
+import type { AdminDigest, Digest, DigestInput, DigestRunDetail, DigestRunSummary } from "../types/digest";
+import { loadRunHistory } from "../runHistory";
 
 interface DigestDetailPageProps {
   admin?: boolean;
@@ -47,6 +49,7 @@ function snapshotTopic(run: DigestRunDetail) {
 export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const { digestId = "" } = useParams();
   const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
   const location = useLocation();
   const routeState = location.state as { success?: string } | null;
   const backPath = admin ? "/admin/digests" : "/";
@@ -59,6 +62,14 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
   const [runTab, setRunTab] = useState(0);
   const [hasRuns, setHasRuns] = useState(false);
+  const [runs, setRuns] = useState<DigestRunSummary[]>([]);
+  const hasSuccessfulRun = runs.some((run) => run.status === "completed");
+
+  function updateRun(run: DigestRunDetail) {
+    setRuns((current) => current.some((item) => item.id === run.id)
+      ? current.map((item) => item.id === run.id ? run : item) : [run, ...current]);
+    setLatestRun((current) => !current || current.id === run.id ? run : current);
+  }
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(routeState?.success ?? null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -67,24 +78,26 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
     let active = true;
     setIsLoading(true);
     setError(null);
+    setRuns([]); setLatestRun(null); setActiveRun(null); setRunTab(0);
 
     async function load() {
       try {
         const digestRequest = admin ? adminDigestsApi.get(digestId) : digestsApi.get(digestId);
         const [digestResult, history, accountActiveRun] = await Promise.all([
           digestRequest,
-          admin ? Promise.resolve(null) : digestRunsApi.list(digestId, { offset: 0, limit: 1 }),
+          admin ? Promise.resolve([]) : loadRunHistory((offset) => digestRunsApi.list(digestId, { offset, limit: 100 })),
           admin ? Promise.resolve(null) : digestRunsApi.active(),
         ]);
         if (!active) return;
         setDigest(digestResult);
         setActiveRun(accountActiveRun);
-        setHasRuns((history?.total ?? 0) > 0);
+        setHasRuns(history.length > 0);
+        setRuns(history);
 
         if (accountActiveRun?.digest_id === digestId) {
           setLatestRun(accountActiveRun);
-        } else if (history?.items[0]) {
-          const detail = await digestRunsApi.get(digestId, history.items[0].id);
+        } else if (history[0]) {
+          const detail = await digestRunsApi.get(digestId, history[0].id);
           if (active) setLatestRun(detail);
         } else {
           setLatestRun(null);
@@ -115,18 +128,19 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
         if (!mounted) return;
         if (accountActiveRun) {
           setActiveRun(accountActiveRun);
-          if (accountActiveRun.digest_id === digestId) setLatestRun(accountActiveRun);
+          if (accountActiveRun.digest_id === digestId) { setLatestRun(accountActiveRun); updateRun(accountActiveRun); }
           return;
         }
 
-        setActiveRun(null);
         if (trackedRun.digest_id === digestId) {
           const finished = await digestRunsApi.get(trackedRun.digest_id, trackedRun.id);
           if (!mounted) return;
           setLatestRun(finished);
+          updateRun(finished);
           setHasRuns(true);
           setSuccess(finished.status === "completed" ? "Radar run completed." : null);
         }
+        setActiveRun(null);
       } catch {
         // Keep the last known progress; the next poll can recover from a transient error.
       }
@@ -153,6 +167,8 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
       setHasRuns(true);
       setActiveRun(run);
       setLatestRun(run);
+      updateRun(run);
+      setSearchParams({ run_id: run.id });
       setSuccess("Radar run started. You can continue using the application.");
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
@@ -163,6 +179,20 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
         }
       }
       setError(caught instanceof ApiError ? caught.message : "Could not start the radar.");
+    } finally {
+      setIsStartingRun(false);
+    }
+  }
+
+  async function retryRun(run: DigestRunDetail) {
+    setIsStartingRun(true);
+    setError(null);
+    try {
+      const retried = await digestRunsApi.retry(digestId, run.id);
+      updateRun(retried); setLatestRun(retried); setActiveRun(retried);
+      setSearchParams({ run_id: retried.id });
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "Could not retry this run.");
     } finally {
       setIsStartingRun(false);
     }
@@ -252,7 +282,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   return (
     <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
       <AppHeader />
-      <Container component="main" maxWidth="md" sx={{ py: { xs: 3, sm: 6 } }}>
+      <Container component="main" maxWidth={!admin && hasSuccessfulRun ? "lg" : "md"} sx={{ py: { xs: 3, sm: 6 } }}>
         <Button
           component={RouterLink}
           to={backPath}
@@ -316,16 +346,6 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                           : "Run now"}
                   </Button>
                   <Button variant="outlined" startIcon={<ScheduleRoundedIcon />} disabled>Schedule runs</Button>
-                  {hasRuns && (
-                    <Button
-                      component={RouterLink}
-                      to={`/digests/${digestId}/history${latestRun ? `?run_id=${latestRun.id}` : ""}`}
-                      color="inherit"
-                      startIcon={<HistoryRoundedIcon />}
-                    >
-                      View history
-                    </Button>
-                  )}
                 </Stack>
 
                 {activeRun && (
@@ -343,12 +363,18 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                         Open active digest
                       </Button>
                     )}
+                    {currentDigestIsRunning && hasSuccessfulRun && (
+                      <Button size="small" onClick={() => setSearchParams({ run_id: activeRun.id })}>View progress</Button>
+                    )}
                   </Alert>
                 )}
               </Paper>
             )}
 
-            {!admin && hasRuns && displayedRun ? (
+            {!admin && hasSuccessfulRun ? (
+              <DigestWorkspace key={digestId} digestId={digestId} runs={runs} latestRun={latestRun}
+                details={digestDetails} runBlocked={runBlocked || isStartingRun} onRetry={retryRun} onUpdate={updateRun} />
+            ) : !admin && hasRuns && displayedRun ? (
               <Box>
                 <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden", mb: 3 }}>
                   <Tabs
@@ -363,7 +389,10 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                     <Tab label="Digest Details" />
                   </Tabs>
                 </Paper>
-                {runTab === 0 && <DigestRunProgress run={displayedRun} />}
+                {runTab === 0 && <Stack spacing={2}>
+                  <DigestRunProgress run={displayedRun} />
+                  {displayedRun.status === "failed" && <Button disabled={runBlocked || isStartingRun} onClick={() => void retryRun(displayedRun)}>Retry failed stage</Button>}
+                </Stack>}
                 {runTab === 1 && displayedRun.status === "completed" && (
                   <DigestRunFeedback
                     run={displayedRun}
