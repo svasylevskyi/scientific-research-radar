@@ -4,7 +4,7 @@ import { LandingPage } from "./pages/LandingPage";
 import { PlansPage } from "./pages/PlansPage";
 import { LegalPage } from "./pages/LegalPage";
 import { ForgotPasswordPage, ResetPasswordPage } from "./pages/PasswordRecoveryPage";
-import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { matchPath, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 
 import { RequireAuth } from "./auth/RequireAuth";
 import { RequireAdmin } from "./auth/RequireAdmin";
@@ -26,6 +26,11 @@ function LegacyDigestHistoryRedirect() {
 }
 
 export default function App() {
+  const { pathname } = useLocation();
+  // Registration includes its email verification step; profile keeps its footer.
+  const isAuthPage = ["/login", "/register", "/forgot-password", "/reset-password"]
+    .some((path) => matchPath(path, pathname));
+
   return (
     <Box sx={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", "& > *": { flex: 1 } }}>
@@ -121,7 +126,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Box>
-      <SiteFooter />
+      {!isAuthPage && <SiteFooter />}
     </Box>
   );
 }
