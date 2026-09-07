@@ -61,6 +61,9 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
   const [isRetrying, setIsRetrying] = useState(false);
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const selectedRunIsInProgress = Boolean(
+    selectedRun && ["queued", "running"].includes(selectedRun.status),
+  );
 
   useEffect(() => {
     let active = true;
@@ -187,13 +190,15 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
       Boolean(selectedRun.briefing),
       Boolean(selectedRun.trend_analysis),
       Boolean(selectedRun.search_data || selectedRun.relevance_data || selectedRun.paper_results.length),
+      !selectedRunIsInProgress,
       selectedRun.status === "completed",
     ];
+    if (selectedRunIsInProgress) availability.splice(3, 1);
     if (!availability[tab]) {
       const firstAvailable = availability.findIndex(Boolean);
       if (firstAvailable >= 0) setTab(firstAvailable);
     }
-  }, [selectedRun, tab]);
+  }, [selectedRun, selectedRunIsInProgress, tab]);
 
   return (
     <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
@@ -272,7 +277,9 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
                 </Box>
               ) : (
                 <Stack spacing={3}>
-                  <DigestRunProgress run={selectedRun} />
+                  {selectedRunIsInProgress && (
+                    <DigestRunProgress run={selectedRun} />
+                  )}
                   {admin && (
                     <Alert severity="info">
                       OpenAI response jobs created: {selectedRun.request_count}. Paper-summary
@@ -308,13 +315,26 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
                           label="Paper Summaries"
                           disabled={!selectedRun.search_data && !selectedRun.relevance_data && selectedRun.paper_results.length === 0}
                         />
+                        {!selectedRunIsInProgress && (
+                          <Tab label="Run Steps" />
+                        )}
                         <Tab label="Feedback" disabled={selectedRun.status !== "completed"} />
                       </Tabs>
                     </Paper>
                     <TabPanel active={tab === 0 && Boolean(selectedRun.briefing)}>
                       <DigestBriefingResult run={selectedRun} />
                     </TabPanel>
-                    <TabPanel active={tab === 3 && selectedRun.status === "completed"}>
+                    {!selectedRunIsInProgress && (
+                      <TabPanel active={tab === 3}>
+                        <DigestRunProgress run={selectedRun} />
+                      </TabPanel>
+                    )}
+                    <TabPanel
+                      active={
+                        tab === (selectedRunIsInProgress ? 3 : 4) &&
+                        selectedRun.status === "completed"
+                      }
+                    >
                       <DigestRunFeedback
                         run={selectedRun}
                         editable={
