@@ -62,6 +62,11 @@ class DigestService:
         digest.schedule = schedule.model_dump(mode="json")
         return self._commit(digest)
 
+    def delete_schedule(self, *, owner: User, digest_id: UUID) -> None:
+        digest = self.get_owned(owner=owner, digest_id=digest_id)
+        digest.schedule = None
+        self._commit(digest)
+
     def list_for_admin(
         self,
         *,

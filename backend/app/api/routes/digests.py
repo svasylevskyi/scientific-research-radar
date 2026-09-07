@@ -79,6 +79,16 @@ def save_digest_schedule(
     ))
 
 
+@router.delete("/{digest_id}/schedule", status_code=status.HTTP_204_NO_CONTENT)
+def delete_digest_schedule(
+    digest_id: UUID,
+    current_user: CurrentUser,
+    service: DigestServiceDep,
+) -> Response:
+    _run(lambda: service.delete_schedule(owner=current_user, digest_id=digest_id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.delete("/{digest_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_digest(
     digest_id: UUID,

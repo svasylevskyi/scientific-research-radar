@@ -1,5 +1,5 @@
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
-import { Alert, Box, Button, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import { useState, type FormEvent } from "react";
 import { ApiError } from "../api/client";
 import { digestsApi } from "../api/digests";
@@ -20,7 +20,7 @@ function describeDate(value: string, timeZone: string) {
 function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
   digestId: string;
   schedule: DigestSchedule | null;
-  onSaved: (schedule: DigestSchedule) => void;
+  onSaved: (schedule: DigestSchedule | null) => void;
   onCancel: () => void;
 }) {
   const [frequency, setFrequency] = useState<DigestFrequency>(schedule?.frequency ?? "weekly");
@@ -28,6 +28,8 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
   const [endsAt, setEndsAt] = useState(() => schedule?.ends_at ? localInput(new Date(schedule.ends_at)) : "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -56,6 +58,22 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
     }
   }
 
+  async function deleteSchedule() {
+    if (busy) return;
+    setBusy(true);
+    setDeleting(true);
+    setError(null);
+    try {
+      await digestsApi.deleteSchedule(digestId);
+      onSaved(null);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "Could not delete the schedule. Please try again.");
+      setConfirmDelete(false);
+      setDeleting(false);
+      setBusy(false);
+    }
+  }
+
   return (
     <Box component="form" id={`schedule-form-${digestId}`} onSubmit={save} sx={{ mt: 2 }}>
       <Stack spacing={2}>
@@ -68,11 +86,20 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
           <TextField label="First digest date and time" type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} required disabled={busy} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
           <TextField label="End date and time (optional)" type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} disabled={busy} fullWidth helperText="Exclusive cutoff. Leave empty for no end date." slotProps={{ inputLabel: { shrink: true } }} />
         </Stack>
-        <Stack direction="row" spacing={1}>
-          <Button type="submit" variant="contained" disabled={busy}>{busy ? "Saving…" : "Save schedule"}</Button>
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          <Button type="submit" variant="contained" disabled={busy}>{busy && !deleting ? "Saving…" : "Save schedule"}</Button>
+          {schedule && <Button type="button" color="error" onClick={() => setConfirmDelete(true)} disabled={busy}>Delete schedule</Button>}
           <Button type="button" onClick={onCancel} disabled={busy}>Cancel</Button>
         </Stack>
       </Stack>
+      <Dialog open={confirmDelete} onClose={() => { if (!busy) setConfirmDelete(false); }} aria-labelledby="delete-schedule-title" aria-describedby="delete-schedule-description">
+        <DialogTitle id="delete-schedule-title">Delete this schedule?</DialogTitle>
+        <DialogContent><DialogContentText id="delete-schedule-description">This removes the saved schedule. Your digest and existing runs will be kept.</DialogContentText></DialogContent>
+        <DialogActions>
+          <Button type="button" autoFocus onClick={() => setConfirmDelete(false)} disabled={busy}>Cancel</Button>
+          <Button type="button" color="error" variant="contained" onClick={() => void deleteSchedule()} disabled={busy}>{deleting ? "Deleting…" : "Delete schedule"}</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -80,7 +107,7 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
 export function DigestScheduleControl({ digestId, schedule, onSaved }: {
   digestId: string;
   schedule: DigestSchedule | null;
-  onSaved: (schedule: DigestSchedule) => void;
+  onSaved: (schedule: DigestSchedule | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
   return (

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -83,3 +84,31 @@ def test_schedule_normalizes_offsets_and_accepts_no_end(client):
     assert response.status_code == 200
     assert response.json()["schedule"]["starts_at"] == "2030-01-01T11:00:00Z"
     assert response.json()["schedule"]["ends_at"] is None
+
+
+def test_delete_schedule_is_owner_scoped_and_preserves_digest_and_runs(client, db_session_factory):
+    owner = _authorization(_register(client, "remove-owner@example.com", "Owner"))
+    other = _authorization(_register(client, "remove-other@example.com", "Other"))
+    digest = client.post("/api/v1/digests", json=_digest_payload(), headers=owner).json()
+    path = f"/api/v1/digests/{digest['id']}"
+    saved = client.put(f"{path}/schedule", json=schedule_payload(), headers=owner).json()["schedule"]
+    run_id = uuid4()
+    with db_session_factory() as db:
+        db.add(DigestRun(id=run_id, digest_id=UUID(digest["id"]), owner_id=UUID(digest["owner_id"]),
+                         status="completed", trigger="manual", digest_snapshot={}, history_context=[],
+                         model_name="test", prompt_version="test", started_at=datetime.now(timezone.utc)))
+        db.commit()
+    assert client.delete(f"{path}/schedule", headers=other).status_code == 404
+    client.cookies.clear()
+    assert client.delete(f"{path}/schedule").status_code == 401
+    assert client.get(path, headers=owner).json()["schedule"] == saved
+    assert client.delete(f"{path}/schedule", headers=owner).status_code == 204
+    remaining = client.get(path, headers=owner).json()
+    assert remaining["schedule"] is None
+    assert remaining["topic"] == digest["topic"]
+    assert remaining["frequency"] == digest["frequency"]
+    assert client.get(f"{path}/runs", headers=owner).json()["items"][0]["id"] == str(run_id)
+    assert client.get("/api/v1/digests", headers=owner).json()["items"][0]["schedule"] is None
+    assert client.delete(f"{path}/schedule", headers=owner).status_code == 204
+    assert client.delete(f"/api/v1/digests/{uuid4()}/schedule", headers=owner).status_code == 404
+    assert client.put(f"{path}/schedule", json=schedule_payload(), headers=owner).status_code == 200
