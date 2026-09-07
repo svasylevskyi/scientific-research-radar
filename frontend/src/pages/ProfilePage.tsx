@@ -120,6 +120,18 @@ export function ProfilePage() {
         </Typography>
 
         <Stack spacing={3}>
+          {challenge && <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
+            <EmailVerificationForm key={challenge.id} challenge={challenge}
+              onConfirm={async (code) => {
+                await usersApi.confirmEmailChange(challenge.id, code);
+                setChallenge(null);
+                await refreshUser();
+                setProfileSuccess("Email address verified and updated. Use your new email to sign in.");
+              }}
+              onResend={async () => setChallenge(await usersApi.resendEmailChange(challenge.id))}
+              onCancel={() => setChallenge(null)} />
+          </Paper>}
+
           <Paper component="form" onSubmit={saveProfile} variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
             <Typography variant="h6" sx={{ mb: 0.75 }}>Profile details</Typography>
             <Typography color="text.secondary" sx={{ mb: 2.5 }}>Update the name and email address associated with your account.</Typography>
@@ -134,18 +146,6 @@ export function ProfilePage() {
               </Button>
             </Stack>
           </Paper>
-
-          {challenge && <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
-            <EmailVerificationForm key={challenge.id} challenge={challenge}
-              onConfirm={async (code) => {
-                await usersApi.confirmEmailChange(challenge.id, code);
-                setChallenge(null);
-                await refreshUser();
-                setProfileSuccess("Email address verified and updated. Use your new email to sign in.");
-              }}
-              onResend={async () => setChallenge(await usersApi.resendEmailChange(challenge.id))}
-              onCancel={() => setChallenge(null)} />
-          </Paper>}
 
           <Paper component="form" onSubmit={changePassword} variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
             <Typography variant="h6" sx={{ mb: 0.75 }}>Change password</Typography>
