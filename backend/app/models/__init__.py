@@ -1,4 +1,5 @@
 from app.models.auth_session import AuthSession
+from app.models.password_reset import PasswordReset, RecoveryRateLimit
 from app.models.digest_email_delivery import DigestEmailDelivery
 from app.models.digest import Digest, DigestFrequency, TargetAudience
 from app.models.digest_run import (

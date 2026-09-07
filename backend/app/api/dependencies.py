@@ -45,7 +45,7 @@ def get_current_user(
         raise unauthorized from exc
 
     user = UserRepository(db).get_by_id(claims.subject)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.auth_version != claims.auth_version:
         raise unauthorized
     return user
 

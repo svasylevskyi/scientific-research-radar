@@ -75,13 +75,13 @@ class AuthService:
                 raise AuthenticationError("Your session has expired. Please sign in again.")
 
             user = self.users.get_by_id(claims.subject)
-            if user is None or not user.is_active or user.id != auth_session.user_id:
+            if user is None or not user.is_active or user.id != auth_session.user_id or user.auth_version != claims.auth_version:
                 self.sessions.revoke(auth_session)
                 raise AuthenticationError("Your session has expired. Please sign in again.")
 
-            access_token, _ = create_access_token(user.id, self.settings)
+            access_token, _ = create_access_token(user.id, self.settings, user.auth_version)
             refresh_token, refresh_expires_at = create_refresh_token(
-                user.id, auth_session.id, self.settings
+                user.id, auth_session.id, self.settings, user.auth_version
             )
             self.sessions.rotate(
                 auth_session,
@@ -108,9 +108,9 @@ class AuthService:
 
     def _start_session(self, user: User) -> IssuedTokens:
         session_id = uuid4()
-        access_token, _ = create_access_token(user.id, self.settings)
+        access_token, _ = create_access_token(user.id, self.settings, user.auth_version)
         refresh_token, refresh_expires_at = create_refresh_token(
-            user.id, session_id, self.settings
+            user.id, session_id, self.settings, user.auth_version
         )
         self.sessions.create(
             session_id=session_id,

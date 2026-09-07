@@ -3,6 +3,7 @@ import { SiteFooter } from "./components/SiteFooter";
 import { LandingPage } from "./pages/LandingPage";
 import { PlansPage } from "./pages/PlansPage";
 import { LegalPage } from "./pages/LegalPage";
+import { ForgotPasswordPage, ResetPasswordPage } from "./pages/PasswordRecoveryPage";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 
 import { RequireAuth } from "./auth/RequireAuth";
@@ -42,6 +43,8 @@ export default function App() {
             }
           />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route
             path="/profile"

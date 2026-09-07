@@ -8,6 +8,12 @@ function acceptSession(result: AuthResponse): AuthResponse {
 }
 
 export const authApi = {
+  forgotPassword(email: string): Promise<{ message: string }> {
+    return apiRequest("/auth/forgot-password", { method: "POST", body: { email }, authenticate: false, retryAfterRefresh: false });
+  },
+  resetPassword(token: string, password: string, password_confirmation: string): Promise<{ message: string }> {
+    return apiRequest("/auth/reset-password", { method: "POST", body: { token, password, password_confirmation }, authenticate: false, retryAfterRefresh: false });
+  },
   async register(input: RegisterInput): Promise<EmailVerification> {
     return apiRequest<EmailVerification>("/auth/register", {
       method: "POST",

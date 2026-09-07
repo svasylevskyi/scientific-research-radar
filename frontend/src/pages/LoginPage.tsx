@@ -107,6 +107,7 @@ export function LoginPage() {
         </Button>
       </Stack>
 
+      <Box sx={{ mt: 2 }}><Link component={RouterLink} to="/forgot-password">Forgot your password?</Link></Box>
       <Typography sx={{ mt: 3.5, color: "text.secondary" }}>
         New to Research Radar?{" "}
         <Link component={RouterLink} to="/register" fontWeight={700} underline="hover">

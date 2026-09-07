@@ -38,3 +38,7 @@ See the endpoint table in the root README. Clients must handle `202` registratio
 ## Scheduled briefing delivery
 
 The separate `python -m app.scheduler.worker` process delivers stored completed scheduled briefings when email is enabled (default). Configure `FRONTEND_BASE_URL` with your public site address as well as SMTP. The existing verification email path remains immediate; briefing delivery uses a durable queue with bounded retries. See the README scheduling section for activation, retry, and SMTP duplicate-delivery semantics. The template is `backend/app/services/briefing_email.py`.
+
+## Password recovery
+
+Password recovery and reset notifications use the same SMTP settings and `FRONTEND_BASE_URL`. Recovery emails are sent after the generic API response; these tasks are best-effort rather than queued durably. See the README for token lifetime, throttling, session invalidation, and migration instructions. Never send or log passwords or raw reset tokens outside the recovery email.

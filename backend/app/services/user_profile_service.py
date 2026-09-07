@@ -50,5 +50,6 @@ class UserProfileService:
             raise PasswordReuseError("New password must be different from the current password")
 
         user.password_hash = hash_password(new_password)
+        user.auth_version += 1
         self.sessions.revoke_all_for_user(user.id)
         self.db.commit()
