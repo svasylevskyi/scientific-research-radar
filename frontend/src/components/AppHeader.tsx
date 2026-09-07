@@ -39,7 +39,7 @@ export function AppHeader() {
           <Box sx={{ flexGrow: 1 }} />
           <Stack direction="row" spacing={{ xs: 0.5, sm: 1 }} alignItems="center">
             <Tooltip title="Workspace">
-              <Button component={RouterLink} to="/" color="inherit" aria-label="Workspace" sx={{ minWidth: 44 }}>
+              <Button component={RouterLink} to="/radar" color="inherit" aria-label="Workspace" sx={{ minWidth: 44 }}>
                 <HomeRoundedIcon />
                 <Box component="span" sx={{ ml: 1, display: { xs: "none", md: "inline" } }}>Workspace</Box>
               </Button>

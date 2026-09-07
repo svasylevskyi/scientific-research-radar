@@ -43,7 +43,7 @@ export function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!isInitializing && user) return <Navigate to="/" replace />;
+  if (!isInitializing && user) return <Navigate to="/radar" replace />;
 
   const passwordIsValid = isValidNewPassword(password);
   const passwordsMatch = password === passwordConfirmation;
@@ -91,7 +91,7 @@ export function RegisterPage() {
         onConfirm={async (code) => {
           await confirmRegistration(challenge.id, code);
           rememberChallenge(null);
-          navigate("/", { replace: true });
+          navigate("/radar", { replace: true });
         }}
         onResend={async () => rememberChallenge(await authApi.resendRegistration(challenge.id))}
         onCancel={() => rememberChallenge(null)} /> : (

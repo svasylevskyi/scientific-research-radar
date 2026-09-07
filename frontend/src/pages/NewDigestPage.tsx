@@ -35,12 +35,12 @@ export function NewDigestPage() {
   }
 
   return (
-    <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
+    <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
       <Container component="main" maxWidth="md" sx={{ py: { xs: 3, sm: 6 } }}>
         <Button
           component={RouterLink}
-          to="/"
+          to="/radar"
           color="inherit"
           startIcon={<ArrowBackRoundedIcon />}
           sx={{ mb: 2 }}
@@ -61,7 +61,7 @@ export function NewDigestPage() {
           submitLabel="Create digest"
           isSubmitting={isSubmitting}
           onSubmit={createDigest}
-          onCancel={() => navigate("/")}
+          onCancel={() => navigate("/radar")}
         />
       </Container>
     </Box>

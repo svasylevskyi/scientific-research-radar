@@ -52,7 +52,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const [, setSearchParams] = useSearchParams();
   const location = useLocation();
   const routeState = location.state as { success?: string } | null;
-  const backPath = admin ? "/admin/digests" : "/";
+  const backPath = admin ? "/admin/digests" : "/radar";
   const [digest, setDigest] = useState<Digest | null>(null);
   const [latestRun, setLatestRun] = useState<DigestRunDetail | null>(null);
   const [activeRun, setActiveRun] = useState<DigestRunDetail | null>(null);
@@ -284,7 +284,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   ) : null;
 
   return (
-    <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
+    <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
       <Container component="main" maxWidth={!admin && hasSuccessfulRun ? "lg" : "md"} sx={{ py: { xs: 3, sm: 6 } }}>
         <Button

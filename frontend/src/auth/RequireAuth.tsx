@@ -13,7 +13,7 @@ export function RequireAuth({ children }: PropsWithChildren) {
       <Box
         role="status"
         aria-label="Restoring your session"
-        sx={{ minHeight: "100dvh", display: "grid", placeItems: "center" }}
+        sx={{ minHeight: "100%", display: "grid", placeItems: "center" }}
       >
         <CircularProgress size={32} />
       </Box>
