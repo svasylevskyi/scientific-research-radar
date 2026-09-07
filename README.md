@@ -162,7 +162,7 @@ The admin panel is available at `/admin/users`. The super-admin cannot be deacti
 
 The digest administration panel is available at `/admin/digests`. Regular administrators cannot list or manage digests owned by the protected super-admin; the super-admin can manage every digest. Deleting a user also deletes their digests through a database foreign-key cascade.
 
-The digest details page can start an immediate radar run and continues polling its persisted progress while the user remains free to navigate. Scheduling is intentionally disabled until its backend workflow is introduced. The history page records completed, running, failed, and pending stages; completed and partial output remains available in the stable briefing, trend-analysis, and paper-summary views.
+The digest page can start an immediate radar run and continues polling its persisted progress while the user remains free to navigate. Once a digest has a successful run, it shows briefing, trend analysis, paper summaries, run steps, feedback, and digest details together. A collapsible run list remembers its state per user in the current browser, with inclusive local-date filters. The latest successful run is selected by default; explicit run links preserve the selected run. Old user history URLs redirect to the digest page. Digests without successful runs retain their existing layout, and admin run review remains separate and read-only. Scheduling is intentionally disabled until its backend workflow is introduced.
 
 The super-admin can manage every account, including editing their own account details. The super-admin account is omitted from regular admins' user lists and cannot be opened or modified by them. Regular users have no access to administration endpoints.
 
