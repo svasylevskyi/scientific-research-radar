@@ -1,6 +1,6 @@
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
-import { Alert, Box, Button, Chip, CircularProgress, Paper, Stack, Tab, Tabs, TextField, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, Checkbox, Chip, CircularProgress, FormControlLabel, Paper, Stack, Tab, Tabs, TextField, Tooltip, Typography } from "@mui/material";
 import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
@@ -34,6 +34,7 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
   }).sort();
   const [fromOverride, setFrom] = useState<string | null>(null);
   const [toOverride, setTo] = useState<string | null>(null);
+  const [successfulOnly, setSuccessfulOnly] = useState(true);
   const from = fromOverride ?? runDays[0] ?? "";
   const to = toOverride ?? runDays.at(-1) ?? "";
   const [tab, setTab] = useState("briefing");
@@ -64,7 +65,7 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
   };
   const activeTab = available[tab as keyof typeof available] ? tab : "steps";
   const invalidRange = Boolean(from && to && from > to);
-  const filtered = filterRuns(runs, from, to);
+  const filtered = filterRuns(runs, from, to).filter((item) => !successfulOnly || item.status === "completed");
   const selectionOutsideFilter = !filtered.some((item) => item.id === selectedId);
 
   function selectRun(id: string) {
@@ -91,7 +92,10 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
             <TextField label="To" type="date" value={to} onChange={(event) => setTo(event.target.value)}
               error={invalidRange} helperText={invalidRange ? "To must be on or after From." : "Run start dates, in your local time. Both dates included."}
               slotProps={{ inputLabel: { shrink: true } }} />
-            {(from || to) && <Button onClick={() => { setFrom(""); setTo(""); }}>Clear dates</Button>}
+            <FormControlLabel
+              control={<Checkbox checked={successfulOnly} onChange={(event) => setSuccessfulOnly(event.target.checked)} />}
+              label="Successful runs only"
+            />
             <Typography variant="body2" color="text.secondary">{filtered.length} of {runs.length} runs</Typography>
           </Stack>
           <Stack sx={{ maxHeight: { md: "65vh" }, overflowY: "auto" }}>
@@ -106,7 +110,7 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
                 </Stack>
               </Stack>
             </Button>)}
-            {!filtered.length && <Typography color="text.secondary" sx={{ p: 2 }}>No runs match these dates.</Typography>}
+            {!filtered.length && <Typography color="text.secondary" sx={{ p: 2 }}>No runs match these filters.</Typography>}
           </Stack>
         </Box>}
       </Paper>
@@ -114,7 +118,7 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
         {run && <Typography color="text.secondary" sx={{ mb: 2 }}>
           Run: {runDate(run.started_at).toLocaleString()} · {run.status}
         </Typography>}
-        {selectionOutsideFilter && (from || to) && <Alert severity="info" sx={{ mb: 2 }}>The displayed run is outside the date filter. Select a matching run or clear the dates.</Alert>}
+        {selectionOutsideFilter && (from || to || successfulOnly) && <Alert severity="info" sx={{ mb: 2 }}>The displayed run is outside the current filters. Adjust the filters or select a matching run.</Alert>}
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden", mb: 3 }}>
           <Tabs value={activeTab} onChange={(_event, value) => setTab(value)} variant="scrollable" scrollButtons="auto" aria-label="Digest results and settings">

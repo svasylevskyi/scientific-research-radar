@@ -73,12 +73,14 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(routeState?.success ?? null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmRun, setConfirmRun] = useState(false);
 
   useEffect(() => {
     let active = true;
     setIsLoading(true);
     setError(null);
     setRuns([]); setLatestRun(null); setActiveRun(null); setRunTab(0);
+    setConfirmRun(false);
 
     async function load() {
       try {
@@ -158,6 +160,8 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   }, [latestRun?.id, latestRun?.status, runTab]);
 
   async function runNow() {
+    if (isStartingRun || isSaving || activeRun) return;
+    setConfirmRun(false);
     setIsStartingRun(true);
     setError(null);
     setSuccess(null);
@@ -335,7 +339,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                     variant="contained"
                     startIcon={isStartingRun ? <CircularProgress size={18} color="inherit" /> : <PlayArrowRoundedIcon />}
                     disabled={isStartingRun || isSaving || runBlocked}
-                    onClick={runNow}
+                    onClick={() => setConfirmRun(true)}
                   >
                     {isStartingRun
                       ? "Starting…"
@@ -407,6 +411,25 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
           </>
         )}
       </Container>
+
+      <Dialog open={confirmRun} onClose={() => setConfirmRun(false)} fullWidth maxWidth="xs"
+        aria-labelledby="confirm-run-title" aria-describedby="confirm-run-description">
+        <DialogTitle id="confirm-run-title">Run this digest now?</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="confirm-run-description">
+            Start a new research run for “{digest?.topic}” using its saved settings?
+            You can continue using the application while it runs. Other digest runs
+            will be temporarily disabled for your account.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button autoFocus onClick={() => setConfirmRun(false)}>Cancel</Button>
+          <Button variant="contained" onClick={() => void runNow()}
+            disabled={isStartingRun || isSaving || runBlocked}>
+            Run now
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={confirmDelete}
