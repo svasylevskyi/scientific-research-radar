@@ -3,6 +3,7 @@ import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
 import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
 import { Box, Container, Stack, Typography } from "@mui/material";
 import type { PropsWithChildren } from "react";
+import { Link as RouterLink } from "react-router-dom";
 
 import { Brand } from "../components/Brand";
 
@@ -29,7 +30,9 @@ export function AuthLayout({ children }: PropsWithChildren) {
           overflow: "hidden",
         }}
       >
-        <Brand light />
+        <Box component={RouterLink} to="/" aria-label="Scientific Research Radar home" sx={{ alignSelf: "flex-start", color: "inherit", textDecoration: "none" }}>
+          <Brand light />
+        </Box>
         <Box sx={{ maxWidth: 520, py: 6 }}>
           <Typography
             component="h1"
@@ -74,7 +77,9 @@ export function AuthLayout({ children }: PropsWithChildren) {
       <Box sx={{ display: "flex", alignItems: "center", bgcolor: "background.default", py: { xs: 3, sm: 5 } }}>
         <Container maxWidth="sm" sx={{ px: { xs: 2.5, sm: 4 } }}>
           <Box sx={{ display: { md: "none" }, mb: 5 }}>
-            <Brand />
+            <Box component={RouterLink} to="/" aria-label="Scientific Research Radar home" sx={{ display: "inline-block", color: "inherit", textDecoration: "none" }}>
+              <Brand />
+            </Box>
           </Box>
           {children}
         </Container>
@@ -82,4 +87,3 @@ export function AuthLayout({ children }: PropsWithChildren) {
     </Box>
   );
 }
-
