@@ -36,6 +36,7 @@ The API, service, repository, and persistence layers are separate. SQLite is sel
 - An admin digest panel with owner filtering and the same management operations.
 - A request-triggered, four-stage radar workflow with persisted progress, partial results, and failure details.
 - Owner-scoped digest run history with responsive, data-driven briefing, trend, and paper-summary views.
+- Optional latest-run feedback that refines subsequent runs and becomes read-only when a newer run starts.
 - Live OpenAI Responses API execution with hosted web search and a strict Pydantic output contract.
 
 ## Run locally
@@ -89,6 +90,8 @@ The prompts also apply conservative copyright and access safeguards: public avai
 
 Completed run summaries are retained in the database and a compact selection of recent runs is included as historical context in subsequent prompts. Historical output is labelled as context, not as evidence for new results.
 
+Users may add or update feedback only on a digest's latest completed run. Starting a newer run immediately freezes older feedback. Relevant feedback is passed to later radar stages as compact, untrusted preference context so it can improve selection, emphasis, explanation depth, and recommendations without being treated as scientific evidence or prompt instructions. Administrators can review run output, OpenAI response-job counts, and feedback but cannot change feedback.
+
 ### 2. Frontend
 
 ```bash
@@ -128,6 +131,7 @@ npm run build
 | `DELETE` | `/api/v1/digests/{id}` | Delete a digest owned by the authenticated user |
 | `POST` | `/api/v1/digests/{id}/runs` | Start the authenticated user's digest run and return `202` |
 | `POST` | `/api/v1/digests/{id}/runs/{run_id}/retry` | Requeue the failed stage of an owned run and return `202` |
+| `PUT` | `/api/v1/digests/{id}/runs/{run_id}/feedback` | Create or update feedback for the latest completed owned run |
 | `GET` | `/api/v1/digests/{id}/runs` | List stored runs for the authenticated user's digest |
 | `GET` | `/api/v1/digests/{id}/runs/{run_id}` | Return all structured stages for one stored run |
 | `GET` | `/api/v1/digest-runs/active` | Return the authenticated user's active run, if any |
@@ -138,6 +142,8 @@ npm run build
 | `DELETE` | `/api/v1/admin/users/{id}` | Delete a user and their sessions (admin only) |
 | `GET` | `/api/v1/admin/digests` | List digests, optionally filtered by owner (admin only) |
 | `GET` | `/api/v1/admin/digests/{id}` | Return any accessible digest (admin only) |
+| `GET` | `/api/v1/admin/digests/{id}/runs` | List accessible digest runs and feedback (admin only) |
+| `GET` | `/api/v1/admin/digests/{id}/runs/{run_id}` | Review one accessible run and its feedback (admin only) |
 | `PATCH` | `/api/v1/admin/digests/{id}` | Update any accessible digest (admin only) |
 | `DELETE` | `/api/v1/admin/digests/{id}` | Delete any accessible digest (admin only) |
 | `GET` | `/health` | Liveness check |

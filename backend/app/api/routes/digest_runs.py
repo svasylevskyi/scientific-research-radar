@@ -15,9 +15,11 @@ from app.radar.runner import (
 )
 from app.schemas.digest_run import (
     DigestRunDetailRead,
+    DigestRunFeedbackUpdate,
     DigestRunListResponse,
 )
 from app.services.digest_run_service import (
+    DigestRunFeedbackUnavailableError,
     DigestRunHistoryService,
     DigestRunNotFoundError,
 )
@@ -96,6 +98,28 @@ def retry_digest_run(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
+    return DigestRunDetailRead.model_validate(run)
+
+
+@router.put("/{run_id}/feedback", response_model=DigestRunDetailRead)
+def update_digest_run_feedback(
+    digest_id: UUID,
+    run_id: UUID,
+    payload: DigestRunFeedbackUpdate,
+    current_user: CurrentUser,
+    service: DigestRunHistoryServiceDep,
+) -> DigestRunDetailRead:
+    try:
+        run = service.update_feedback(
+            owner=current_user,
+            digest_id=digest_id,
+            run_id=run_id,
+            feedback_text=payload.feedback_text,
+        )
+    except DigestRunNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DigestRunFeedbackUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return DigestRunDetailRead.model_validate(run)
 
 

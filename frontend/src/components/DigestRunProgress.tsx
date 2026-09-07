@@ -77,9 +77,6 @@ export function DigestRunProgress({ run }: { run: DigestRunDetail }) {
 
   return (
     <Stack spacing={1.25} aria-label="Radar run progress">
-      <Typography variant="caption" color="text.secondary">
-        OpenAI response jobs created: {run.request_count}. Paper-summary batches can make the total exceed four.
-      </Typography>
       {sortedStages.map((stage) => (
         <Paper
           key={stage.stage}
