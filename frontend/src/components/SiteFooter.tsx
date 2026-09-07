@@ -22,9 +22,14 @@ export function SiteFooter() {
             </Stack>
             <Stack spacing={1}>
               <Typography color="white" fontWeight={700}>More to come</Typography>
-              {["About", "Contact", "Privacy", "Terms"].map((label) => (
+              {["About", "Contact"].map((label) => (
                 <Typography key={label} component="span" aria-disabled="true" variant="body2" sx={{ color: "#a5b6c3" }}>{label}</Typography>
               ))}
+            </Stack>
+            <Stack spacing={1}>
+              <Typography color="white" fontWeight={700}>Legal drafts</Typography>
+              <Link component={RouterLink} to="/privacy" color="inherit" underline="hover">Privacy</Link>
+              <Link component={RouterLink} to="/terms" color="inherit" underline="hover">Terms</Link>
             </Stack>
           </Stack>
         </Stack>

@@ -2,6 +2,7 @@ import { Box } from "@mui/material";
 import { SiteFooter } from "./components/SiteFooter";
 import { LandingPage } from "./pages/LandingPage";
 import { PlansPage } from "./pages/PlansPage";
+import { LegalPage } from "./pages/LegalPage";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 
 import { RequireAuth } from "./auth/RequireAuth";
@@ -30,6 +31,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/plans" element={<PlansPage />} />
+          <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+          <Route path="/terms" element={<LegalPage kind="terms" />} />
           <Route
             path="/radar"
             element={
