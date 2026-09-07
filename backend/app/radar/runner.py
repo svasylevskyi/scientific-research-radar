@@ -74,7 +74,9 @@ class RadarRunner:
                 "Wait for it to finish before starting a new run."
             )
 
-        digest_snapshot = DigestRead.model_validate(digest).model_dump(mode="json")
+        digest_snapshot = DigestRead.model_validate(digest).model_dump(
+            mode="json", exclude={"schedule"}
+        )
         history_context = self.runs.build_history_context(
             digest_id=digest.id, limit=self.history_limit
         )

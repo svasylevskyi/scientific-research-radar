@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.api.dependencies import CurrentUser, DbSession
 from app.schemas.digest import DigestCreate, DigestListResponse, DigestRead, DigestUpdate
+from app.schemas.digest_schedule import DigestSchedule
 from app.services.digest_service import (
     DigestNotFoundError,
     DigestRunActiveError,
@@ -63,6 +64,19 @@ def update_digest(
             owner=current_user, digest_id=digest_id, changes=payload
         )
     )
+
+
+@router.put("/{digest_id}/schedule", response_model=DigestRead)
+def save_digest_schedule(
+    digest_id: UUID,
+    payload: DigestSchedule,
+    current_user: CurrentUser,
+    service: DigestServiceDep,
+) -> DigestRead:
+    """Create or replace saved schedule preferences; does not enqueue a run."""
+    return _run(lambda: service.save_schedule(
+        owner=current_user, digest_id=digest_id, schedule=payload
+    ))
 
 
 @router.delete("/{digest_id}", status_code=status.HTTP_204_NO_CONTENT)

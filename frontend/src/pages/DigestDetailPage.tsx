@@ -2,7 +2,7 @@ import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
-import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
+import { DigestScheduleControl } from "../components/DigestScheduleControl";
 import {
   Alert,
   Box,
@@ -349,8 +349,9 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                           ? "Another run is active"
                           : "Run now"}
                   </Button>
-                  <Button variant="outlined" startIcon={<ScheduleRoundedIcon />} disabled>Schedule runs</Button>
                 </Stack>
+                <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule}
+                  onSaved={(schedule) => setDigest((current) => current?.id === digest.id ? { ...current, schedule } : current)} />
 
                 {activeRun && (
                   <Alert severity="info" sx={{ mt: 2 }}>

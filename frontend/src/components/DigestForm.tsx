@@ -22,7 +22,6 @@ import { useState, type FormEvent } from "react";
 
 import type {
   Digest,
-  DigestFrequency,
   DigestInput,
   TargetAudience,
 } from "../types/digest";
@@ -40,12 +39,7 @@ const audienceOptions: { value: TargetAudience; label: string }[] = [
   { value: "general", label: "General audience" },
 ];
 
-const frequencyOptions: { value: DigestFrequency; label: string }[] = [
-  { value: "daily", label: "Daily" },
-  { value: "weekly", label: "Weekly" },
-  { value: "monthly", label: "Monthly" },
-  { value: "quarterly", label: "Quarterly" },
-];
+
 
 export interface DigestFormValues {
   topic: string;
@@ -55,7 +49,6 @@ export interface DigestFormValues {
   targetAudience: TargetAudience[];
   reportingFrom: string;
   reportingTo: string;
-  frequency: DigestFrequency;
   maximumPapers: string;
 }
 
@@ -89,7 +82,6 @@ export function createDefaultDigestFormValues(): DigestFormValues {
     targetAudience: ["general"],
     reportingFrom: toDateInputValue(twoWeeksAgo),
     reportingTo: toDateInputValue(currentDate),
-    frequency: "weekly",
     maximumPapers: "20",
   };
 }
@@ -103,7 +95,6 @@ export function digestToFormValues(digest: Digest): DigestFormValues {
     targetAudience: digest.target_audience,
     reportingFrom: digest.reporting_from,
     reportingTo: digest.reporting_to,
-    frequency: digest.frequency,
     maximumPapers: String(digest.maximum_papers),
   };
 }
@@ -183,7 +174,6 @@ export function DigestForm({
       target_audience: values.targetAudience,
       reporting_from: values.reportingFrom,
       reporting_to: values.reportingTo,
-      frequency: values.frequency,
       maximum_papers: Number(values.maximumPapers),
     });
   }
@@ -316,21 +306,6 @@ export function DigestForm({
             />
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-            <FormControl fullWidth required>
-              <InputLabel id="digest-frequency-label">Digest frequency</InputLabel>
-              <Select
-                labelId="digest-frequency-label"
-                value={values.frequency}
-                label="Digest frequency"
-                onChange={(event) => setValue("frequency", event.target.value as DigestFrequency)}
-              >
-                {frequencyOptions.map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
             <TextField
               label="Maximum papers"
               type="number"

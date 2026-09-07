@@ -6,6 +6,7 @@ import type {
   DigestRunDetail,
   DigestRunListResponse,
   DigestUpdateInput,
+  DigestSchedule,
 } from "../types/digest";
 import { apiRequest } from "./client";
 
@@ -19,6 +20,9 @@ function listSearch(params: { offset: number; limit: number; ownerId?: string })
 }
 
 export const digestsApi = {
+  saveSchedule(digestId: string, schedule: DigestSchedule): Promise<Digest> {
+    return apiRequest<Digest>(`/digests/${digestId}/schedule`, { method: "PUT", body: schedule });
+  },
   create(input: DigestInput): Promise<Digest> {
     return apiRequest<Digest>("/digests", { method: "POST", body: input });
   },
