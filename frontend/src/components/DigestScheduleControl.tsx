@@ -1,8 +1,9 @@
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Checkbox, FormControlLabel, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { ApiError } from "../api/client";
 import { digestsApi } from "../api/digests";
+import { useAuth } from "../auth/AuthContext";
 import type { DigestFrequency, DigestSchedule } from "../types/digest";
 
 const frequencies: DigestFrequency[] = ["daily", "weekly", "monthly", "quarterly"];
@@ -24,6 +25,8 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
   onCancel: () => void;
 }) {
   const [frequency, setFrequency] = useState<DigestFrequency>(schedule?.frequency ?? "weekly");
+  const [sendEmail, setSendEmail] = useState(schedule?.send_email ?? true);
+  const { user } = useAuth();
   const [startsAt, setStartsAt] = useState(() => localInput(schedule ? new Date(schedule.starts_at) : new Date(Date.now() + 86400000)));
   const [endsAt, setEndsAt] = useState(() => schedule?.ends_at ? localInput(new Date(schedule.ends_at)) : "");
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +52,7 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
     setBusy(true);
     try {
       const saved = await digestsApi.saveSchedule(digestId, {
-        frequency, starts_at: start.toISOString(), ends_at: end?.toISOString() ?? null, time_zone: timeZone,
+        frequency, starts_at: start.toISOString(), ends_at: end?.toISOString() ?? null, time_zone: timeZone, send_email: sendEmail,
       });
       onSaved(saved.schedule!);
     } catch (caught) {
@@ -77,7 +80,7 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
   return (
     <Box component="form" id={`schedule-form-${digestId}`} onSubmit={save} sx={{ mt: 2 }}>
       <Stack spacing={2}>
-        <Typography variant="body2" color="text.secondary">All dates and times below use {timeZone}. Saving stores preferences only; automatic runs are not enabled.</Typography>
+        <Typography variant="body2" color="text.secondary">All dates and times below use {timeZone}. Scheduled runs use a rolling reporting period with the same length as your digest. Saving enables future automatic runs while the scheduler is running.</Typography>
         {error && <Alert severity="error">{error}</Alert>}
         <TextField select label="Digest frequency" value={frequency} onChange={(event) => setFrequency(event.target.value as DigestFrequency)} required disabled={busy} fullWidth>
           {frequencies.map((value) => <MenuItem key={value} value={value}>{label(value)}</MenuItem>)}
@@ -86,6 +89,7 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
           <TextField label="First digest date and time" type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} required disabled={busy} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
           <TextField label="End date and time (optional)" type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} disabled={busy} fullWidth helperText="Exclusive cutoff. Leave empty for no end date." slotProps={{ inputLabel: { shrink: true } }} />
         </Stack>
+        <FormControlLabel control={<Checkbox checked={sendEmail} onChange={(event) => setSendEmail(event.target.checked)} disabled={busy} />} label={`Email completed briefings to ${user?.email ?? "the email in your profile"}`} />
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
           <Button type="submit" variant="contained" disabled={busy}>{busy && !deleting ? "Saving…" : "Save schedule"}</Button>
           {schedule && <Button type="button" color="error" onClick={() => setConfirmDelete(true)} disabled={busy}>Delete schedule</Button>}
@@ -122,12 +126,12 @@ export function DigestScheduleControl({ digestId, schedule, onSaved, runButton }
       </Stack>
       <Box sx={{ mt: 2 }}>
         {!editing && (schedule ? <Box>
-          <Typography variant="body2" fontWeight={700}>{label(schedule.frequency)} · Saved preview</Typography>
+          <Typography variant="body2" fontWeight={700}>{label(schedule.frequency)} · Schedule saved</Typography>
           <Typography variant="body2" color="text.secondary">
             First digest: {describeDate(schedule.starts_at, schedule.time_zone)}. {schedule.ends_at ? `Stop before: ${describeDate(schedule.ends_at, schedule.time_zone)}.` : "No end date."} Time zone: {schedule.time_zone}.
           </Typography>
-          <Typography variant="caption" color="text.secondary">Automatic runs are not enabled.</Typography>
-        </Box> : <Typography variant="body2" color="text.secondary">Preview only — save a schedule without starting automatic runs.</Typography>)}
+          <Typography variant="caption" color="text.secondary">{schedule.send_email !== false ? "Completed briefings will be emailed to your profile address." : "Email delivery is off."} Runs stop at the end date, if set. Changes apply to future runs.</Typography>
+        </Box> : <Typography variant="body2" color="text.secondary">Schedule automatic research runs and optional email delivery.</Typography>)}
       </Box>
       {editing && <ScheduleForm digestId={digestId} schedule={schedule} onCancel={() => setEditing(false)} onSaved={(saved) => { onSaved(saved); setEditing(false); }} />}
     </Box>

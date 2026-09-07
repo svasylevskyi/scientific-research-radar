@@ -17,6 +17,7 @@ class OutgoingEmail:
     subject: str
     text: str
     html: str | None = None
+    message_id: str | None = None
 
 
 class EmailService:
@@ -31,6 +32,8 @@ class EmailService:
         message["From"] = str(settings.email_from)
         message["To"] = email.recipient
         message["Subject"] = email.subject
+        if email.message_id:
+            message["Message-ID"] = email.message_id
         message.set_content(email.text)
         if email.html:
             message.add_alternative(email.html, subtype="html")

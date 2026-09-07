@@ -34,3 +34,7 @@ The generic `EmailService.send(OutgoingEmail(...))` in `app/services/email_servi
 ## API changes
 
 See the endpoint table in the root README. Clients must handle `202` registration responses and call confirmation before expecting tokens. Direct profile PATCH requests that change email return `409` and direct clients to verification. Registration and verification responses never expose codes or password hashes.
+
+## Scheduled briefing delivery
+
+The separate `python -m app.scheduler.worker` process delivers stored completed scheduled briefings when email is enabled (default). Configure `FRONTEND_BASE_URL` with your public site address as well as SMTP. The existing verification email path remains immediate; briefing delivery uses a durable queue with bounded retries. See the README scheduling section for activation, retry, and SMTP duplicate-delivery semantics. The template is `backend/app/services/briefing_email.py`.

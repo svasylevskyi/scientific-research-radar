@@ -91,7 +91,17 @@ class DigestRunSummaryRead(BaseModel):
     created_at: datetime
 
 
+class DigestEmailDeliveryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    status: str
+    attempts: int
+    sent_at: datetime | None
+    last_error: str | None
+
+
 class DigestRunDetailRead(DigestRunSummaryRead):
+    email_delivery: DigestEmailDeliveryRead | None = None
+    scheduled_for: datetime | None = None
     digest_snapshot: dict[str, Any]
     history_context: list[dict[str, Any]]
     feedback_context: list[dict[str, Any]]

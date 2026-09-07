@@ -155,6 +155,7 @@ class DigestRead(BaseModel):
     reporting_to: date
     frequency: DigestFrequency | None
     schedule: DigestSchedule | None = None
+    schedule_next_at: datetime | None = None
     maximum_papers: int
     created_at: datetime
     updated_at: datetime

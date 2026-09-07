@@ -170,6 +170,11 @@ export function DigestBriefingResult({ run }: { run: DigestRunDetail }) {
 
   return (
     <Stack spacing={2}>
+      {run.email_delivery && <Alert severity={run.email_delivery.status === "failed" ? "warning" : "info"}>
+        {run.email_delivery.status === "sent" ? "Briefing email sent." :
+          run.email_delivery.status === "failed" ? "Briefing email delivery failed after retries. Your results remain available here." :
+          run.email_delivery.status === "cancelled" ? "Briefing email delivery was cancelled." : "Briefing email is queued for delivery. Refresh this page to see its latest status."}
+      </Alert>}
       <Paper variant="outlined" sx={{ p: { xs: 2.5, sm: 4 }, borderRadius: 3 }}>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1.5} sx={{ mb: 2 }}>
           <Stack direction="row" spacing={1.25} alignItems="center">
