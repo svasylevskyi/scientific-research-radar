@@ -139,12 +139,17 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
     };
   }, [activeRun?.id, admin, digestId]);
 
+  useEffect(() => {
+    if (runTab === 1 && latestRun?.status !== "completed") setRunTab(0);
+  }, [latestRun?.id, latestRun?.status, runTab]);
+
   async function runNow() {
     setIsStartingRun(true);
     setError(null);
     setSuccess(null);
     try {
       const run = await digestRunsApi.runNow(digestId);
+      setRunTab(0);
       setHasRuns(true);
       setActiveRun(run);
       setLatestRun(run);
@@ -212,9 +217,37 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
     }
   }
 
-  const displayedRun = activeRun ?? latestRun;
   const runBlocked = activeRun !== null;
   const currentDigestIsRunning = activeRun?.digest_id === digestId;
+  const displayedRun = currentDigestIsRunning ? activeRun : latestRun;
+
+  const digestDetails = digest ? (
+    <>
+      <DigestForm
+        key={digest.updated_at}
+        initialValues={digestToFormValues(digest)}
+        submitLabel="Save changes"
+        isSubmitting={isSaving}
+        onSubmit={updateDigest}
+      />
+
+      <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, mt: 3, borderRadius: 3 }}>
+        <Typography variant="h6" color="error.main" sx={{ mb: 0.75 }}>Delete digest</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          Permanently removes this digest and its saved configuration.
+        </Typography>
+        <Button
+          color="error"
+          variant="outlined"
+          startIcon={<DeleteOutlineRoundedIcon />}
+          disabled={isSaving || currentDigestIsRunning}
+          onClick={() => setConfirmDelete(true)}
+        >
+          Delete digest
+        </Button>
+      </Paper>
+    </>
+  ) : null;
 
   return (
     <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
@@ -312,58 +345,36 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                     )}
                   </Alert>
                 )}
-
-                {displayedRun && (
-                  <Box sx={{ mt: 2.25 }}>
-                    <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: "hidden", mb: 2 }}>
-                      <Tabs
-                        value={runTab}
-                        onChange={(_event, value) => setRunTab(value)}
-                        variant="scrollable"
-                        scrollButtons="auto"
-                        aria-label="Latest radar run and feedback"
-                      >
-                        <Tab label={activeRun ? "Current Run" : "Latest Run"} />
-                        <Tab label="Feedback" disabled={displayedRun.status !== "completed"} />
-                      </Tabs>
-                    </Paper>
-                    {runTab === 0 && <DigestRunProgress run={displayedRun} />}
-                    {runTab === 1 && displayedRun.status === "completed" && (
-                      <DigestRunFeedback
-                        run={displayedRun}
-                        editable={displayedRun.id === latestRun?.id}
-                        isSaving={isSavingFeedback}
-                        onSave={saveFeedback}
-                      />
-                    )}
-                  </Box>
-                )}
               </Paper>
             )}
 
-            <DigestForm
-              key={digest.updated_at}
-              initialValues={digestToFormValues(digest)}
-              submitLabel="Save changes"
-              isSubmitting={isSaving}
-              onSubmit={updateDigest}
-            />
-
-            <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, mt: 3, borderRadius: 3 }}>
-              <Typography variant="h6" color="error.main" sx={{ mb: 0.75 }}>Delete digest</Typography>
-              <Typography color="text.secondary" sx={{ mb: 2 }}>
-                Permanently removes this digest and its saved configuration.
-              </Typography>
-              <Button
-                color="error"
-                variant="outlined"
-                startIcon={<DeleteOutlineRoundedIcon />}
-                disabled={isSaving || currentDigestIsRunning}
-                onClick={() => setConfirmDelete(true)}
-              >
-                Delete digest
-              </Button>
-            </Paper>
+            {!admin && hasRuns && displayedRun ? (
+              <Box>
+                <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden", mb: 3 }}>
+                  <Tabs
+                    value={runTab}
+                    onChange={(_event, value) => setRunTab(value)}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    aria-label="Latest radar run, feedback, and digest details"
+                  >
+                    <Tab label={currentDigestIsRunning ? "Current Run" : "Latest Run"} />
+                    <Tab label="Feedback" disabled={displayedRun.status !== "completed"} />
+                    <Tab label="Digest Details" />
+                  </Tabs>
+                </Paper>
+                {runTab === 0 && <DigestRunProgress run={displayedRun} />}
+                {runTab === 1 && displayedRun.status === "completed" && (
+                  <DigestRunFeedback
+                    run={displayedRun}
+                    editable={displayedRun.id === latestRun?.id}
+                    isSaving={isSavingFeedback}
+                    onSave={saveFeedback}
+                  />
+                )}
+                {runTab === 2 && digestDetails}
+              </Box>
+            ) : digestDetails}
           </>
         )}
       </Container>
