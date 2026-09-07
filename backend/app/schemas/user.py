@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.models.user import UserRole
+from app.schemas.password import NewPassword
 
 
 class UserRead(BaseModel):
@@ -84,7 +85,7 @@ class UserProfileUpdate(BaseModel):
 
 class UserPasswordUpdate(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
-    new_password: str = Field(min_length=8, max_length=128)
+    new_password: NewPassword
     new_password_confirmation: str = Field(min_length=8, max_length=128)
 
     @model_validator(mode="after")

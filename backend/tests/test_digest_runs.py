@@ -42,7 +42,7 @@ from app.radar.runner import RadarRunner
 from app.repositories.digest_run_repository import DigestRunRepository
 from app.services.super_admin_service import ensure_super_admin
 
-PASSWORD = "correct-horse-battery-staple"
+PASSWORD = "Correct-horse-battery-staple1"
 
 
 def _radar_output() -> RadarOutput:

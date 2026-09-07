@@ -4,8 +4,8 @@ from fastapi.testclient import TestClient
 REGISTER_PAYLOAD = {
     "email": "researcher@example.com",
     "full_name": "Ada Researcher",
-    "password": "correct-horse-battery-staple",
-    "password_confirmation": "correct-horse-battery-staple",
+    "password": "Correct-horse-battery-staple1",
+    "password_confirmation": "Correct-horse-battery-staple1",
 }
 
 

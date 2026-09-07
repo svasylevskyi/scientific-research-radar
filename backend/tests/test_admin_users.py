@@ -11,8 +11,8 @@ from app.services.super_admin_service import ensure_super_admin
 USER_PAYLOAD = {
     "email": "member@example.com",
     "full_name": "Research Member",
-    "password": "correct-horse-battery-staple",
-    "password_confirmation": "correct-horse-battery-staple",
+    "password": "Correct-horse-battery-staple1",
+    "password_confirmation": "Correct-horse-battery-staple1",
 }
 
 
