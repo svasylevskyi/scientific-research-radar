@@ -14,7 +14,7 @@ const benefits = [
 
 export function AuthLayout({ children }: PropsWithChildren) {
   return (
-    <Box sx={{ minHeight: "100dvh", display: "grid", gridTemplateColumns: { md: "minmax(320px, 0.9fr) 1.1fr" } }}>
+    <Box sx={{ minHeight: "100%", display: "grid", gridTemplateColumns: { md: "minmax(320px, 0.9fr) 1.1fr" } }}>
       <Box
         component="aside"
         sx={{

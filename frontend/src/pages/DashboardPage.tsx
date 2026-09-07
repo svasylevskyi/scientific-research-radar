@@ -57,7 +57,7 @@ export function DashboardPage() {
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
+    <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
 
       <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 7 } }}>

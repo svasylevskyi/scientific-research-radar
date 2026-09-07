@@ -111,7 +111,7 @@ export function ProfilePage() {
   );
 
   return (
-    <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
+    <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
       <Container component="main" maxWidth="md" sx={{ py: { xs: 4, sm: 6 } }}>
         <Typography component="h1" variant="h3" sx={{ mb: 1 }}>Your profile</Typography>
@@ -140,7 +140,7 @@ export function ProfilePage() {
               {profileSuccess && <Alert severity="success">{profileSuccess}</Alert>}
               <TextField label="Full name" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required fullWidth />
               <TextField label="Email address" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required fullWidth
-                helperText="Changing this address requires a 6-digit code sent to the new email. Confirm within 24 hours. Resend after 1 minute. Your current email stays active until confirmation." />
+                helperText="We will send a verification code to your email." />
               <Button type="submit" variant="contained" startIcon={<SaveRoundedIcon />} disabled={isSavingProfile || !fullName || !email} sx={{ alignSelf: "flex-start" }}>
                 {isSavingProfile ? "Saving…" : "Save details"}
               </Button>

@@ -31,7 +31,7 @@ export function LoginPage() {
     (location.state as { passwordChanged?: boolean } | null)?.passwordChanged,
   );
 
-  if (!isInitializing && user) return <Navigate to="/" replace />;
+  if (!isInitializing && user) return <Navigate to="/radar" replace />;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,7 +39,7 @@ export function LoginPage() {
     setIsSubmitting(true);
     try {
       await login({ email, password });
-      const destination = (location.state as { from?: string } | null)?.from ?? "/";
+      const destination = (location.state as { from?: string } | null)?.from ?? "/radar";
       navigate(destination, { replace: true });
     } catch {
       setError("Email or password is incorrect.");

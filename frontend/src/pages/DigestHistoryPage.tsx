@@ -201,7 +201,7 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
   }, [selectedRun, selectedRunIsInProgress, tab]);
 
   return (
-    <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
+    <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
       <Container component="main" maxWidth="lg" sx={{ py: { xs: 3, sm: 6 } }}>
         <Button
