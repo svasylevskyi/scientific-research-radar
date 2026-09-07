@@ -1,16 +1,17 @@
-import { Box, Button, Container, Stack, Tooltip } from "@mui/material";
+import { Box, Button, Container, Stack } from "@mui/material";
 import { Link as RouterLink } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Brand } from "./Brand";
 
 export function RadarLink() {
   const { user, isInitializing } = useAuth();
+  if (isInitializing) {
+    return <Button variant="contained" disabled>Restoring your session…</Button>;
+  }
   return user ? (
     <Button component={RouterLink} to="/radar" variant="contained">Open your radar ↗</Button>
   ) : (
-    <Tooltip title={isInitializing ? "Restoring your session" : "Preview only. Radar access is available to signed-in users."}>
-      <span><Button variant="contained" disabled>Open your radar ↗</Button></span>
-    </Tooltip>
+    <Button component={RouterLink} to="/login" state={{ from: "/radar" }} variant="contained">Sign in to Radar ↗</Button>
   );
 }
 
