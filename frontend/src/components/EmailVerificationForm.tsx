@@ -50,12 +50,6 @@ export function EmailVerificationForm({ challenge, registration = false, onConfi
         {expired ? "This verification attempt has expired. Please start again." :
           `Enter the 6-digit code sent to ${challenge.email}. Check your spam folder if it has not arrived.`}
       </Alert>
-      <Typography variant="body2" color="text.secondary">
-        Codes expire 24 hours after sending. Complete this attempt by {new Date(timestamp(challenge.expires_at)).toLocaleString()}.
-        Resending is available after 1 minute, replaces the previous code, and does not extend this deadline.
-        {registration ? " If you do not verify within 24 hours of starting registration, the attempt is removed and you must register again. Your account is created only after confirmation." :
-          " Your current email remains your sign-in address until you confirm the new one. If this attempt expires, your current email stays unchanged."}
-      </Typography>
       {error && <Alert severity="error">{error}</Alert>}
       {notice && <Alert severity="success">{notice}</Alert>}
       <TextField label="6-digit verification code" value={code}
