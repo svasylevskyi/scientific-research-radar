@@ -1,5 +1,6 @@
 import type { User } from "../types/auth";
 import { apiRequest } from "./client";
+import type { EmailVerification } from "../components/EmailVerificationForm";
 
 export interface ProfileUpdateInput {
   full_name: string;
@@ -13,6 +14,18 @@ export interface PasswordUpdateInput {
 }
 
 export const usersApi = {
+  pendingEmail(): Promise<EmailVerification | null> {
+    return apiRequest<EmailVerification | null>("/users/me/email-verification");
+  },
+  startEmailChange(email: string): Promise<EmailVerification> {
+    return apiRequest<EmailVerification>("/users/me/email-verification", { method: "POST", body: { email } });
+  },
+  resendEmailChange(id: string): Promise<EmailVerification> {
+    return apiRequest<EmailVerification>(`/users/me/email-verification/${id}/resend`, { method: "POST" });
+  },
+  confirmEmailChange(id: string, code: string): Promise<User> {
+    return apiRequest<User>(`/users/me/email-verification/${id}/confirm`, { method: "POST", body: { code } });
+  },
   updateProfile(input: ProfileUpdateInput): Promise<User> {
     return apiRequest<User>("/users/me", { method: "PATCH", body: input });
   },

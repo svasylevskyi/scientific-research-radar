@@ -22,6 +22,7 @@ import { usersApi } from "../api/users";
 import { useAuth } from "../auth/AuthContext";
 import { isValidNewPassword, passwordRequirementsText } from "../auth/passwordRequirements";
 import { AppHeader } from "../components/AppHeader";
+import { EmailVerificationForm, type EmailVerification } from "../components/EmailVerificationForm";
 
 export function ProfilePage() {
   const { user, refreshUser, logout } = useAuth();
@@ -38,6 +39,14 @@ export function ProfilePage() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [challenge, setChallenge] = useState<EmailVerification | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    usersApi.pendingEmail().then((pending) => { if (active) setChallenge(pending); })
+      .catch(() => { if (active) setProfileError("Could not load pending email verification. Please reload the page."); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     setFullName(user?.full_name ?? "");
@@ -53,9 +62,15 @@ export function ProfilePage() {
     setProfileSuccess(null);
     setIsSavingProfile(true);
     try {
-      await usersApi.updateProfile({ full_name: fullName, email });
+      const requestedEmail = email.trim().toLowerCase();
+      await usersApi.updateProfile({ full_name: fullName, email: user!.email });
+      if (requestedEmail !== user!.email) {
+        setChallenge(await usersApi.startEmailChange(requestedEmail));
+        setProfileSuccess("Name saved. Confirm the code sent to your new email to finish the email change.");
+      } else {
+        setProfileSuccess("Profile details updated.");
+      }
       await refreshUser();
-      setProfileSuccess("Profile details updated.");
     } catch (caught) {
       setProfileError(caught instanceof ApiError ? caught.message : "Could not update your profile.");
     } finally {
@@ -112,12 +127,25 @@ export function ProfilePage() {
               {profileError && <Alert severity="error">{profileError}</Alert>}
               {profileSuccess && <Alert severity="success">{profileSuccess}</Alert>}
               <TextField label="Full name" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required fullWidth />
-              <TextField label="Email address" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required fullWidth />
+              <TextField label="Email address" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required fullWidth
+                helperText="Changing this address requires a 6-digit code sent to the new email. Confirm within 24 hours. Resend after 1 minute. Your current email stays active until confirmation." />
               <Button type="submit" variant="contained" startIcon={<SaveRoundedIcon />} disabled={isSavingProfile || !fullName || !email} sx={{ alignSelf: "flex-start" }}>
                 {isSavingProfile ? "Saving…" : "Save details"}
               </Button>
             </Stack>
           </Paper>
+
+          {challenge && <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
+            <EmailVerificationForm key={challenge.id} challenge={challenge}
+              onConfirm={async (code) => {
+                await usersApi.confirmEmailChange(challenge.id, code);
+                setChallenge(null);
+                await refreshUser();
+                setProfileSuccess("Email address verified and updated. Use your new email to sign in.");
+              }}
+              onResend={async () => setChallenge(await usersApi.resendEmailChange(challenge.id))}
+              onCancel={() => setChallenge(null)} />
+          </Paper>}
 
           <Paper component="form" onSubmit={changePassword} variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
             <Typography variant="h6" sx={{ mb: 0.75 }}>Change password</Typography>

@@ -1,27 +1,39 @@
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
-from app.api.dependencies import AppSettings, AuthServiceDep
+from app.api.dependencies import AppSettings, AuthServiceDep, DbSession
+from app.schemas.email_verification import VerificationRead, VerificationCode
+from app.services.email_verification_service import EmailVerificationService
 from app.schemas.auth import AuthResponse, LoginRequest, MessageResponse, RegisterRequest
 from app.services.auth_service import (
     AuthenticationError,
-    EmailAlreadyRegisteredError,
     IssuedTokens,
 )
 
 router = APIRouter()
 
 
-@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=VerificationRead, status_code=status.HTTP_202_ACCEPTED)
 def register(
     payload: RegisterRequest,
-    response: Response,
-    auth: AuthServiceDep,
+    db: DbSession,
     settings: AppSettings,
-) -> AuthResponse:
-    try:
-        issued = auth.register(**payload.model_dump(exclude={"password_confirmation"}))
-    except EmailAlreadyRegisteredError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+) -> VerificationRead:
+    challenge = EmailVerificationService(db, settings).start(
+        **payload.model_dump(exclude={"password_confirmation"})
+    )
+    return VerificationRead.model_validate(challenge)
+
+
+@router.post("/register/{challenge_id}/resend", response_model=VerificationRead)
+def resend_registration(challenge_id: UUID, db: DbSession, settings: AppSettings):
+    return EmailVerificationService(db, settings).resend(challenge_id)
+
+
+@router.post("/register/{challenge_id}/confirm", response_model=AuthResponse, status_code=201)
+def confirm_registration(challenge_id: UUID, payload: VerificationCode, response: Response,
+                         db: DbSession, settings: AppSettings):
+    issued = EmailVerificationService(db, settings).confirm(challenge_id, payload.code)
     _set_refresh_cookie(response, issued, settings)
     return _auth_response(issued)
 

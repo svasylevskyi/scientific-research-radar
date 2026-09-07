@@ -1,5 +1,6 @@
 import { apiRequest, refreshAccessToken, setAccessToken } from "./client";
 import type { AuthResponse, LoginInput, RegisterInput, User } from "../types/auth";
+import type { EmailVerification } from "../components/EmailVerificationForm";
 
 function acceptSession(result: AuthResponse): AuthResponse {
   setAccessToken(result.access_token);
@@ -7,14 +8,25 @@ function acceptSession(result: AuthResponse): AuthResponse {
 }
 
 export const authApi = {
-  async register(input: RegisterInput): Promise<AuthResponse> {
-    const result = await apiRequest<AuthResponse>("/auth/register", {
+  async register(input: RegisterInput): Promise<EmailVerification> {
+    return apiRequest<EmailVerification>("/auth/register", {
       method: "POST",
       body: input,
       authenticate: false,
       retryAfterRefresh: false,
     });
-    return acceptSession(result);
+  },
+
+  resendRegistration(id: string): Promise<EmailVerification> {
+    return apiRequest<EmailVerification>(`/auth/register/${id}/resend`, {
+      method: "POST", authenticate: false, retryAfterRefresh: false,
+    });
+  },
+
+  async confirmRegistration(id: string, code: string): Promise<AuthResponse> {
+    return acceptSession(await apiRequest<AuthResponse>(`/auth/register/${id}/confirm`, {
+      method: "POST", body: { code }, authenticate: false, retryAfterRefresh: false,
+    }));
   },
 
   async login(input: LoginInput): Promise<AuthResponse> {

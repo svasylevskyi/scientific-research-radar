@@ -1,15 +1,33 @@
 from contextlib import asynccontextmanager
+import asyncio
+import logging
+from contextlib import suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError
 
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.services.super_admin_service import ensure_super_admin
+from app.services.email_service import EmailDeliveryError
+from app.services.email_verification_service import VerificationError, cleanup_expired
 
 settings = get_settings()
+
+
+async def verification_cleanup_loop():
+    def clean():
+        with SessionLocal() as db:
+            cleanup_expired(db)
+    while True:
+        try:
+            await asyncio.to_thread(clean)
+        except Exception:
+            logging.getLogger(__name__).exception("Email verification cleanup failed")
+        await asyncio.sleep(60)
 
 
 @asynccontextmanager
@@ -22,7 +40,14 @@ async def lifespan(_app: FastAPI):
             raise RuntimeError(
                 "Database schema is not ready. Run `alembic upgrade head` before starting the API."
             ) from exc
-    yield
+    cleaner = asyncio.create_task(verification_cleanup_loop()) if settings.environment != "test" else None
+    try:
+        yield
+    finally:
+        if cleaner:
+            cleaner.cancel()
+            with suppress(asyncio.CancelledError):
+                await cleaner
 
 
 app = FastAPI(
@@ -42,6 +67,16 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+
+
+@app.exception_handler(VerificationError)
+async def verification_error(_request, exc):
+    return JSONResponse(status_code=exc.status_code, content={"detail": str(exc)})
+
+
+@app.exception_handler(EmailDeliveryError)
+async def email_error(_request, exc):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
 @app.get("/health", tags=["system"])

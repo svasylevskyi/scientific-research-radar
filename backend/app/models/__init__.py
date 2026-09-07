@@ -14,6 +14,7 @@ from app.models.digest_run import (
     RADAR_STAGE_ORDER,
 )
 from app.models.user import User, UserRole
+from app.models.email_verification import EmailVerification
 
 __all__ = [
     "AuthSession",

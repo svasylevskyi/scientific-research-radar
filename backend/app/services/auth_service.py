@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -12,7 +11,6 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
-    hash_password,
     hash_token,
     token_hash_matches,
     verify_password,
@@ -23,10 +21,6 @@ from app.repositories.user_repository import UserRepository
 
 
 class AuthenticationError(ValueError):
-    pass
-
-
-class EmailAlreadyRegisteredError(ValueError):
     pass
 
 
@@ -45,20 +39,6 @@ class AuthService:
         self.settings = settings
         self.users = UserRepository(db)
         self.sessions = AuthSessionRepository(db)
-
-    def register(self, *, email: str, full_name: str, password: str) -> IssuedTokens:
-        try:
-            with self.db.begin():
-                if self.users.get_by_email(email) is not None:
-                    raise EmailAlreadyRegisteredError("An account with this email already exists")
-                user = self.users.create(
-                    email=email,
-                    full_name=full_name,
-                    password_hash=hash_password(password),
-                )
-                return self._start_session(user)
-        except IntegrityError as exc:
-            raise EmailAlreadyRegisteredError("An account with this email already exists") from exc
 
     def login(self, *, email: str, password: str) -> IssuedTokens:
         with self.db.begin():
