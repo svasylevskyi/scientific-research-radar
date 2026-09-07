@@ -91,6 +91,9 @@ class DigestRun(Base):
     trigger: Mapped[DigestRunTrigger] = mapped_column(String(16), nullable=False)
     digest_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     history_context: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    feedback_context: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     search_data: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     relevance_data: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -102,6 +105,9 @@ class DigestRun(Base):
     worker_id: Mapped[str | None] = mapped_column(String(100))
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     request_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    feedback_text: Mapped[str | None] = mapped_column(Text)
+    feedback_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    feedback_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -138,6 +144,10 @@ class DigestRun(Base):
     @property
     def paper_count(self) -> int:
         return len(self.paper_results)
+
+    @property
+    def has_feedback(self) -> bool:
+        return self.feedback_text is not None
 
     @property
     def current_stage(self) -> DigestRunStageType | None:

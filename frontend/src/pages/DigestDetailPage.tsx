@@ -16,6 +16,8 @@ import {
   DialogTitle,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
@@ -25,6 +27,7 @@ import { ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi, digestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
 import { DigestForm, digestToFormValues } from "../components/DigestForm";
+import { DigestRunFeedback } from "../components/DigestRunFeedback";
 import { DigestRunProgress } from "../components/DigestRunProgress";
 import type { AdminDigest, Digest, DigestInput, DigestRunDetail } from "../types/digest";
 
@@ -53,6 +56,8 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isStartingRun, setIsStartingRun] = useState(false);
+  const [isSavingFeedback, setIsSavingFeedback] = useState(false);
+  const [runTab, setRunTab] = useState(0);
   const [hasRuns, setHasRuns] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(routeState?.success ?? null);
@@ -175,6 +180,21 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
     }
   }
 
+  async function saveFeedback(feedback: string) {
+    if (!latestRun) return;
+    setIsSavingFeedback(true);
+    setError(null);
+    try {
+      const updated = await digestRunsApi.updateFeedback(digestId, latestRun.id, feedback);
+      setLatestRun(updated);
+      setSuccess("Feedback saved. It will help refine subsequent runs for this digest.");
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "Could not save your feedback.");
+    } finally {
+      setIsSavingFeedback(false);
+    }
+  }
+
   async function deleteDigest() {
     setIsSaving(true);
     setError(null);
@@ -228,6 +248,14 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                 <Typography variant="caption" color="text.secondary">Digest owner</Typography>
                 <Typography fontWeight={700}>{digest.owner.full_name}</Typography>
                 <Typography color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{digest.owner.email}</Typography>
+                <Button
+                  component={RouterLink}
+                  to={`/admin/digests/${digestId}/runs`}
+                  startIcon={<HistoryRoundedIcon />}
+                  sx={{ mt: 1.5 }}
+                >
+                  Review digest runs
+                </Button>
               </Paper>
             )}
             {error && <Alert severity="error" sx={{ mb: 2.5 }}>{error}</Alert>}
@@ -287,10 +315,27 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
 
                 {displayedRun && (
                   <Box sx={{ mt: 2.25 }}>
-                    <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                      {activeRun ? "Current run progress" : "Latest run"}
-                    </Typography>
-                    <DigestRunProgress run={displayedRun} />
+                    <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: "hidden", mb: 2 }}>
+                      <Tabs
+                        value={runTab}
+                        onChange={(_event, value) => setRunTab(value)}
+                        variant="scrollable"
+                        scrollButtons="auto"
+                        aria-label="Latest radar run and feedback"
+                      >
+                        <Tab label={activeRun ? "Current Run" : "Latest Run"} />
+                        <Tab label="Feedback" disabled={displayedRun.status !== "completed"} />
+                      </Tabs>
+                    </Paper>
+                    {runTab === 0 && <DigestRunProgress run={displayedRun} />}
+                    {runTab === 1 && displayedRun.status === "completed" && (
+                      <DigestRunFeedback
+                        run={displayedRun}
+                        editable={displayedRun.id === latestRun?.id}
+                        isSaving={isSavingFeedback}
+                        onSave={saveFeedback}
+                      />
+                    )}
                   </Box>
                 )}
               </Paper>

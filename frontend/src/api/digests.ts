@@ -66,6 +66,17 @@ export const digestRunsApi = {
     });
   },
 
+  updateFeedback(
+    digestId: string,
+    runId: string,
+    feedbackText: string,
+  ): Promise<DigestRunDetail> {
+    return apiRequest<DigestRunDetail>(`/digests/${digestId}/runs/${runId}/feedback`, {
+      method: "PUT",
+      body: { feedback_text: feedbackText },
+    });
+  },
+
   active(): Promise<DigestRunDetail | null> {
     return apiRequest<DigestRunDetail | null>("/digest-runs/active");
   },
@@ -84,6 +95,21 @@ export const adminDigestsApi = {
 
   get(digestId: string): Promise<AdminDigest> {
     return apiRequest<AdminDigest>(`/admin/digests/${digestId}`);
+  },
+
+  listRuns(
+    digestId: string,
+    params: { offset: number; limit: number },
+  ): Promise<DigestRunListResponse> {
+    const search = new URLSearchParams({
+      offset: String(params.offset),
+      limit: String(params.limit),
+    });
+    return apiRequest<DigestRunListResponse>(`/admin/digests/${digestId}/runs?${search}`);
+  },
+
+  getRun(digestId: string, runId: string): Promise<DigestRunDetail> {
+    return apiRequest<DigestRunDetail>(`/admin/digests/${digestId}/runs/${runId}`);
   },
 
   update(digestId: string, input: DigestUpdateInput): Promise<AdminDigest> {

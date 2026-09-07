@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.digest_run import (
     DigestRunStageStatus,
@@ -84,6 +84,7 @@ class DigestRunSummaryRead(BaseModel):
     prompt_version: str
     paper_count: int
     request_count: int
+    has_feedback: bool
     error_message: str | None
     started_at: datetime
     completed_at: datetime | None
@@ -93,6 +94,7 @@ class DigestRunSummaryRead(BaseModel):
 class DigestRunDetailRead(DigestRunSummaryRead):
     digest_snapshot: dict[str, Any]
     history_context: list[dict[str, Any]]
+    feedback_context: list[dict[str, Any]]
     stages: list[DigestRunStageRead]
     search_data: dict[str, Any] | None
     relevance_data: dict[str, Any] | None
@@ -100,6 +102,21 @@ class DigestRunDetailRead(DigestRunSummaryRead):
     paper_results: list[DigestRunPaperRead]
     trend_analysis: DigestRunTrendAnalysisRead | None
     briefing: DigestRunBriefingRead | None
+    feedback_text: str | None
+    feedback_created_at: datetime | None
+    feedback_updated_at: datetime | None
+
+
+class DigestRunFeedbackUpdate(BaseModel):
+    feedback_text: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("feedback_text")
+    @classmethod
+    def normalize_feedback(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Feedback cannot be empty")
+        return normalized
 
 
 class DigestRunListResponse(BaseModel):

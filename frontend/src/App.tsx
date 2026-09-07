@@ -90,6 +90,14 @@ export default function App() {
           </RequireAuth>
         }
       />
+      <Route
+        path="/admin/digests/:digestId/runs"
+        element={
+          <RequireAuth>
+            <RequireAdmin><DigestHistoryPage admin /></RequireAdmin>
+          </RequireAuth>
+        }
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

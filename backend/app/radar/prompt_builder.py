@@ -6,7 +6,7 @@ from typing import Any
 
 from app.models.digest_run import DigestRunStageType
 
-PROMPT_VERSION = "2026-09-06.1"
+PROMPT_VERSION = "2026-09-07.1"
 PROMPT_DIRECTORY = Path(__file__).resolve().parent / "prompts"
 
 
@@ -27,24 +27,28 @@ class RadarPromptBuilder:
         *,
         digest_snapshot: dict[str, Any],
         history_context: list[dict[str, Any]],
+        feedback_context: list[dict[str, Any]],
     ) -> RadarPrompt:
         return self._build(
             stage=DigestRunStageType.DISCOVERY_RELEVANCE,
             filename="discovery_relevance.md",
             digest_json=digest_snapshot,
             history_json=history_context,
+            feedback_json=feedback_context,
         )
 
     def build_paper_summaries(
         self,
         *,
         digest_snapshot: dict[str, Any],
+        feedback_context: list[dict[str, Any]],
         papers: list[dict[str, Any]],
     ) -> RadarPrompt:
         return self._build(
             stage=DigestRunStageType.PAPER_SUMMARIES,
             filename="paper_summaries.md",
             digest_json=digest_snapshot,
+            feedback_json=feedback_context,
             papers_json=papers,
         )
 
@@ -53,6 +57,7 @@ class RadarPromptBuilder:
         *,
         digest_snapshot: dict[str, Any],
         history_context: list[dict[str, Any]],
+        feedback_context: list[dict[str, Any]],
         papers: list[dict[str, Any]],
     ) -> RadarPrompt:
         return self._build(
@@ -60,6 +65,7 @@ class RadarPromptBuilder:
             filename="trend_analysis.md",
             digest_json=digest_snapshot,
             history_json=history_context,
+            feedback_json=feedback_context,
             papers_json=papers,
         )
 
@@ -67,6 +73,7 @@ class RadarPromptBuilder:
         self,
         *,
         digest_snapshot: dict[str, Any],
+        feedback_context: list[dict[str, Any]],
         papers: list[dict[str, Any]],
         trend_analysis: dict[str, Any],
     ) -> RadarPrompt:
@@ -74,6 +81,7 @@ class RadarPromptBuilder:
             stage=DigestRunStageType.DIGEST_BRIEFING,
             filename="digest_briefing.md",
             digest_json=digest_snapshot,
+            feedback_json=feedback_context,
             papers_json=papers,
             trend_json=trend_analysis,
         )

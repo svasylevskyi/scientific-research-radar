@@ -271,6 +271,7 @@ export interface DigestRunSummary {
   prompt_version: string;
   paper_count: number;
   request_count: number;
+  has_feedback: boolean;
   error_message: string | null;
   started_at: string;
   completed_at: string | null;
@@ -320,6 +321,7 @@ export interface DigestRunStage {
 export interface DigestRunDetail extends DigestRunSummary {
   digest_snapshot: Record<string, unknown>;
   history_context: Record<string, unknown>[];
+  feedback_context: Record<string, unknown>[];
   stages: DigestRunStage[];
   search_data: DigestRunSearchData | null;
   relevance_data: DigestRunRelevanceData | null;
@@ -335,6 +337,9 @@ export interface DigestRunDetail extends DigestRunSummary {
     content_markdown: string;
     data: DigestBriefingData;
   } | null;
+  feedback_text: string | null;
+  feedback_created_at: string | null;
+  feedback_updated_at: string | null;
 }
 
 export interface DigestRunListResponse {

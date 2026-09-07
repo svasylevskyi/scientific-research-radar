@@ -17,8 +17,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link as RouterLink, useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../api/client";
-import { digestRunsApi, digestsApi } from "../api/digests";
+import { adminDigestsApi, digestRunsApi, digestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
+import { DigestRunFeedback } from "../components/DigestRunFeedback";
 import { DigestRunProgress } from "../components/DigestRunProgress";
 import {
   DigestBriefingResult,
@@ -45,7 +46,7 @@ function TabPanel({ active, children }: { active: boolean; children: ReactNode }
   return <Box role="tabpanel" sx={{ pt: 3 }}>{children}</Box>;
 }
 
-export function DigestHistoryPage() {
+export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
   const { digestId = "" } = useParams();
   const location = useLocation();
   const routeState = location.state as { success?: string } | null;
@@ -58,6 +59,7 @@ export function DigestHistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingRun, setIsLoadingRun] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isSavingFeedback, setIsSavingFeedback] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,8 +67,10 @@ export function DigestHistoryPage() {
     setIsLoading(true);
     setError(null);
     Promise.all([
-      digestsApi.get(digestId),
-      digestRunsApi.list(digestId, { offset: 0, limit: 100 }),
+      admin ? adminDigestsApi.get(digestId) : digestsApi.get(digestId),
+      admin
+        ? adminDigestsApi.listRuns(digestId, { offset: 0, limit: 100 })
+        : digestRunsApi.list(digestId, { offset: 0, limit: 100 }),
     ])
       .then(([digestResult, historyResult]) => {
         if (!active) return;
@@ -88,7 +92,7 @@ export function DigestHistoryPage() {
     return () => {
       active = false;
     };
-  }, [digestId, setSearchParams]);
+  }, [admin, digestId, setSearchParams]);
 
   useEffect(() => {
     if (!selectedRunId) {
@@ -98,8 +102,10 @@ export function DigestHistoryPage() {
     let active = true;
     setIsLoadingRun(true);
     setError(null);
-    digestRunsApi
-      .get(digestId, selectedRunId)
+    const request = admin
+      ? adminDigestsApi.getRun(digestId, selectedRunId)
+      : digestRunsApi.get(digestId, selectedRunId);
+    request
       .then((result) => {
         if (active) setSelectedRun(result);
       })
@@ -114,7 +120,7 @@ export function DigestHistoryPage() {
     return () => {
       active = false;
     };
-  }, [digestId, selectedRunId]);
+  }, [admin, digestId, selectedRunId]);
 
   useEffect(() => {
     if (!selectedRun || !["queued", "running"].includes(selectedRun.status)) return;
@@ -123,7 +129,9 @@ export function DigestHistoryPage() {
 
     async function refreshRun() {
       try {
-        const result = await digestRunsApi.get(digestId, runId);
+        const result = admin
+          ? await adminDigestsApi.getRun(digestId, runId)
+          : await digestRunsApi.get(digestId, runId);
         if (!active) return;
         setSelectedRun(result);
         setRuns((current) => current.map((run) => (run.id === result.id ? result : run)));
@@ -137,7 +145,7 @@ export function DigestHistoryPage() {
       active = false;
       window.clearInterval(interval);
     };
-  }, [digestId, selectedRun?.id, selectedRun?.status]);
+  }, [admin, digestId, selectedRun?.id, selectedRun?.status]);
 
   async function retryRun() {
     if (!selectedRun) return;
@@ -154,12 +162,32 @@ export function DigestHistoryPage() {
     }
   }
 
+  async function saveFeedback(feedback: string) {
+    if (!selectedRun) return;
+    setIsSavingFeedback(true);
+    setError(null);
+    try {
+      const updated = await digestRunsApi.updateFeedback(
+        digestId,
+        selectedRun.id,
+        feedback,
+      );
+      setSelectedRun(updated);
+      setRuns((current) => current.map((run) => run.id === updated.id ? updated : run));
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "Could not save your feedback.");
+    } finally {
+      setIsSavingFeedback(false);
+    }
+  }
+
   useEffect(() => {
     if (!selectedRun) return;
     const availability = [
       Boolean(selectedRun.briefing),
       Boolean(selectedRun.trend_analysis),
       Boolean(selectedRun.search_data || selectedRun.relevance_data || selectedRun.paper_results.length),
+      selectedRun.status === "completed",
     ];
     if (!availability[tab]) {
       const firstAvailable = availability.findIndex(Boolean);
@@ -173,16 +201,16 @@ export function DigestHistoryPage() {
       <Container component="main" maxWidth="lg" sx={{ py: { xs: 3, sm: 6 } }}>
         <Button
           component={RouterLink}
-          to={`/digests/${digestId}`}
+          to={admin ? `/admin/digests/${digestId}` : `/digests/${digestId}`}
           color="inherit"
           startIcon={<ArrowBackRoundedIcon />}
           sx={{ mb: 2 }}
         >
-          Back to digest
+          {admin ? "Back to digest management" : "Back to digest"}
         </Button>
 
         <Typography component="h1" variant="h3" sx={{ mb: 0.75 }}>
-          Digest history
+          {admin ? "Digest run review" : "Digest history"}
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 3 }}>
           {digest?.topic ?? "Review previous radar runs and their stored output stages."}
@@ -197,7 +225,11 @@ export function DigestHistoryPage() {
         ) : runs.length === 0 ? (
           <Paper variant="outlined" sx={{ p: 5, textAlign: "center", borderRadius: 3 }}>
             <Typography variant="h6">This digest has not been run yet</Typography>
-            <Typography color="text.secondary">Return to the digest and select Run now.</Typography>
+            <Typography color="text.secondary">
+              {admin
+                ? "No radar runs have been created for this digest."
+                : "Return to the digest and select Run now."}
+            </Typography>
           </Paper>
         ) : (
           <Stack direction={{ xs: "column", md: "row" }} spacing={3} alignItems="flex-start">
@@ -241,7 +273,13 @@ export function DigestHistoryPage() {
               ) : (
                 <Stack spacing={3}>
                   <DigestRunProgress run={selectedRun} />
-                  {selectedRun.status === "failed" && (
+                  {admin && (
+                    <Alert severity="info">
+                      OpenAI response jobs created: {selectedRun.request_count}. Paper-summary
+                      batches can make this number exceed four.
+                    </Alert>
+                  )}
+                  {!admin && selectedRun.status === "failed" && (
                     <Alert severity="error">
                       {selectedRun.error_message ?? "This radar run failed."}
                       <Button
@@ -270,10 +308,23 @@ export function DigestHistoryPage() {
                           label="Paper Summaries"
                           disabled={!selectedRun.search_data && !selectedRun.relevance_data && selectedRun.paper_results.length === 0}
                         />
+                        <Tab label="Feedback" disabled={selectedRun.status !== "completed"} />
                       </Tabs>
                     </Paper>
                     <TabPanel active={tab === 0 && Boolean(selectedRun.briefing)}>
                       <DigestBriefingResult run={selectedRun} />
+                    </TabPanel>
+                    <TabPanel active={tab === 3 && selectedRun.status === "completed"}>
+                      <DigestRunFeedback
+                        run={selectedRun}
+                        editable={
+                          !admin &&
+                          selectedRun.id === runs[0]?.id &&
+                          selectedRun.status === "completed"
+                        }
+                        isSaving={isSavingFeedback}
+                        onSave={saveFeedback}
+                      />
                     </TabPanel>
                     <TabPanel active={tab === 1 && Boolean(selectedRun.trend_analysis)}>
                       <TrendAnalysisResult run={selectedRun} />

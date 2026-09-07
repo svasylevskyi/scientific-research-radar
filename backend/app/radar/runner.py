@@ -78,15 +78,18 @@ class RadarRunner:
         history_context = self.runs.build_history_context(
             digest_id=digest.id, limit=self.history_limit
         )
+        feedback_context = self.runs.build_feedback_context(digest_id=digest.id)
         first_prompt = self.prompt_builder.build_discovery_relevance(
             digest_snapshot=digest_snapshot,
             history_context=history_context,
+            feedback_context=feedback_context,
         )
         run = self.runs.create_running(
             digest_id=digest.id,
             owner_id=owner_id,
             digest_snapshot=digest_snapshot,
             history_context=history_context,
+            feedback_context=feedback_context,
             model_name=self.client.model_name,
             prompt_version=first_prompt.version,
         )
@@ -190,6 +193,7 @@ class RadarRunner:
         prompt = self.prompt_builder.build_discovery_relevance(
             digest_snapshot=run.digest_snapshot,
             history_context=run.history_context,
+            feedback_context=run.feedback_context,
         )
         result = self._execute_client(
             run=run,
@@ -232,6 +236,7 @@ class RadarRunner:
             batch = remaining[start : start + self.summary_batch_size]
             prompt = self.prompt_builder.build_paper_summaries(
                 digest_snapshot=run.digest_snapshot,
+                feedback_context=run.feedback_context,
                 papers=batch,
             )
             result = self._execute_client(
@@ -279,6 +284,7 @@ class RadarRunner:
         prompt = self.prompt_builder.build_trend_analysis(
             digest_snapshot=run.digest_snapshot,
             history_context=run.history_context,
+            feedback_context=run.feedback_context,
             papers=self._trend_input(discovery, summaries),
         )
         result = self._execute_client(
@@ -315,6 +321,7 @@ class RadarRunner:
         self.db.commit()
         prompt = self.prompt_builder.build_digest_briefing(
             digest_snapshot=run.digest_snapshot,
+            feedback_context=run.feedback_context,
             papers=self._briefing_input(discovery, summaries),
             trend_analysis=trend.trend_analysis.model_dump(mode="json"),
         )

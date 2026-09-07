@@ -40,6 +40,7 @@ from app.radar.prompt_builder import (
 )
 from app.radar.runner import RadarRunner
 from app.repositories.digest_run_repository import DigestRunRepository
+from app.services.super_admin_service import ensure_super_admin
 
 PASSWORD = "correct-horse-battery-staple"
 
@@ -372,7 +373,7 @@ def test_run_now_executes_four_stages_and_persists_progress(
         assert db.scalar(select(func.count()).select_from(DigestRunBriefing)) == 1
 
 
-def test_completed_history_is_added_only_to_relevant_later_stages(
+def test_completed_history_is_added_to_all_later_run_stages(
     client: TestClient,
     db_session_factory: sessionmaker[Session],
 ) -> None:
@@ -393,7 +394,9 @@ def test_completed_history_is_added_only_to_relevant_later_stages(
     second_discovery = radar_client.calls[4]["prompt"]
     assert first.json()["id"] in second_discovery.user
     assert "Previous completed runs" in second_discovery.user
-    assert "Previous completed runs" not in radar_client.calls[5]["prompt"].user
+    assert first.json()["id"] not in radar_client.calls[5]["prompt"].user
+    assert first.json()["id"] in radar_client.calls[6]["prompt"].user
+    assert first.json()["id"] not in radar_client.calls[7]["prompt"].user
 
     listed = client.get(
         f"/api/v1/digests/{digest['id']}/runs", headers=authorization
@@ -599,6 +602,111 @@ def test_run_history_is_owner_scoped(client: TestClient) -> None:
     ).status_code == 404
 
 
+def test_latest_completed_run_feedback_is_editable_then_becomes_read_only(
+    client: TestClient,
+    db_session_factory: sessionmaker[Session],
+) -> None:
+    user = _register(client, "feedback@example.com", "Feedback Owner")
+    authorization = _authorization(user)
+    digest = _create_digest(client, authorization)
+    radar_client = RecordingRadarClient()
+    _override_runner(radar_client)
+
+    first = client.post(f"/api/v1/digests/{digest['id']}/runs", headers=authorization)
+    _execute_next(db_session_factory, radar_client)
+    feedback_url = (
+        f"/api/v1/digests/{digest['id']}/runs/{first.json()['id']}/feedback"
+    )
+    saved = client.put(
+        feedback_url,
+        json={"feedback_text": "  Prioritize implementation evidence next time.  "},
+        headers=authorization,
+    )
+    assert saved.status_code == 200
+    assert saved.json()["feedback_text"] == "Prioritize implementation evidence next time."
+    assert saved.json()["feedback_created_at"]
+    assert saved.json()["has_feedback"] is True
+
+    updated = client.put(
+        feedback_url,
+        json={"feedback_text": "Include more benchmark comparisons."},
+        headers=authorization,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["feedback_text"] == "Include more benchmark comparisons."
+
+    second = client.post(f"/api/v1/digests/{digest['id']}/runs", headers=authorization)
+    assert second.status_code == 202
+    locked = client.put(
+        feedback_url,
+        json={"feedback_text": "This must remain read-only."},
+        headers=authorization,
+    )
+    assert locked.status_code == 409
+    assert "latest radar run" in locked.json()["detail"]
+    unavailable = client.put(
+        f"/api/v1/digests/{digest['id']}/runs/{second.json()['id']}/feedback",
+        json={"feedback_text": "The run has not completed yet."},
+        headers=authorization,
+    )
+    assert unavailable.status_code == 409
+    assert "completed radar run" in unavailable.json()["detail"]
+
+    _execute_next(db_session_factory, radar_client)
+    second_run_prompts = [call["prompt"].user for call in radar_client.calls[4:]]
+    assert len(second_run_prompts) == 4
+    assert all("Include more benchmark comparisons." in prompt for prompt in second_run_prompts)
+
+
+def test_feedback_is_owner_scoped_and_admin_can_review_it(
+    client: TestClient,
+    db_session_factory: sessionmaker[Session],
+) -> None:
+    owner = _register(client, "feedback.owner@example.com", "Feedback Owner")
+    other = _register(client, "feedback.other@example.com", "Other User")
+    owner_access = _authorization(owner)
+    digest = _create_digest(client, owner_access)
+    radar_client = RecordingRadarClient()
+    _override_runner(radar_client)
+    run = client.post(
+        f"/api/v1/digests/{digest['id']}/runs", headers=owner_access
+    )
+    _execute_next(db_session_factory, radar_client)
+    feedback_url = (
+        f"/api/v1/digests/{digest['id']}/runs/{run.json()['id']}/feedback"
+    )
+    assert client.put(
+        feedback_url,
+        json={"feedback_text": "Useful, but make the briefing shorter."},
+        headers=owner_access,
+    ).status_code == 200
+    assert client.put(
+        feedback_url,
+        json={"feedback_text": "Unauthorized change"},
+        headers=_authorization(other),
+    ).status_code == 404
+
+    settings = Settings(environment="test")
+    with db_session_factory() as db:
+        ensure_super_admin(db, settings)
+    admin = client.post(
+        "/api/v1/auth/login",
+        json={"email": str(settings.super_admin_email), "password": settings.super_admin_password},
+    )
+    admin_access = _authorization(admin)
+    listed = client.get(
+        f"/api/v1/admin/digests/{digest['id']}/runs", headers=admin_access
+    )
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["has_feedback"] is True
+    detail = client.get(
+        f"/api/v1/admin/digests/{digest['id']}/runs/{run.json()['id']}",
+        headers=admin_access,
+    )
+    assert detail.status_code == 200
+    assert detail.json()["feedback_text"] == "Useful, but make the briefing shorter."
+
+
 def test_missing_openai_configuration_prevents_a_run(client: TestClient) -> None:
     app.dependency_overrides[get_settings] = lambda: Settings(
         environment="test",
@@ -696,13 +804,15 @@ def test_stage_prompts_are_versioned_compact_and_compliant() -> None:
     discovery = builder.build_discovery_relevance(
         digest_snapshot={"topic": "Transparent AI evaluation", "maximum_papers": 5},
         history_context=[],
+        feedback_context=[],
     )
     summaries = builder.build_paper_summaries(
         digest_snapshot={"topic": "Transparent AI evaluation"},
+        feedback_context=[],
         papers=[],
     )
 
-    assert discovery.version == "2026-09-06.1"
+    assert discovery.version == "2026-09-07.1"
     assert "untrusted data" in discovery.system
     assert "Public accessibility does not establish" in discovery.system
     assert "could substitute for a source" in discovery.system

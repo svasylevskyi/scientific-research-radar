@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, or_, select, update
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import and_, exists, func, or_, select, update
+from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
 from app.models.digest_run import (
     RADAR_STAGE_ORDER,
@@ -53,6 +53,7 @@ class DigestRunRepository:
         owner_id: UUID,
         digest_snapshot: dict[str, Any],
         history_context: list[dict[str, Any]],
+        feedback_context: list[dict[str, Any]],
         model_name: str,
         prompt_version: str,
     ) -> DigestRun:
@@ -64,6 +65,7 @@ class DigestRunRepository:
             trigger=DigestRunTrigger.MANUAL,
             digest_snapshot=digest_snapshot,
             history_context=history_context,
+            feedback_context=feedback_context,
             model_name=model_name,
             prompt_version=prompt_version,
             started_at=datetime.now(timezone.utc),
@@ -321,7 +323,7 @@ class DigestRunRepository:
                 joinedload(DigestRun.trend_analysis),
                 joinedload(DigestRun.briefing),
             )
-            .order_by(DigestRun.created_at.desc())
+            .order_by(DigestRun.started_at.desc(), DigestRun.id.desc())
         )
         return self.db.scalar(statement)
 
@@ -341,7 +343,7 @@ class DigestRunRepository:
                 DigestRun.status.in_((DigestRunStatus.QUEUED, DigestRunStatus.RUNNING)),
                 or_(DigestRun.lease_expires_at.is_(None), DigestRun.lease_expires_at < now),
             )
-            .order_by(DigestRun.created_at)
+            .order_by(DigestRun.started_at, DigestRun.id)
             .limit(1)
         )
         if candidate is None:
@@ -403,7 +405,7 @@ class DigestRunRepository:
                 selectinload(DigestRun.stages),
                 selectinload(DigestRun.paper_results),
             )
-            .order_by(DigestRun.created_at.desc())
+            .order_by(DigestRun.started_at.desc(), DigestRun.id.desc())
             .offset(offset)
             .limit(limit)
         )
@@ -415,6 +417,36 @@ class DigestRunRepository:
             DigestRun.owner_id == owner_id,
         )
         return self.db.scalar(statement) or 0
+
+    def save_feedback_if_latest(
+        self, *, run: DigestRun, feedback_text: str
+    ) -> bool:
+        now = datetime.now(timezone.utc)
+        newer = aliased(DigestRun)
+        newer_run_exists = exists(
+            select(newer.id).where(
+                newer.digest_id == run.digest_id,
+                or_(
+                    newer.started_at > run.started_at,
+                    and_(newer.started_at == run.started_at, newer.id > run.id),
+                ),
+            )
+        )
+        result = self.db.execute(
+            update(DigestRun)
+            .where(
+                DigestRun.id == run.id,
+                DigestRun.status == DigestRunStatus.COMPLETED,
+                ~newer_run_exists,
+            )
+            .values(
+                feedback_text=feedback_text,
+                feedback_created_at=run.feedback_created_at or now,
+                feedback_updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return result.rowcount == 1
 
     def build_history_context(
         self, *, digest_id: UUID, limit: int
@@ -432,11 +464,36 @@ class DigestRunRepository:
                 joinedload(DigestRun.trend_analysis),
                 joinedload(DigestRun.briefing),
             )
-            .order_by(DigestRun.created_at.desc())
+            .order_by(DigestRun.started_at.desc(), DigestRun.id.desc())
             .limit(limit)
         )
         runs = list(self.db.scalars(statement))
         return [self._history_item(run) for run in reversed(runs)]
+
+    def build_feedback_context(
+        self, *, digest_id: UUID, limit: int = 3
+    ) -> list[dict[str, Any]]:
+        statement = (
+            select(DigestRun)
+            .where(
+                DigestRun.digest_id == digest_id,
+                DigestRun.status == DigestRunStatus.COMPLETED,
+                DigestRun.feedback_text.is_not(None),
+            )
+            .order_by(DigestRun.started_at.desc(), DigestRun.id.desc())
+            .limit(limit)
+        )
+        runs = list(self.db.scalars(statement))
+        return [
+            {
+                "run_id": str(run.id),
+                "completed_at": (
+                    run.completed_at.isoformat() if run.completed_at else None
+                ),
+                "user_feedback": run.feedback_text,
+            }
+            for run in reversed(runs)
+        ]
 
     def _complete_stage(
         self,
