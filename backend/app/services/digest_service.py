@@ -8,6 +8,7 @@ from app.models.user import User
 from app.repositories.digest_repository import DigestRepository
 from app.repositories.digest_run_repository import DigestRunRepository
 from app.schemas.digest import DigestCreate, DigestUpdate
+from app.schemas.digest_schedule import DigestSchedule
 
 
 class DigestNotFoundError(ValueError):
@@ -53,6 +54,18 @@ class DigestService:
 
     def delete_owned(self, *, owner: User, digest_id: UUID) -> None:
         self._delete(self.get_owned(owner=owner, digest_id=digest_id))
+
+    def save_schedule(
+        self, *, owner: User, digest_id: UUID, schedule: DigestSchedule
+    ) -> Digest:
+        digest = self.get_owned(owner=owner, digest_id=digest_id)
+        digest.schedule = schedule.model_dump(mode="json")
+        return self._commit(digest)
+
+    def delete_schedule(self, *, owner: User, digest_id: UUID) -> None:
+        digest = self.get_owned(owner=owner, digest_id=digest_id)
+        digest.schedule = None
+        self._commit(digest)
 
     def list_for_admin(
         self,

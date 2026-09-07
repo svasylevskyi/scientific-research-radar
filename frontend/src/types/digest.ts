@@ -7,6 +7,13 @@ export type TargetAudience =
 
 export type DigestFrequency = "daily" | "weekly" | "monthly" | "quarterly";
 
+export interface DigestSchedule {
+  frequency: DigestFrequency;
+  starts_at: string;
+  ends_at: string | null;
+  time_zone: string;
+}
+
 export interface DigestInput {
   topic: string;
   description: string | null;
@@ -15,13 +22,14 @@ export interface DigestInput {
   target_audience: TargetAudience[];
   reporting_from: string;
   reporting_to: string;
-  frequency: DigestFrequency;
+  frequency?: DigestFrequency | null;
   maximum_papers: number;
 }
 
 export type DigestUpdateInput = Partial<DigestInput>;
 
 export interface Digest extends DigestInput {
+  schedule: DigestSchedule | null;
   id: string;
   owner_id: string;
   created_at: string;

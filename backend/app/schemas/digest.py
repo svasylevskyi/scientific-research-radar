@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.digest import DigestFrequency, TargetAudience
+from app.schemas.digest_schedule import DigestSchedule
 
 MAX_KEYWORDS = 20
 MAX_KEYWORD_LENGTH = 48
@@ -60,7 +61,7 @@ class DigestCreate(BaseModel):
     target_audience: list[TargetAudience] = Field(min_length=1, max_length=5)
     reporting_from: date
     reporting_to: date
-    frequency: DigestFrequency = DigestFrequency.WEEKLY
+    frequency: DigestFrequency | None = None
     maximum_papers: int = Field(default=20, ge=1, le=30)
 
     @field_validator("topic")
@@ -133,7 +134,7 @@ class DigestUpdate(BaseModel):
     def require_valid_change(self) -> "DigestUpdate":
         if not self.model_fields_set:
             raise ValueError("At least one digest field is required")
-        nullable_fields = {"description"}
+        nullable_fields = {"description", "frequency"}
         for field_name in self.model_fields_set - nullable_fields:
             if getattr(self, field_name) is None:
                 raise ValueError(f"{field_name.replace('_', ' ').capitalize()} cannot be null")
@@ -152,7 +153,8 @@ class DigestRead(BaseModel):
     target_audience: list[TargetAudience]
     reporting_from: date
     reporting_to: date
-    frequency: DigestFrequency
+    frequency: DigestFrequency | None
+    schedule: DigestSchedule | None = None
     maximum_papers: int
     created_at: datetime
     updated_at: datetime

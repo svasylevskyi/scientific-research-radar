@@ -52,7 +52,8 @@ class Digest(Base):
     target_audience: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     reporting_from: Mapped[date] = mapped_column(Date, nullable=False)
     reporting_to: Mapped[date] = mapped_column(Date, nullable=False)
-    frequency: Mapped[DigestFrequency] = mapped_column(String(16), nullable=False)
+    frequency: Mapped[DigestFrequency | None] = mapped_column(String(16), nullable=True)
+    schedule: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     maximum_papers: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
