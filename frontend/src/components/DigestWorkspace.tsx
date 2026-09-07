@@ -1,6 +1,6 @@
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
-import { Alert, Box, Button, Chip, CircularProgress, Paper, Stack, Tab, Tabs, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, CircularProgress, Paper, Stack, Tab, Tabs, TextField, Tooltip, Typography } from "@mui/material";
 import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
@@ -28,8 +28,14 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
   });
   const [search, setSearch] = useSearchParams();
   const selectedId = search.get("run_id") || defaultRunId(runs);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const runDays = runs.map((item) => {
+    const date = runDate(item.started_at);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }).sort();
+  const [fromOverride, setFrom] = useState<string | null>(null);
+  const [toOverride, setTo] = useState<string | null>(null);
+  const from = fromOverride ?? runDays[0] ?? "";
+  const to = toOverride ?? runDays.at(-1) ?? "";
   const [tab, setTab] = useState("briefing");
   const [loadedRun, setLoadedRun] = useState<DigestRunDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -69,6 +75,7 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
   return (
     <Stack direction={{ xs: "column", md: "row" }} spacing={3} alignItems="flex-start">
       <Paper variant="outlined" sx={{ width: { xs: "100%", md: collapsed ? 64 : 280 }, flexShrink: 0, borderRadius: 3, overflow: "hidden" }}>
+        <Tooltip title={collapsed ? "Show run history" : "Hide run history"} arrow>
         <Button aria-label={collapsed ? "Show run history" : "Hide run history"} aria-expanded={!collapsed}
           aria-controls="digest-runs-list" fullWidth onClick={() => {
             const next = !collapsed; setCollapsed(next);
@@ -76,6 +83,7 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
           }} sx={{ py: 2 }}>
           {collapsed ? <HistoryRoundedIcon /> : <><ChevronLeftRoundedIcon /> Runs</>}
         </Button>
+        </Tooltip>
         {!collapsed && <Box id="digest-runs-list">
           <Stack spacing={2} sx={{ p: 2 }}>
             <TextField label="From" type="date" value={from} onChange={(event) => setFrom(event.target.value)}
