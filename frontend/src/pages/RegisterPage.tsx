@@ -96,7 +96,6 @@ export function RegisterPage() {
         onResend={async () => rememberChallenge(await authApi.resendRegistration(challenge.id))}
         onCancel={() => rememberChallenge(null)} /> : (
       <Stack component="form" onSubmit={handleSubmit} spacing={2.25} noValidate>
-        <Alert severity="info">We will send a 6-digit verification code to your email. Confirm within 24 hours to create your account; otherwise the registration attempt is removed. You can resend the code after 1 minute.</Alert>
         {error && <Alert severity="error">{error}</Alert>}
         <TextField
           label="Full name"
@@ -112,6 +111,7 @@ export function RegisterPage() {
           autoComplete="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          helperText="We will send a verification code to your email."
           required
           fullWidth
         />
