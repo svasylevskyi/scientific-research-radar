@@ -11,7 +11,7 @@ REGISTER_PAYLOAD = {
 
 
 def _register(client: TestClient, **overrides):
-    return client.post("/api/v1/auth/register", json={**REGISTER_PAYLOAD, **overrides})
+    return client.register_verified( json={**REGISTER_PAYLOAD, **overrides})
 
 
 def _authorization(response) -> dict[str, str]:
@@ -22,13 +22,13 @@ def test_user_can_update_own_name_and_email(client: TestClient) -> None:
     registration = _register(client)
     response = client.patch(
         "/api/v1/users/me",
-        json={"full_name": "  Updated   Profile  ", "email": "UPDATED@example.com"},
+        json={"full_name": "  Updated   Profile  "},
         headers=_authorization(registration),
     )
 
     assert response.status_code == 200
     assert response.json()["full_name"] == "Updated Profile"
-    assert response.json()["email"] == "updated@example.com"
+    assert response.json()["email"] == REGISTER_PAYLOAD["email"]
 
 
 def test_user_cannot_take_an_existing_email(client: TestClient) -> None:

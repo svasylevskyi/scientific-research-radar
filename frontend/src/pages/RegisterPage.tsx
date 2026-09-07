@@ -19,9 +19,20 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { isValidNewPassword, passwordRequirementsText } from "../auth/passwordRequirements";
 import { AuthLayout } from "../layouts/AuthLayout";
+import { authApi } from "../api/auth";
+import { EmailVerificationForm, type EmailVerification } from "../components/EmailVerificationForm";
 
 export function RegisterPage() {
-  const { user, isInitializing, register } = useAuth();
+  const { user, isInitializing, register, confirmRegistration } = useAuth();
+  const [challenge, setChallenge] = useState<EmailVerification | null>(() => {
+    try { return JSON.parse(sessionStorage.getItem("registrationVerification") ?? "null"); }
+    catch { return null; }
+  });
+  function rememberChallenge(value: EmailVerification | null) {
+    setChallenge(value);
+    if (value) sessionStorage.setItem("registrationVerification", JSON.stringify(value));
+    else sessionStorage.removeItem("registrationVerification");
+  }
   const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -44,13 +55,14 @@ export function RegisterPage() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await register({
+      const pending = await register({
         full_name: fullName,
         email,
         password,
         password_confirmation: passwordConfirmation,
       });
-      navigate("/", { replace: true });
+      rememberChallenge(pending);
+      setPassword(""); setPasswordConfirmation("");
     } catch (caught) {
       if (
         caught instanceof ApiError
@@ -75,7 +87,16 @@ export function RegisterPage() {
         <Typography color="text.secondary">Start a focused workspace for the science you follow.</Typography>
       </Box>
 
+      {challenge ? <EmailVerificationForm challenge={challenge} registration
+        onConfirm={async (code) => {
+          await confirmRegistration(challenge.id, code);
+          rememberChallenge(null);
+          navigate("/", { replace: true });
+        }}
+        onResend={async () => rememberChallenge(await authApi.resendRegistration(challenge.id))}
+        onCancel={() => rememberChallenge(null)} /> : (
       <Stack component="form" onSubmit={handleSubmit} spacing={2.25} noValidate>
+        <Alert severity="info">We will send a 6-digit verification code to your email. Confirm within 24 hours to create your account; otherwise the registration attempt is removed. You can resend the code after 1 minute.</Alert>
         {error && <Alert severity="error">{error}</Alert>}
         <TextField
           label="Full name"
@@ -156,9 +177,9 @@ export function RegisterPage() {
           endIcon={<ArrowForwardRoundedIcon />}
           sx={{ minHeight: 52 }}
         >
-          {isSubmitting ? "Creating account…" : "Create account"}
+          {isSubmitting ? "Sending code…" : "Continue to email verification"}
         </Button>
-      </Stack>
+      </Stack>)}
 
       <Typography sx={{ mt: 3.5, color: "text.secondary" }}>
         Already have an account?{" "}

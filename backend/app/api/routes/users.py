@@ -1,8 +1,15 @@
 from typing import Annotated
+from uuid import UUID
+from datetime import UTC, datetime
+from pydantic import BaseModel, EmailStr, field_validator
+from sqlalchemy import select
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.dependencies import CurrentUser, DbSession
+from app.api.dependencies import CurrentUser, DbSession, AppSettings
+from app.models.email_verification import EmailVerification
+from app.schemas.email_verification import VerificationRead, VerificationCode
+from app.services.email_verification_service import EmailVerificationService
 from app.schemas.auth import MessageResponse
 from app.schemas.user import UserPasswordUpdate, UserProfileUpdate, UserRead
 from app.services.user_profile_service import (
@@ -13,6 +20,41 @@ from app.services.user_profile_service import (
 )
 
 router = APIRouter()
+
+
+class EmailChangeRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return value.strip().lower() if isinstance(value, str) else value
+
+
+@router.get("/me/email-verification", response_model=VerificationRead | None)
+def pending_email(current_user: CurrentUser, db: DbSession):
+    return db.scalar(select(EmailVerification).where(
+        EmailVerification.user_id == current_user.id,
+        EmailVerification.expires_at > datetime.now(UTC),
+    ))
+
+
+@router.post("/me/email-verification", response_model=VerificationRead, status_code=202)
+def start_email_change(payload: EmailChangeRequest, current_user: CurrentUser,
+                       db: DbSession, settings: AppSettings):
+    return EmailVerificationService(db, settings).start(email=str(payload.email), user=current_user)
+
+
+@router.post("/me/email-verification/{challenge_id}/resend", response_model=VerificationRead)
+def resend_email_change(challenge_id: UUID, current_user: CurrentUser,
+                        db: DbSession, settings: AppSettings):
+    return EmailVerificationService(db, settings).resend(challenge_id, current_user)
+
+
+@router.post("/me/email-verification/{challenge_id}/confirm", response_model=UserRead)
+def confirm_email_change(challenge_id: UUID, payload: VerificationCode,
+                         current_user: CurrentUser, db: DbSession, settings: AppSettings):
+    return EmailVerificationService(db, settings).confirm(challenge_id, payload.code, current_user)
 
 
 def get_user_profile_service(db: DbSession) -> UserProfileService:

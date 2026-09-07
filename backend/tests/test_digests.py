@@ -10,8 +10,7 @@ PASSWORD = "Correct-horse-battery-staple1"
 
 
 def _register(client: TestClient, email: str, full_name: str):
-    return client.post(
-        "/api/v1/auth/register",
+    return client.register_verified(
         json={
             "email": email,
             "full_name": full_name,

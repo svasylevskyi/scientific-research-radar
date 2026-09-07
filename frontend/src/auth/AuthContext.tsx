@@ -11,12 +11,14 @@ import {
 import { authApi } from "../api/auth";
 import { AUTH_EXPIRED_EVENT } from "../api/client";
 import type { LoginInput, RegisterInput, User } from "../types/auth";
+import type { EmailVerification } from "../components/EmailVerificationForm";
 
 interface AuthContextValue {
   user: User | null;
   isInitializing: boolean;
   login: (input: LoginInput) => Promise<void>;
-  register: (input: RegisterInput) => Promise<void>;
+  register: (input: RegisterInput) => Promise<EmailVerification>;
+  confirmRegistration: (id: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -57,7 +59,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const register = useCallback(async (input: RegisterInput) => {
-    const session = await authApi.register(input);
+    return authApi.register(input);
+  }, []);
+
+  const confirmRegistration = useCallback(async (id: string, code: string) => {
+    const session = await authApi.confirmRegistration(id, code);
     setUser(session.user);
   }, []);
 
@@ -74,8 +80,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, isInitializing, login, register, logout, refreshUser }),
-    [user, isInitializing, login, register, logout, refreshUser],
+    () => ({ user, isInitializing, login, register, confirmRegistration, logout, refreshUser }),
+    [user, isInitializing, login, register, confirmRegistration, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

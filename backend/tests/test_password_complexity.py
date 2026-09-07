@@ -26,14 +26,14 @@ def test_password_policy_enforced_by_api(client, password, accepted, flow):
         "password": original, "password_confirmation": original,
     }
     if flow == "registration":
-        response = client.post("/api/v1/auth/register", json={
+        response = client.register_verified( json={
             **registration, "password": password, "password_confirmation": password,
         })
         assert response.status_code == (201 if accepted else 422)
         if not accepted:
-            assert client.post("/api/v1/auth/register", json=registration).status_code == 201
+            assert client.register_verified( json=registration).status_code == 201
     else:
-        registered = client.post("/api/v1/auth/register", json=registration)
+        registered = client.register_verified( json=registration)
         response = client.put("/api/v1/users/me/password", json={
             "current_password": original,
             "new_password": password, "new_password_confirmation": password,

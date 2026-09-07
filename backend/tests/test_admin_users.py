@@ -17,7 +17,7 @@ USER_PAYLOAD = {
 
 
 def _register(client: TestClient, **overrides):
-    return client.post("/api/v1/auth/register", json={**USER_PAYLOAD, **overrides})
+    return client.register_verified( json={**USER_PAYLOAD, **overrides})
 
 
 def _authorization(response) -> dict[str, str]:

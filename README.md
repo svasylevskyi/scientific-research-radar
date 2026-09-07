@@ -20,7 +20,7 @@ The API, service, repository, and persistence layers are separate. SQLite is sel
 
 ## Included auth flow
 
-- Register with name, email, and password.
+- Register with name, email, and password, then confirm a 6-digit email code.
 - Login with email and password.
 - Short-lived access JWT kept only in JavaScript memory.
 - Rotating refresh JWT kept in an HttpOnly cookie.
@@ -67,6 +67,8 @@ python -m app.radar.worker
 ```
 
 API documentation is available at `http://localhost:8000/docs`.
+
+Configure SMTP before testing registration or profile email changes. See [email setup and verification behavior](backend/EMAIL.md). Registration requires a code from the delivered email before an account and session are created.
 
 On startup, the API creates the configured super-admin if it does not exist. `SUPER_ADMIN_PASSWORD` supplies its initial password; subsequent password changes can be made from the profile page. The defaults in `.env.example` are for local development only. Set `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_FULL_NAME`, and a unique `SUPER_ADMIN_PASSWORD` before signing in. Production mode rejects the placeholder password.
 
@@ -117,12 +119,18 @@ npm run build
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/v1/auth/register` | Create a user and authenticated session |
+| `POST` | `/api/v1/auth/register` | Send verification code; return pending challenge (`202`), no session |
+| `POST` | `/api/v1/auth/register/{id}/confirm` | Submit `{ "code": "123456" }`; create user and session (`201`) |
+| `POST` | `/api/v1/auth/register/{id}/resend` | Replace the code after the 60-second cooldown |
 | `POST` | `/api/v1/auth/login` | Authenticate and create a session |
 | `POST` | `/api/v1/auth/refresh` | Rotate the refresh token and return a new access token |
 | `POST` | `/api/v1/auth/logout` | Revoke the current refresh session |
 | `GET` | `/api/v1/users/me` | Return the authenticated user |
-| `PATCH` | `/api/v1/users/me` | Update the authenticated user's name or email |
+| `PATCH` | `/api/v1/users/me` | Update the authenticated user's name; email changes require verification |
+| `GET` | `/api/v1/users/me/email-verification` | Return the current pending email change or null |
+| `POST` | `/api/v1/users/me/email-verification` | Send code to `{ "email": "new@example.com" }` (`202`) |
+| `POST` | `/api/v1/users/me/email-verification/{id}/confirm` | Submit code and apply the verified email change |
+| `POST` | `/api/v1/users/me/email-verification/{id}/resend` | Resend a profile email-change code after 60 seconds |
 | `PUT` | `/api/v1/users/me/password` | Verify and change the authenticated user's password |
 | `POST` | `/api/v1/digests` | Create a digest for the authenticated user |
 | `GET` | `/api/v1/digests` | List the authenticated user's digests |
@@ -165,4 +173,4 @@ The super-admin can manage every account, including editing their own account de
 - Move to PostgreSQL by changing `DATABASE_URL` and installing its SQLAlchemy driver.
 - Put the API behind a reverse proxy or managed platform with TLS, rate limiting, request-size limits, and centralized logs.
 - Configure OpenAI project spend/rate limits and monitor radar request duration, failures, and token usage.
-- Add email verification, password reset, MFA/passkeys, abuse protection, audit events, and key rotation when product requirements reach those areas.
+- Add password reset, MFA/passkeys, broader abuse protection, audit events, and key rotation when product requirements reach those areas.

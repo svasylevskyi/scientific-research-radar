@@ -30,9 +30,7 @@ class UserProfileService:
         values = changes.model_dump(exclude_unset=True, exclude_none=True)
         email = values.get("email")
         if email is not None and email != user.email:
-            existing = self.users.get_by_email(email)
-            if existing is not None and existing.id != user.id:
-                raise ProfileEmailConflictError("An account with this email already exists")
+            raise ProfileEmailConflictError("Verify your new email address before changing it.")
 
         for field, value in values.items():
             setattr(user, field, value)
