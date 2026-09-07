@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import datetime, timezone
 
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -9,6 +10,7 @@ from app.repositories.digest_repository import DigestRepository
 from app.repositories.digest_run_repository import DigestRunRepository
 from app.schemas.digest import DigestCreate, DigestUpdate
 from app.schemas.digest_schedule import DigestSchedule
+from app.scheduler.recurrence import first_dispatch
 
 
 class DigestNotFoundError(ValueError):
@@ -60,11 +62,13 @@ class DigestService:
     ) -> Digest:
         digest = self.get_owned(owner=owner, digest_id=digest_id)
         digest.schedule = schedule.model_dump(mode="json")
+        digest.schedule_next_at = first_dispatch(schedule, datetime.now(timezone.utc))
         return self._commit(digest)
 
     def delete_schedule(self, *, owner: User, digest_id: UUID) -> None:
         digest = self.get_owned(owner=owner, digest_id=digest_id)
         digest.schedule = None
+        digest.schedule_next_at = None
         self._commit(digest)
 
     def list_for_admin(

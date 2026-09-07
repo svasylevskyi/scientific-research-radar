@@ -12,6 +12,7 @@ class DigestSchedule(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     frequency: DigestFrequency
+    send_email: bool = True
     starts_at: AwareDatetime
     ends_at: AwareDatetime | None = None
     time_zone: str = Field(min_length=1, max_length=100)

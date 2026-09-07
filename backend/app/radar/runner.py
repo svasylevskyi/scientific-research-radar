@@ -12,6 +12,7 @@ from app.models.digest_run import (
     DigestRunStageStatus,
     DigestRunStageType,
     DigestRunStatus,
+    DigestRunTrigger,
 )
 from app.repositories.digest_repository import DigestRepository
 from app.repositories.digest_run_repository import DigestRunRepository
@@ -64,7 +65,9 @@ class RadarRunner:
         self.digests = DigestRepository(db)
         self.runs = DigestRunRepository(db)
 
-    def start_digest(self, *, digest_id: UUID, owner_id: UUID) -> DigestRun:
+    def start_digest(self, *, digest_id: UUID, owner_id: UUID,
+                     scheduled_for: datetime | None = None, time_zone: str = "UTC",
+                     commit: bool = True) -> DigestRun:
         digest = self.digests.get_for_owner(digest_id=digest_id, owner_id=owner_id)
         if digest is None:
             raise RadarDigestNotFoundError("Digest not found")
@@ -75,8 +78,13 @@ class RadarRunner:
             )
 
         digest_snapshot = DigestRead.model_validate(digest).model_dump(
-            mode="json", exclude={"schedule"}
+            mode="json", exclude={"schedule", "schedule_next_at"}
         )
+        if scheduled_for is not None:
+            from zoneinfo import ZoneInfo
+            end = scheduled_for.astimezone(ZoneInfo(time_zone)).date()
+            start = end - (digest.reporting_to - digest.reporting_from)
+            digest_snapshot.update(reporting_from=start.isoformat(), reporting_to=end.isoformat())
         history_context = self.runs.build_history_context(
             digest_id=digest.id, limit=self.history_limit
         )
@@ -95,6 +103,11 @@ class RadarRunner:
             model_name=self.client.model_name,
             prompt_version=first_prompt.version,
         )
+        if scheduled_for is not None:
+            run.trigger = DigestRunTrigger.SCHEDULED
+            run.scheduled_for = scheduled_for
+        if not commit:
+            return run
         try:
             self.db.commit()
         except IntegrityError as exc:

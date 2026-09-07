@@ -1,7 +1,8 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import EmailStr, Field, SecretStr, model_validator
+from pydantic import EmailStr, Field, SecretStr, model_validator, field_validator
+from urllib.parse import urlsplit
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,16 @@ class Settings(BaseSettings):
     smtp_security: Literal["starttls", "ssl", "none"] = "starttls"
     smtp_timeout_seconds: float = Field(default=15, ge=1, le=60)
     email_from: EmailStr | None = None
+    frontend_base_url: str = "http://localhost:5173"
+    scheduler_poll_seconds: float = Field(default=10, ge=1, le=300)
+
+    @field_validator("frontend_base_url")
+    @classmethod
+    def validate_frontend_url(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("FRONTEND_BASE_URL must be an HTTP(S) URL without credentials, query, or fragment")
+        return value.rstrip("/")
 
     jwt_secret: str = "development-only-secret-change-me"
     jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"

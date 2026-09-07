@@ -102,6 +102,7 @@ class DigestRun(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     worker_id: Mapped[str | None] = mapped_column(String(100))
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     request_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -116,6 +117,9 @@ class DigestRun(Base):
     )
 
     digest: Mapped["Digest"] = relationship(back_populates="runs")  # noqa: F821
+    email_delivery: Mapped["DigestEmailDelivery | None"] = relationship(  # noqa: F821
+        cascade="all, delete-orphan", passive_deletes=True, uselist=False
+    )
     paper_results: Mapped[list["DigestRunPaper"]] = relationship(
         back_populates="run",
         cascade="all, delete-orphan",

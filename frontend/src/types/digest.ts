@@ -8,6 +8,7 @@ export type TargetAudience =
 export type DigestFrequency = "daily" | "weekly" | "monthly" | "quarterly";
 
 export interface DigestSchedule {
+  send_email: boolean;
   frequency: DigestFrequency;
   starts_at: string;
   ends_at: string | null;
@@ -327,6 +328,8 @@ export interface DigestRunStage {
 }
 
 export interface DigestRunDetail extends DigestRunSummary {
+  email_delivery?: { status: string; attempts: number; sent_at: string | null; last_error: string | null } | null;
+  scheduled_for?: string | null;
   digest_snapshot: Record<string, unknown>;
   history_context: Record<string, unknown>[];
   feedback_context: Record<string, unknown>[];

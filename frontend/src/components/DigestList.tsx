@@ -96,7 +96,7 @@ export function DigestList({
                 <TableCell>
                   {formatDate(digest.reporting_from)} – {formatDate(digest.reporting_to)}
                 </TableCell>
-                <TableCell><Chip size="small" label={digest.schedule ? `${frequencyLabel(digest.schedule.frequency)} · Preview` : "Not scheduled"} /></TableCell>
+                <TableCell><Chip size="small" label={digest.schedule ? frequencyLabel(digest.schedule.frequency) : "Not scheduled"} /></TableCell>
                 <TableCell align="right">
                   <Button
                     component={RouterLink}
@@ -127,7 +127,7 @@ export function DigestList({
                   {formatDate(digest.reporting_from)} – {formatDate(digest.reporting_to)}
                 </Typography>
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <Chip size="small" label={digest.schedule ? `${frequencyLabel(digest.schedule.frequency)} · Preview` : "Not scheduled"} />
+                  <Chip size="small" label={digest.schedule ? frequencyLabel(digest.schedule.frequency) : "Not scheduled"} />
                   <Typography variant="body2" color="text.secondary">
                     Up to {digest.maximum_papers} papers
                   </Typography>
