@@ -1,6 +1,6 @@
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Stack, TextField, Typography } from "@mui/material";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { ApiError } from "../api/client";
 import { digestsApi } from "../api/digests";
 import type { DigestFrequency, DigestSchedule } from "../types/digest";
@@ -104,19 +104,23 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
   );
 }
 
-export function DigestScheduleControl({ digestId, schedule, onSaved }: {
+export function DigestScheduleControl({ digestId, schedule, onSaved, runButton }: {
+  runButton: ReactNode;
   digestId: string;
   schedule: DigestSchedule | null;
   onSaved: (schedule: DigestSchedule | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
   return (
-    <Box sx={{ mt: 2 }}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }}>
+    <Box>
+      <Stack direction="row" spacing={1.5} alignItems="stretch">
+        {runButton}
         <Button variant="outlined" startIcon={<ScheduleRoundedIcon />} onClick={() => setEditing(true)} disabled={editing}
-          aria-expanded={editing} aria-controls={editing ? `schedule-form-${digestId}` : undefined} sx={{ flexShrink: 0 }}>
+          aria-expanded={editing} aria-controls={editing ? `schedule-form-${digestId}` : undefined}>
           {schedule ? "Update schedule" : "Schedule runs"}
         </Button>
+      </Stack>
+      <Box sx={{ mt: 2 }}>
         {!editing && (schedule ? <Box>
           <Typography variant="body2" fontWeight={700}>{label(schedule.frequency)} · Saved preview</Typography>
           <Typography variant="body2" color="text.secondary">
@@ -124,7 +128,7 @@ export function DigestScheduleControl({ digestId, schedule, onSaved }: {
           </Typography>
           <Typography variant="caption" color="text.secondary">Automatic runs are not enabled.</Typography>
         </Box> : <Typography variant="body2" color="text.secondary">Preview only — save a schedule without starting automatic runs.</Typography>)}
-      </Stack>
+      </Box>
       {editing && <ScheduleForm digestId={digestId} schedule={schedule} onCancel={() => setEditing(false)} onSaved={(saved) => { onSaved(saved); setEditing(false); }} />}
     </Box>
   );

@@ -334,7 +334,9 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                 <Typography color="text.secondary" sx={{ mb: 2 }}>
                   Start an immediate research run or review results from previous runs.
                 </Typography>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule}
+                  onSaved={(schedule) => setDigest((current) => current?.id === digest.id ? { ...current, schedule } : current)}
+                  runButton={
                   <Button
                     variant="contained"
                     startIcon={isStartingRun ? <CircularProgress size={18} color="inherit" /> : <PlayArrowRoundedIcon />}
@@ -349,9 +351,8 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                           ? "Another run is active"
                           : "Run now"}
                   </Button>
-                </Stack>
-                <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule}
-                  onSaved={(schedule) => setDigest((current) => current?.id === digest.id ? { ...current, schedule } : current)} />
+                  }
+                />
 
                 {activeRun && (
                   <Alert severity="info" sx={{ mt: 2 }}>
