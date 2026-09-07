@@ -20,6 +20,7 @@ import { useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { usersApi } from "../api/users";
 import { useAuth } from "../auth/AuthContext";
+import { isValidNewPassword, passwordRequirementsText } from "../auth/passwordRequirements";
 import { AppHeader } from "../components/AppHeader";
 
 export function ProfilePage() {
@@ -43,7 +44,7 @@ export function ProfilePage() {
     setEmail(user?.email ?? "");
   }, [user]);
 
-  const newPasswordIsValid = newPassword.length >= 8;
+  const newPasswordIsValid = isValidNewPassword(newPassword);
   const passwordsMatch = newPassword === newPasswordConfirmation;
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
@@ -139,7 +140,7 @@ export function ProfilePage() {
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                helperText="Use at least 8 characters."
+                helperText={passwordRequirementsText}
                 required
                 fullWidth
                 slotProps={{ input: { endAdornment: passwordAdornment } }}

@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 
-PASSWORD = "correct-horse-battery-staple"
+PASSWORD = "Correct-horse-battery-staple1"
 REGISTER_PAYLOAD = {
     "email": "profile@example.com",
     "full_name": "Profile Owner",
@@ -57,8 +57,8 @@ def test_password_change_validates_current_password_and_confirmation(
         "/api/v1/users/me/password",
         json={
             "current_password": "wrong-password",
-            "new_password": "a-new-secure-password",
-            "new_password_confirmation": "a-new-secure-password",
+            "new_password": "A-new-secure-password1",
+            "new_password_confirmation": "A-new-secure-password1",
         },
         headers=authorization,
     )
@@ -68,7 +68,7 @@ def test_password_change_validates_current_password_and_confirmation(
         "/api/v1/users/me/password",
         json={
             "current_password": PASSWORD,
-            "new_password": "a-new-secure-password",
+            "new_password": "A-new-secure-password1",
             "new_password_confirmation": "different-password",
         },
         headers=authorization,
@@ -89,7 +89,7 @@ def test_password_change_validates_current_password_and_confirmation(
 
 def test_password_change_revokes_sessions_and_updates_login(client: TestClient) -> None:
     registration = _register(client)
-    new_password = "a-new-secure-password"
+    new_password = "A-new-secure-password1"
     response = client.put(
         "/api/v1/users/me/password",
         json={

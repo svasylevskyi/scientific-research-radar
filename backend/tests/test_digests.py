@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import get_settings
 from app.services.super_admin_service import ensure_super_admin
 
-PASSWORD = "correct-horse-battery-staple"
+PASSWORD = "Correct-horse-battery-staple1"
 
 
 def _register(client: TestClient, email: str, full_name: str):

@@ -5,7 +5,6 @@ import {
   Alert,
   Box,
   Button,
-  FormHelperText,
   IconButton,
   InputAdornment,
   Link,
@@ -18,6 +17,7 @@ import { Link as RouterLink, Navigate, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { isValidNewPassword, passwordRequirementsText } from "../auth/passwordRequirements";
 import { AuthLayout } from "../layouts/AuthLayout";
 
 export function RegisterPage() {
@@ -34,7 +34,7 @@ export function RegisterPage() {
 
   if (!isInitializing && user) return <Navigate to="/" replace />;
 
-  const passwordIsValid = password.length >= 8;
+  const passwordIsValid = isValidNewPassword(password);
   const passwordsMatch = password === passwordConfirmation;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -100,6 +100,7 @@ export function RegisterPage() {
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             value={password}
+            helperText={passwordRequirementsText}
             onChange={(event) => setPassword(event.target.value)}
             required
             fullWidth
@@ -119,7 +120,6 @@ export function RegisterPage() {
               },
             }}
           />
-          <FormHelperText sx={{ ml: 1.75 }}>Use at least 8 characters.</FormHelperText>
         </Box>
         <TextField
           label="Confirm password"
