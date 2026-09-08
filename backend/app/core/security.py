@@ -26,6 +26,7 @@ class TokenClaims:
     jwt_id: UUID
     session_id: UUID | None
     expires_at: datetime
+    auth_version: int = 0
 
 
 def hash_password(password: str) -> str:
@@ -44,11 +45,12 @@ def token_hash_matches(token: str, expected_hash: str) -> bool:
     return secrets.compare_digest(hash_token(token), expected_hash)
 
 
-def create_access_token(user_id: UUID, settings: Settings) -> tuple[str, datetime]:
+def create_access_token(user_id: UUID, settings: Settings, auth_version: int = 0) -> tuple[str, datetime]:
     expires_at = datetime.now(UTC) + timedelta(minutes=settings.access_token_minutes)
     token = _encode_token(
         user_id=user_id,
         token_type="access",
+        auth_version=auth_version,
         expires_at=expires_at,
         settings=settings,
     )
@@ -59,11 +61,13 @@ def create_refresh_token(
     user_id: UUID,
     session_id: UUID,
     settings: Settings,
+    auth_version: int = 0,
 ) -> tuple[str, datetime]:
     expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_days)
     token = _encode_token(
         user_id=user_id,
         token_type="refresh",
+        auth_version=auth_version,
         expires_at=expires_at,
         settings=settings,
         session_id=session_id,
@@ -78,10 +82,12 @@ def _encode_token(
     expires_at: datetime,
     settings: Settings,
     session_id: UUID | None = None,
+    auth_version: int = 0,
 ) -> str:
     now = datetime.now(UTC)
     payload: dict[str, Any] = {
         "sub": str(user_id),
+        "av": auth_version,
         "typ": token_type,
         "jti": str(uuid4()),
         "iat": now,
@@ -121,6 +127,7 @@ def decode_token(
             jwt_id=UUID(payload["jti"]),
             session_id=session_id,
             expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
+            auth_version=int(payload.get("av", 0)),
         )
     except (InvalidTokenError, KeyError, TypeError, ValueError) as exc:
         raise TokenError("Invalid or expired token") from exc

@@ -6,6 +6,8 @@ from contextlib import suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from sqlalchemy.exc import OperationalError
 
 from app.api.router import api_router
@@ -14,6 +16,7 @@ from app.db.session import SessionLocal
 from app.services.super_admin_service import ensure_super_admin
 from app.services.email_service import EmailDeliveryError
 from app.services.email_verification_service import VerificationError, cleanup_expired
+from app.services.password_recovery_service import cleanup_recovery
 
 settings = get_settings()
 
@@ -22,6 +25,7 @@ async def verification_cleanup_loop():
     def clean():
         with SessionLocal() as db:
             cleanup_expired(db)
+            cleanup_recovery(db)
     while True:
         try:
             await asyncio.to_thread(clean)
@@ -67,6 +71,15 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request, exc):
+    if request.url.path in ("/api/v1/auth/forgot-password", "/api/v1/auth/reset-password"):
+        return JSONResponse(status_code=422, headers={"Cache-Control": "no-store"}, content={
+            "detail": [{"loc": error["loc"], "msg": error["msg"], "type": error["type"]} for error in exc.errors()]
+        })
+    return await request_validation_exception_handler(request, exc)
 
 
 @app.exception_handler(VerificationError)

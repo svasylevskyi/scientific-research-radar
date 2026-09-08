@@ -1,5 +1,8 @@
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, status
+from sqlalchemy.orm import sessionmaker
+from app.schemas.password_reset import PasswordRecoveryRequest, PasswordResetRequest
+from app.services.password_recovery_service import allowed, send_recovery, reset_password, notify_password_reset, RECOVERY_MESSAGE
 
 from app.api.dependencies import AppSettings, AuthServiceDep, DbSession
 from app.schemas.email_verification import VerificationRead, VerificationCode
@@ -11,6 +14,34 @@ from app.services.auth_service import (
 )
 
 router = APIRouter()
+
+
+@router.post("/forgot-password", response_model=MessageResponse, status_code=202)
+def forgot_password(payload: PasswordRecoveryRequest, request: Request, response: Response,
+                    tasks: BackgroundTasks, db: DbSession, settings: AppSettings):
+    response.headers["Cache-Control"] = "no-store"
+    peer = request.client.host if request.client else "unknown"
+    ip_ok = allowed(db, settings, "request-ip", peer, 20, 3600)
+    if not ip_ok:
+        return MessageResponse(message=RECOVERY_MESSAGE)
+    minute_ok = allowed(db, settings, "request-email-minute", str(payload.email), 1, 60)
+    hour_ok = allowed(db, settings, "request-email-hour", str(payload.email), 5, 3600)
+    if ip_ok and minute_ok and hour_ok:
+        tasks.add_task(send_recovery, sessionmaker(bind=db.get_bind()), settings, str(payload.email))
+    return MessageResponse(message=RECOVERY_MESSAGE)
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+def finish_password_reset(payload: PasswordResetRequest, request: Request, response: Response,
+                          tasks: BackgroundTasks, db: DbSession, settings: AppSettings):
+    response.headers["Cache-Control"] = "no-store"
+    peer = request.client.host if request.client else "unknown"
+    if not allowed(db, settings, "reset-ip", peer, 30, 900):
+        raise HTTPException(429, "Too many attempts. Please try again later.")
+    email = reset_password(db, payload.token, payload.password)
+    _clear_refresh_cookie(response, settings)
+    tasks.add_task(notify_password_reset, settings, email)
+    return MessageResponse(message="Password reset successfully. Sign in with your new password.")
 
 
 @router.post("/register", response_model=VerificationRead, status_code=status.HTTP_202_ACCEPTED)
