@@ -343,7 +343,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
               <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3 }, mb: 3, borderRadius: 3 }}>
                 <Typography variant="h6" sx={{ mb: 0.75 }}>Radar controls</Typography>
                 <Typography color="text.secondary" sx={{ mb: 2 }}>
-                  Start an immediate research run or review results from previous runs.
+                  Run research now, schedule recurring runs with optional email delivery, and review past results.
                 </Typography>
                 <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule} exhausted={digest.schedule_exhausted}
                   onSaved={(saved) => {

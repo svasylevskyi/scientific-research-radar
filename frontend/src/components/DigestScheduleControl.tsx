@@ -123,11 +123,11 @@ export function DigestScheduleControl({ digestId, schedule, exhausted, onSaved, 
           {schedule ? "Update schedule" : "Schedule runs"}
         </Button>
       </Stack>
-      <Box sx={{ mt: 2 }}>
-        {!editing && (schedule
-          ? <ScheduleOutlook key={`${digestId}:${JSON.stringify(schedule)}`} digestId={digestId} schedule={schedule} exhausted={exhausted} />
-          : <Typography variant="body2" color="text.secondary">Schedule automatic research runs and optional email delivery.</Typography>)}
-      </Box>
+      {!editing && schedule && (
+        <Box sx={{ mt: 2 }}>
+          <ScheduleOutlook key={`${digestId}:${JSON.stringify(schedule)}`} digestId={digestId} schedule={schedule} exhausted={exhausted} />
+        </Box>
+      )}
       {editing && <ScheduleForm digestId={digestId} schedule={schedule} onCancel={() => setEditing(false)} onSaved={(saved) => { onSaved(saved); setEditing(false); }} />}
     </Box>
   );
