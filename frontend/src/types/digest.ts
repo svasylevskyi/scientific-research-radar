@@ -30,6 +30,8 @@ export interface DigestInput {
 export type DigestUpdateInput = Partial<DigestInput>;
 
 export interface Digest extends DigestInput {
+  schedule_next_at: string | null;
+  schedule_exhausted: boolean;
   schedule: DigestSchedule | null;
   id: string;
   owner_id: string;

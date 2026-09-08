@@ -20,7 +20,7 @@ import {
   Tabs,
   Typography,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../api/client";
@@ -31,6 +31,7 @@ import { DigestRunFeedback } from "../components/DigestRunFeedback";
 import { DigestRunProgress } from "../components/DigestRunProgress";
 import { DigestWorkspace } from "../components/DigestWorkspace";
 import type { AdminDigest, Digest, DigestInput, DigestRunDetail, DigestRunSummary } from "../types/digest";
+import { startPagePolling } from "../pagePolling";
 import { loadRunHistory } from "../runHistory";
 
 interface DigestDetailPageProps {
@@ -74,6 +75,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const [success, setSuccess] = useState<string | null>(routeState?.success ?? null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmRun, setConfirmRun] = useState(false);
+  const scheduleRevision = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -120,21 +122,32 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   }, [admin, digestId]);
 
   useEffect(() => {
-    if (admin || !activeRun) return;
+    if (admin || isLoading || isStartingRun) return;
     let mounted = true;
     const trackedRun = activeRun;
 
     async function refreshProgress() {
       try {
+        const revision = scheduleRevision.current;
         const accountActiveRun = await digestRunsApi.active();
         if (!mounted) return;
+        // Schedule reads are independent: a failed read must not hide an active run.
+        const scheduleRead = digestsApi.get(digestId).then((saved) => {
+          if (mounted && revision === scheduleRevision.current) {
+            setDigest((current) => current?.id === digestId ? { ...current,
+              schedule: saved.schedule, schedule_next_at: saved.schedule_next_at,
+              schedule_exhausted: saved.schedule_exhausted } : current);
+          }
+        }).catch(() => {});
         if (accountActiveRun) {
+          setConfirmRun(false);
           setActiveRun(accountActiveRun);
-          if (accountActiveRun.digest_id === digestId) { setLatestRun(accountActiveRun); updateRun(accountActiveRun); }
+          if (accountActiveRun.digest_id === digestId) { setHasRuns(true); setLatestRun(accountActiveRun); updateRun(accountActiveRun); }
+          await scheduleRead;
           return;
         }
 
-        if (trackedRun.digest_id === digestId) {
+        if (trackedRun?.digest_id === digestId) {
           const finished = await digestRunsApi.get(trackedRun.digest_id, trackedRun.id);
           if (!mounted) return;
           setLatestRun(finished);
@@ -143,17 +156,15 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
           setSuccess(finished.status === "completed" ? "Radar run completed." : null);
         }
         setActiveRun(null);
+        await scheduleRead;
       } catch {
         // Keep the last known progress; the next poll can recover from a transient error.
       }
     }
 
-    const interval = window.setInterval(() => void refreshProgress(), 2500);
-    return () => {
-      mounted = false;
-      window.clearInterval(interval);
-    };
-  }, [activeRun?.id, admin, digestId]);
+    const stop = startPagePolling(refreshProgress, activeRun ? 2500 : 5000);
+    return () => { mounted = false; stop(); };
+  }, [activeRun?.id, admin, digestId, isLoading, isStartingRun]);
 
   useEffect(() => {
     if (runTab === 1 && latestRun?.status !== "completed") setRunTab(0);
@@ -334,8 +345,13 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                 <Typography color="text.secondary" sx={{ mb: 2 }}>
                   Start an immediate research run or review results from previous runs.
                 </Typography>
-                <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule}
-                  onSaved={(schedule) => setDigest((current) => current?.id === digest.id ? { ...current, schedule } : current)}
+                <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule} exhausted={digest.schedule_exhausted}
+                  onSaved={(saved) => {
+                    scheduleRevision.current += 1;
+                    setDigest((current) => current?.id === digest.id ? { ...current,
+                      schedule: saved?.schedule ?? null, schedule_next_at: saved?.schedule_next_at ?? null,
+                      schedule_exhausted: saved?.schedule_exhausted ?? false } : current);
+                  }}
                   runButton={
                   <Button
                     variant="contained"
