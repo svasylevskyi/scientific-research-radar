@@ -1,3 +1,4 @@
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from threading import Barrier
@@ -25,15 +26,20 @@ def bearer(token):
 
 
 @pytest.fixture
-def file_sessions(tmp_path):
-    engine = build_engine(f"sqlite:///{tmp_path}/security.db")
-    Base.metadata.create_all(engine)
-    factory = sessionmaker(bind=engine, expire_on_commit=False)
+def file_sessions(tmp_path, db_session_factory):
+    engine = None
+    if os.environ.get("TEST_DATABASE_URL"):
+        factory = db_session_factory
+    else:
+        engine = build_engine(f"sqlite:///{tmp_path}/security.db")
+        Base.metadata.create_all(engine)
+        factory = sessionmaker(bind=engine, expire_on_commit=False)
     with factory() as db:
         db.add(User(id=uuid4(), email=REGISTER_PAYLOAD["email"], full_name="Security Test", password_hash=hash_password(REGISTER_PAYLOAD["password"])))
         db.commit()
     yield factory
-    engine.dispose()
+    if engine is not None:
+        engine.dispose()
 
 
 def login_service(factory):

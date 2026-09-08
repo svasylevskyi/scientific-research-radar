@@ -1,0 +1,121 @@
+x-backend: &backend
+  image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a published commit image}
+  env_file: ${RADAR_ENV_FILE:-/etc/radar/development.env}
+  environment: &backend-env
+    DATABASE_URL: postgresql+psycopg://radar:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/radar
+    ENVIRONMENT: production
+    FRONTEND_BASE_URL: https://${PUBLIC_HOST:?Set PUBLIC_HOST}
+    CORS_ORIGINS: '["https://${PUBLIC_HOST}"]'
+    REFRESH_COOKIE_SECURE: 'true'
+    SMTP_HOST: ${SMTP_HOST:-mailpit}
+    SMTP_PORT: ${SMTP_PORT:-1025}
+    SMTP_SECURITY: ${SMTP_SECURITY:-none}
+    SMTP_USERNAME: ${SMTP_USERNAME:-}
+    SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    EMAIL_FROM: ${EMAIL_FROM:-radar@example.com}
+  init: true
+  restart: unless-stopped
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  networks: [data]
+  logging: &logging
+    driver: local
+    options:
+      max-size: '10m'
+      max-file: '3'
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: radar
+      POSTGRES_USER: radar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [data]
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U radar -d radar']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  api:
+    <<: *backend
+    networks:
+      data:
+      proxy:
+        ipv4_address: 172.29.10.3
+    healthcheck:
+      test: [CMD, python, -m, app.ops, ready]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+  research:
+    <<: *backend
+    profiles: [research]
+    environment:
+      <<: *backend-env
+      RADAR_HEARTBEAT_FILE: /tmp/research-heartbeat
+    command: [python, -m, app.radar.worker]
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, python, -m, app.ops, worker-health, research]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+  scheduler:
+    <<: *backend
+    profiles: [scheduled]
+    environment:
+      <<: *backend-env
+      RADAR_HEARTBEAT_FILE: /tmp/scheduler-heartbeat
+    command: [python, -m, app.scheduler.worker]
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, python, -m, app.ops, worker-health, scheduler]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ['127.0.0.1:8025:8025']
+    volumes: [mailpit_data:/data]
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: '500'
+    networks: [data]
+    restart: unless-stopped
+    logging: *logging
+  web:
+    image: ${WEB_IMAGE:?Set WEB_IMAGE to a published commit image}
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?Set PUBLIC_HOST}
+    ports: ['80:80', '443:443']
+    volumes: [caddy_data:/data, caddy_config:/config]
+    networks:
+      proxy:
+        ipv4_address: 172.29.10.2
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+
+networks:
+  data:
+  proxy:
+    ipam:
+      config:
+        - subnet: 172.29.10.0/24
+
+volumes:
+  postgres_data:
+  mailpit_data:
+  caddy_data:
+  caddy_config:

@@ -3,6 +3,7 @@ import logging
 import time
 from urllib.parse import urlsplit
 
+from app.ops import heartbeat
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.scheduler.dispatch import ScheduleDispatcher
@@ -23,15 +24,20 @@ def main():
     delivery = BriefingDeliveryWorker(settings, SessionLocal)
     logger.info("Schedule dispatcher and briefing delivery started")
     while True:
+        healthy = True
         try:
             dispatcher.tick()
         except Exception:
+            healthy = False
             logger.exception("Schedule dispatch tick failed")
         try:
             # One delivery per tick keeps dispatch responsive when mail is slow.
             delivery.run_once()
         except Exception:
+            healthy = False
             logger.exception("Briefing delivery tick failed")
+        if healthy:
+            heartbeat()
         time.sleep(settings.scheduler_poll_seconds)
 
 

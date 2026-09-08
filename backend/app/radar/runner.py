@@ -3,6 +3,8 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from app.ops import heartbeat
+
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -412,6 +414,7 @@ class RadarRunner:
         self.db.commit()
 
     def _renew_lease(self, run: DigestRun) -> None:
+        heartbeat()
         if self.worker_id is not None:
             renewed = self.runs.renew_lease(
                 run_id=run.id,

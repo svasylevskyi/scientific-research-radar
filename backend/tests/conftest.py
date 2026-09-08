@@ -1,11 +1,12 @@
 import os
 import re
+from uuid import uuid4
 
 os.environ.setdefault("ENVIRONMENT", "test")
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -31,16 +32,29 @@ class VerifiedTestClient(TestClient):
 
 @pytest.fixture
 def db_session_factory() -> sessionmaker[Session]:
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    test_url = os.environ.get("TEST_DATABASE_URL")
+    admin_engine = None
+    if test_url:
+        if not test_url.startswith("postgresql+psycopg://"):
+            raise ValueError("TEST_DATABASE_URL must use postgresql+psycopg")
+        schema = "test_" + uuid4().hex
+        admin_engine = create_engine(test_url)
+        with admin_engine.begin() as db:
+            db.execute(text(f'CREATE SCHEMA "{schema}"'))
+        engine = create_engine(test_url, connect_args={"options": f"-csearch_path={schema}"})
+    else:
+        engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+        )
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     yield factory
     Base.metadata.drop_all(engine)
     engine.dispose()
+    if admin_engine:
+        with admin_engine.begin() as db:
+            db.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        admin_engine.dispose()
 
 
 @pytest.fixture

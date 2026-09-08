@@ -12,3 +12,8 @@ frontend/node_modules/
 frontend/dist/
 *.log
 .DS_Store
+
+# Deployment secrets and database dumps
+infra/*.env
+*.dump
+*.dump.sha256
