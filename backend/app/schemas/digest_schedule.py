@@ -1,4 +1,6 @@
-from datetime import timezone
+from datetime import datetime, timezone
+from typing import Literal
+from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -36,3 +38,16 @@ class DigestSchedule(BaseModel):
         if self.ends_at is not None and self.ends_at <= self.starts_at:
             raise ValueError("Schedule end must be after the first digest date and time")
         return self
+
+
+class SchedulePreviewRead(BaseModel):
+    state: Literal["not_scheduled", "scheduled", "due", "waiting_for_run", "waiting_for_allowance", "queued", "running", "ended"]
+    as_of: datetime
+    next_scheduled_at: datetime | None = None
+    upcoming_runs: list[datetime] = Field(default_factory=list)
+    time_zone: str | None = None
+    send_email: bool = False
+    active_run_id: UUID | None = None
+    waiting_digest_id: UUID | None = None
+    allowance_available_at: datetime | None = None
+    exhausted: bool = False

@@ -7,6 +7,7 @@ import type {
   DigestRunListResponse,
   DigestUpdateInput,
   DigestSchedule,
+  SchedulePreview,
 } from "../types/digest";
 import { apiRequest } from "./client";
 
@@ -20,6 +21,9 @@ function listSearch(params: { offset: number; limit: number; ownerId?: string })
 }
 
 export const digestsApi = {
+  schedulePreview(digestId: string): Promise<SchedulePreview> {
+    return apiRequest<SchedulePreview>(`/digests/${digestId}/schedule/preview`);
+  },
   deleteSchedule(digestId: string): Promise<void> {
     return apiRequest<void>(`/digests/${digestId}/schedule`, { method: "DELETE" });
   },

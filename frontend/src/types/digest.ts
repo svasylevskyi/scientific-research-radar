@@ -15,6 +15,19 @@ export interface DigestSchedule {
   time_zone: string;
 }
 
+export interface SchedulePreview {
+  state: "not_scheduled" | "scheduled" | "due" | "waiting_for_run" | "waiting_for_allowance" | "queued" | "running" | "ended";
+  as_of: string;
+  next_scheduled_at: string | null;
+  upcoming_runs: string[];
+  time_zone: string | null;
+  send_email: boolean;
+  active_run_id: string | null;
+  waiting_digest_id: string | null;
+  allowance_available_at: string | null;
+  exhausted: boolean;
+}
+
 export interface DigestInput {
   topic: string;
   description: string | null;

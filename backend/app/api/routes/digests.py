@@ -3,9 +3,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
-from app.api.dependencies import CurrentUser, DbSession
+from app.api.dependencies import CurrentUser, DbSession, AppSettings
 from app.schemas.digest import DigestCreate, DigestListResponse, DigestRead, DigestUpdate
-from app.schemas.digest_schedule import DigestSchedule
+from app.schemas.digest_schedule import DigestSchedule, SchedulePreviewRead
+from app.services.schedule_preview_service import schedule_preview
 from app.services.digest_service import (
     DigestNotFoundError,
     DigestRunActiveError,
@@ -64,6 +65,13 @@ def update_digest(
             owner=current_user, digest_id=digest_id, changes=payload
         )
     )
+
+
+@router.get("/{digest_id}/schedule/preview", response_model=SchedulePreviewRead)
+def preview_digest_schedule(digest_id: UUID, current_user: CurrentUser,
+                            service: DigestServiceDep, db: DbSession, settings: AppSettings):
+    digest = _run(lambda: service.get_owned(owner=current_user, digest_id=digest_id))
+    return schedule_preview(db, settings, digest)
 
 
 @router.put("/{digest_id}/schedule", response_model=DigestRead)
