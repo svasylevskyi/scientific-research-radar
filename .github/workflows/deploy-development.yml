@@ -1,0 +1,79 @@
+name: Deploy development
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'base: account/UI testing; research: Run now enabled; scheduled: recurring runs enabled'
+        type: choice
+        options: [base, research, scheduled]
+        default: base
+permissions:
+  contents: read
+concurrency:
+  group: deploy-development
+  cancel-in-progress: false
+jobs:
+  check-ref:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only deploy main
+        env:
+          REF: ${{ github.ref }}
+        run: test "$REF" = refs/heads/main
+  checks:
+    needs: check-ref
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Build and publish exact commit
+        run: |
+          docker build -t "ghcr.io/${GITHUB_REPOSITORY}-backend:${GITHUB_SHA}" backend
+          docker build -t "ghcr.io/${GITHUB_REPOSITORY}-web:${GITHUB_SHA}" frontend
+          docker push "ghcr.io/${GITHUB_REPOSITORY}-backend:${GITHUB_SHA}"
+          docker push "ghcr.io/${GITHUB_REPOSITORY}-web:${GITHUB_SHA}"
+      - name: Deployment command
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          echo "Images published for $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Run on server from /opt/radar/source:' >> "$GITHUB_STEP_SUMMARY"
+          echo "sudo bash infra/scripts/deploy.sh $GITHUB_SHA $MODE" >> "$GITHUB_STEP_SUMMARY"
+  deploy:
+    needs: publish
+    # Start with scripted SSH from your laptop. Enable only after configuring a
+    # reachable, authenticated deployment path and the GitHub environment below.
+    if: vars.DEV_SSH_DEPLOY_ENABLED == 'true'
+    environment: development
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEV_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEV_SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Request deployment
+        env:
+          HOST: ${{ vars.DEV_SSH_HOST }}
+          USER: ${{ vars.DEV_SSH_USER }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          [[ "$HOST" =~ ^[a-zA-Z0-9.-]+$ && "$USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+            "$USER@$HOST" "deploy $GITHUB_SHA $MODE"
+      - name: Remove deployment key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

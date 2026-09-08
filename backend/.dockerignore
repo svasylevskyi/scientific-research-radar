@@ -1,0 +1,8 @@
+*
+!pyproject.toml
+!app/
+!app/**
+!alembic.ini
+!migrations/
+!migrations/**
+**/__pycache__

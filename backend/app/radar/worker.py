@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.ops import heartbeat
 from app.core.config import Settings, get_settings
 from app.db.session import SessionLocal
 from app.models.digest_run import DigestRunStageType
@@ -64,6 +65,7 @@ class RadarWorker:
     def run_forever(self) -> None:
         logger.info("Radar worker %s started", self.worker_id)
         while True:
+            heartbeat()
             if not self.run_once():
                 time.sleep(self.settings.radar_worker_poll_interval_seconds)
 

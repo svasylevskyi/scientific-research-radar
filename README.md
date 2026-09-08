@@ -238,3 +238,9 @@ Digest responses expose `schedule_exhausted`, derived from the saved dispatch cu
 The schedule panel shows the next date and an expandable Upcoming runs list. It refreshes every five seconds on visible pages and immediately on return to the tab. An actual active scheduled run is displayed as queued/running even if it is the final occurrence. Future dates remain separate from that accepted run. Due dates are not presented as queued until a run record exists; a stopped scheduler may therefore leave a due/waiting state visible. Planned times are not guaranteed execution, completion or delivery times. Shared allowances, other active runs and scheduler/worker availability can delay execution; existing missed-date coalescing and exclusive cutoff rules still apply.
 
 The preview is computed from existing data. No database migration or new dependencies are needed.
+
+## Remote development deployment
+
+The Hetzner/Docker Compose setup, PostgreSQL configuration, manual GitHub release
+workflow, and backup/restore instructions are in [infra/README.md](infra/README.md).
+Start in `base` mode: research and scheduled execution are explicit opt-ins.
