@@ -27,7 +27,7 @@ The API, service, repository, and persistence layers are separate. SQLite is sel
 - Refresh sessions stored as SHA-256 token hashes so raw refresh tokens are not persisted.
 - Automatic access-token renewal after a page reload or one unauthorized API response.
 - Protected `/api/v1/users/me` endpoint and protected React route.
-- Logout revokes the refresh session and clears the cookie.
+- Logout revokes the session immediately, including its access tokens, and clears the cookie.
 - `user` and `admin` roles, checked against the database on every protected request.
 - An automatically bootstrapped, always-active super-admin account.
 - An admin-only, responsive user management panel with account editing, role changes, and confirmed deletion.
@@ -124,7 +124,7 @@ npm run build
 | `POST` | `/api/v1/auth/register/{id}/resend` | Replace the code after the 60-second cooldown |
 | `POST` | `/api/v1/auth/login` | Authenticate and create a session |
 | `POST` | `/api/v1/auth/refresh` | Rotate the refresh token and return a new access token |
-| `POST` | `/api/v1/auth/logout` | Revoke the current refresh session |
+| `POST` | `/api/v1/auth/logout` | Revoke the current session and its access tokens |
 | `GET` | `/api/v1/users/me` | Return the authenticated user |
 | `PATCH` | `/api/v1/users/me` | Update the authenticated user's name; email changes require verification |
 | `GET` | `/api/v1/users/me/email-verification` | Return the current pending email change or null |
@@ -208,8 +208,17 @@ The sign-in page links to `/forgot-password`. `POST /api/v1/auth/forgot-password
 
 Links expire after 30 minutes and are single-use. Only a SHA-256 token hash and a fingerprint of the email/password state are stored. A later request replaces the earlier token; changing the password or confirmed email invalidates it. The `/reset-password` page reads the token from a URL fragment, removes it from history, keeps it in memory only, and submits it in the body of `POST /api/v1/auth/reset-password` with password and password_confirmation. Reopening the email link is required after refreshing the reset page. Viewing the link does not consume it. Do not log request bodies on recovery endpoints.
 
-Successful recovery changes the password, invalidates existing access and refresh tokens, clears pending profile email changes, and sends a best-effort password-change notification. It does not automatically sign in. Profile password changes now also invalidate access tokens immediately. Existing sessions remain valid through the migration until credentials change. Deploy the updated API instances together so older instances cannot continue accepting revoked access tokens.
+Successful recovery changes the password, invalidates existing access and refresh tokens, clears pending profile email changes, and sends a best-effort password-change notification. It does not automatically sign in. Profile password changes now also invalidate access tokens immediately. Legacy access tokens without a session ID must be renewed after the security migration; valid refresh cookies can renew them silently unless the session exceeds its absolute lifetime. Deploy the updated API instances together so older instances cannot continue accepting revoked access tokens.
 
 Database-backed fixed-window request limits: 20 requests per source IP per hour, 1 per email per minute, 5 per email per hour; reset submissions: 30 per source IP per 15 minutes. Throttled recovery requests keep the generic response; throttled reset submissions return 429. IP addresses and email addresses in rate-limit keys are HMAC-hashed, and expired records are cleaned by the API's cleanup loop. Configure trusted proxy forwarding correctly; do not trust arbitrary client-supplied forwarding headers. Add edge request limits for volumetric protection.
 
 SMTP failures do not reveal account existence. Post-response mail tasks are best-effort and are not a durable queue: an API crash may require requesting a new link. Failures are logged without tokens or email bodies. Run `alembic upgrade head` for migration `20260907_0011`, then restart the API. No new dependency or OpenAI call is required.
+
+
+## Session and abuse-control hardening
+
+See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for findings, fixes, default limits, deployment instructions, verification and user-experience impact.
+
+Run `alembic upgrade head` for migration `20260908_0012`, and deploy the API, frontend and scheduler together. Refresh/logout API calls now require `X-Radar-Request: 1`; the frontend supplies it automatically. Browser origins must match configured trusted origins.
+
+Sessions have a default seven-day renewal window and a 30-day absolute lifetime. Role changes and deactivation invalidate existing sessions. Shared database limits cover auth requests, API traffic, and accepted manual/scheduled run starts and retries (default 5/hour and 20/day per user). Rate-limited scheduled runs remain due. Subscription billing quotas remain future work.

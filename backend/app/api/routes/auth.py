@@ -1,8 +1,10 @@
 from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, status
 from sqlalchemy.orm import sessionmaker
+from fastapi.responses import JSONResponse
+from app.services.rate_limit_service import RECOVERY_POLICIES, allowed, enforce
 from app.schemas.password_reset import PasswordRecoveryRequest, PasswordResetRequest
-from app.services.password_recovery_service import allowed, send_recovery, reset_password, notify_password_reset, RECOVERY_MESSAGE
+from app.services.password_recovery_service import send_recovery, reset_password, notify_password_reset, RECOVERY_MESSAGE
 
 from app.api.dependencies import AppSettings, AuthServiceDep, DbSession
 from app.schemas.email_verification import VerificationRead, VerificationCode
@@ -10,6 +12,7 @@ from app.services.email_verification_service import EmailVerificationService
 from app.schemas.auth import AuthResponse, LoginRequest, MessageResponse, RegisterRequest
 from app.services.auth_service import (
     AuthenticationError,
+    RefreshConflict,
     IssuedTokens,
 )
 
@@ -21,11 +24,11 @@ def forgot_password(payload: PasswordRecoveryRequest, request: Request, response
                     tasks: BackgroundTasks, db: DbSession, settings: AppSettings):
     response.headers["Cache-Control"] = "no-store"
     peer = request.client.host if request.client else "unknown"
-    ip_ok = allowed(db, settings, "request-ip", peer, 20, 3600)
+    ip_ok = allowed(db, settings, "request-ip", peer, *RECOVERY_POLICIES["request-ip"])
     if not ip_ok:
         return MessageResponse(message=RECOVERY_MESSAGE)
-    minute_ok = allowed(db, settings, "request-email-minute", str(payload.email), 1, 60)
-    hour_ok = allowed(db, settings, "request-email-hour", str(payload.email), 5, 3600)
+    minute_ok = allowed(db, settings, "request-email-minute", str(payload.email), *RECOVERY_POLICIES["request-email-minute"])
+    hour_ok = allowed(db, settings, "request-email-hour", str(payload.email), *RECOVERY_POLICIES["request-email-hour"])
     if ip_ok and minute_ok and hour_ok:
         tasks.add_task(send_recovery, sessionmaker(bind=db.get_bind()), settings, str(payload.email))
     return MessageResponse(message=RECOVERY_MESSAGE)
@@ -36,8 +39,7 @@ def finish_password_reset(payload: PasswordResetRequest, request: Request, respo
                           tasks: BackgroundTasks, db: DbSession, settings: AppSettings):
     response.headers["Cache-Control"] = "no-store"
     peer = request.client.host if request.client else "unknown"
-    if not allowed(db, settings, "reset-ip", peer, 30, 900):
-        raise HTTPException(429, "Too many attempts. Please try again later.")
+    enforce(db, settings, "reset-ip", peer, *RECOVERY_POLICIES["reset-ip"])
     email = reset_password(db, payload.token, payload.password)
     _clear_refresh_cookie(response, settings)
     tasks.add_task(notify_password_reset, settings, email)
@@ -96,9 +98,12 @@ def refresh(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No active session")
     try:
         issued = auth.refresh(refresh_token)
+    except RefreshConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc), headers={"Retry-After": "1"}) from exc
     except AuthenticationError as exc:
-        _clear_refresh_cookie(response, settings)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+        rejected = JSONResponse(status_code=401, content={"detail": str(exc)})
+        _clear_refresh_cookie(rejected, settings)
+        return rejected
     _set_refresh_cookie(response, issued, settings)
     return _auth_response(issued)
 

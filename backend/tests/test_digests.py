@@ -237,6 +237,8 @@ def test_regular_admin_cannot_access_super_admin_digests(
         json=_digest_payload(topic="Super-admin digest"),
         headers=super_admin_access,
     ).json()
+    # Role changes revoke the old session; authenticate with the new permissions.
+    admin = client.post("/api/v1/auth/login", json={"email": "admin.member@example.com", "password": PASSWORD})
     admin_access = _authorization(admin)
 
     filtered = client.get(

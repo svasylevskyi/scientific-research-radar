@@ -17,6 +17,7 @@ from app.services.super_admin_service import ensure_super_admin
 from app.services.email_service import EmailDeliveryError
 from app.services.email_verification_service import VerificationError, cleanup_expired
 from app.services.password_recovery_service import cleanup_recovery
+from app.services.rate_limit_service import RateLimitExceeded, cleanup_rate_limits
 
 settings = get_settings()
 
@@ -26,6 +27,7 @@ async def verification_cleanup_loop():
         with SessionLocal() as db:
             cleanup_expired(db)
             cleanup_recovery(db)
+            cleanup_rate_limits(db)
     while True:
         try:
             await asyncio.to_thread(clean)
@@ -67,7 +69,8 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Radar-Request"],
+    expose_headers=["Retry-After"],
 )
 
 app.include_router(api_router, prefix="/api/v1")
@@ -75,7 +78,7 @@ app.include_router(api_router, prefix="/api/v1")
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(request, exc):
-    if request.url.path in ("/api/v1/auth/forgot-password", "/api/v1/auth/reset-password"):
+    if request.url.path.startswith(("/api/v1/auth/", "/api/v1/users/me")):
         return JSONResponse(status_code=422, headers={"Cache-Control": "no-store"}, content={
             "detail": [{"loc": error["loc"], "msg": error["msg"], "type": error["type"]} for error in exc.errors()]
         })
@@ -95,3 +98,17 @@ async def email_error(_request, exc):
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_error(_request, exc):
+    return JSONResponse(status_code=429, headers={"Retry-After": str(exc.retry_after), "Cache-Control": "no-store"},
+                        content={"detail": str(exc)})
+
+
+@app.middleware("http")
+async def private_response_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/v1/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response

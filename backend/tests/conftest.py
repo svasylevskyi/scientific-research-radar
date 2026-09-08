@@ -52,7 +52,7 @@ def client(db_session_factory: sessionmaker[Session], monkeypatch) -> TestClient
     app.dependency_overrides[get_db] = override_get_db
     outbox = []
     monkeypatch.setattr(EmailService, "send", lambda self, message: outbox.append(message))
-    with VerifiedTestClient(app) as test_client:
+    with VerifiedTestClient(app, headers={"X-Radar-Request": "1"}) as test_client:
         test_client.outbox = outbox
         yield test_client
     app.dependency_overrides.clear()

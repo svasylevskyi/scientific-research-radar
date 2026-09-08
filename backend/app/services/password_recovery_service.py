@@ -1,19 +1,16 @@
 from datetime import datetime, timedelta, timezone
 from html import escape
-import hashlib
-import hmac
 import logging
 import secrets
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException
 from sqlalchemy import delete, select, update
-from sqlalchemy.exc import IntegrityError
 
 from app.core.security import hash_password, hash_token
 from app.models.user import User
 from app.models.email_verification import EmailVerification
-from app.models.password_reset import PasswordReset, RecoveryRateLimit
+from app.models.password_reset import PasswordReset
 from app.repositories.auth_session_repository import AuthSessionRepository
 from app.services.email_service import EmailService, OutgoingEmail
 
@@ -21,28 +18,6 @@ logger = logging.getLogger(__name__)
 RECOVERY_MESSAGE = "If an active account uses this email, we will send a password reset link. Check your inbox and spam folder."
 INVALID_LINK = "This reset link is invalid or expired. Please request a new one."
 
-
-def allowed(db, settings, scope, subject, limit, seconds):
-    now = datetime.now(timezone.utc)
-    bucket = int(now.timestamp()) // seconds
-    key = hmac.new(settings.jwt_secret.encode(), f"{scope}:{subject}:{bucket}".encode(), hashlib.sha256).hexdigest()
-    statement = update(RecoveryRateLimit).where(RecoveryRateLimit.key == key, RecoveryRateLimit.count < limit).values(count=RecoveryRateLimit.count + 1)
-    if db.execute(statement).rowcount:
-        db.commit()
-        return True
-    if db.get(RecoveryRateLimit, key):
-        db.commit()
-        return False
-    try:
-        with db.begin_nested():
-            db.add(RecoveryRateLimit(key=key, count=1, expires_at=now + timedelta(seconds=seconds)))
-            db.flush()
-        db.commit()
-        return True
-    except IntegrityError:
-        accepted = db.execute(statement).rowcount == 1
-        db.commit()
-        return accepted
 
 
 def fingerprint(user):
@@ -113,5 +88,4 @@ def notify_password_reset(settings, email):
 def cleanup_recovery(db):
     now = datetime.now(timezone.utc)
     db.execute(delete(PasswordReset).where(PasswordReset.expires_at <= now))
-    db.execute(delete(RecoveryRateLimit).where(RecoveryRateLimit.expires_at <= now))
     db.commit()

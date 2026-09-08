@@ -149,7 +149,7 @@ export function ProfilePage() {
 
           <Paper component="form" onSubmit={changePassword} variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
             <Typography variant="h6" sx={{ mb: 0.75 }}>Change password</Typography>
-            <Typography color="text.secondary" sx={{ mb: 2.5 }}>You will be signed out here, and refresh sessions on other devices will be revoked.</Typography>
+            <Typography color="text.secondary" sx={{ mb: 2.5 }}>You will be signed out on all devices after changing your password.</Typography>
             <Stack spacing={2.25}>
               {passwordError && <Alert severity="error">{passwordError}</Alert>}
               <TextField

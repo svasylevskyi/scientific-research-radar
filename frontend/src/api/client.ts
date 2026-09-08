@@ -4,6 +4,24 @@ const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 export const AUTH_EXPIRED_EVENT = "research-radar:auth-expired";
 
 let accessToken: string | null = null;
+let sessionGeneration = 0;
+const sessionChannel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("radar-session") : null;
+sessionChannel?.addEventListener("message", (event) => {
+  if (event.data === "signed-out") {
+    setAccessToken(null);
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
+});
+
+export function announceSignOut(): void {
+  setAccessToken(null);
+  sessionChannel?.postMessage("signed-out");
+}
+
+export async function withSessionLock<T>(operation: () => Promise<T>): Promise<T> {
+  return navigator.locks ? await navigator.locks.request("radar-session", operation) : operation();
+}
+
 let refreshPromise: Promise<AuthResponse> | null = null;
 
 interface RequestOptions extends Omit<RequestInit, "body"> {
@@ -16,6 +34,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly retryAfterSeconds: number | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -23,6 +42,7 @@ export class ApiError extends Error {
 }
 
 export function setAccessToken(token: string | null): void {
+  sessionGeneration += 1;
   accessToken = token;
 }
 
@@ -36,6 +56,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   } = options;
 
   const headers = new Headers(suppliedHeaders);
+  headers.set("X-Radar-Request", "1");
   if (body !== undefined) {
     headers.set("Content-Type", "application/json");
   }
@@ -54,7 +75,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     try {
       await refreshAccessToken();
       return apiRequest<T>(path, { ...options, retryAfterRefresh: false });
-    } catch {
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 401) throw error;
       setAccessToken(null);
     }
   }
@@ -65,7 +87,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   if (!response.ok) {
-    throw new ApiError(await readErrorMessage(response), response.status);
+    const retryAfter = Number(response.headers.get("Retry-After"));
+    throw new ApiError(await readErrorMessage(response), response.status, retryAfter > 0 ? retryAfter : null);
   }
 
   if (response.status === 204) {
@@ -76,20 +99,30 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
 export function refreshAccessToken(): Promise<AuthResponse> {
   if (!refreshPromise) {
-    refreshPromise = apiRequest<AuthResponse>("/auth/refresh", {
-      method: "POST",
-      authenticate: false,
-      retryAfterRefresh: false,
-    })
-      .then((result) => {
-        setAccessToken(result.access_token);
-        return result;
-      })
-      .finally(() => {
-        refreshPromise = null;
-      });
+    const generation = sessionGeneration;
+    refreshPromise = withSessionLock(async () => {
+      if (generation !== sessionGeneration) throw new ApiError("Session changed. Please try again.", 409);
+      let result: AuthResponse;
+      try {
+        result = await requestRefresh();
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 409) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (generation !== sessionGeneration) throw error;
+        result = await requestRefresh();
+      }
+      if (generation !== sessionGeneration) throw new ApiError("Session changed. Please try again.", 409);
+      accessToken = result.access_token;
+      return result;
+    }).finally(() => { refreshPromise = null; });
   }
   return refreshPromise;
+}
+
+function requestRefresh(): Promise<AuthResponse> {
+  return apiRequest<AuthResponse>("/auth/refresh", {
+    method: "POST", authenticate: false, retryAfterRefresh: false,
+  });
 }
 
 async function readErrorMessage(response: Response): Promise<string> {

@@ -1,4 +1,7 @@
 from typing import Annotated
+from datetime import UTC, datetime, timedelta
+from app.models.auth_session import AuthSession
+from app.services.auth_service import _as_utc
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -46,6 +49,11 @@ def get_current_user(
 
     user = UserRepository(db).get_by_id(claims.subject)
     if user is None or not user.is_active or user.auth_version != claims.auth_version:
+        raise unauthorized
+    session = db.get(AuthSession, claims.session_id) if claims.session_id else None
+    if (session is None or session.user_id != user.id or session.revoked_at is not None
+            or _as_utc(session.expires_at) <= datetime.now(UTC)
+            or _as_utc(session.created_at) + timedelta(days=settings.session_absolute_days) <= datetime.now(UTC)):
         raise unauthorized
     return user
 
