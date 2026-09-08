@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from app.api.security import guard_request
 
 from app.api.routes import admin_digests, admin_users, auth, digest_runs, digests, users
 
-api_router = APIRouter()
+api_router = APIRouter(dependencies=[Depends(guard_request)])
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(digests.router, prefix="/digests", tags=["digests"])

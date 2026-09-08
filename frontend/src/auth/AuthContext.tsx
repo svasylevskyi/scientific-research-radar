@@ -9,13 +9,15 @@ import {
 } from "react";
 
 import { authApi } from "../api/auth";
-import { AUTH_EXPIRED_EVENT } from "../api/client";
+import { ApiError, AUTH_EXPIRED_EVENT } from "../api/client";
 import type { LoginInput, RegisterInput, User } from "../types/auth";
 import type { EmailVerification } from "../components/EmailVerificationForm";
 
 interface AuthContextValue {
   user: User | null;
   isInitializing: boolean;
+  initializationError: string | null;
+  retryInitialization: () => void;
   login: (input: LoginInput) => Promise<void>;
   register: (input: RegisterInput) => Promise<EmailVerification>;
   confirmRegistration: (id: string, code: string) => Promise<void>;
@@ -28,16 +30,23 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<User | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
+  const [initializationAttempt, setInitializationAttempt] = useState(0);
+  const retryInitialization = useCallback(() => setInitializationAttempt((value) => value + 1), []);
 
   useEffect(() => {
     let active = true;
+    setIsInitializing(true);
+    setInitializationError(null);
     authApi
       .refresh()
       .then((session) => {
         if (active) setUser(session.user);
       })
-      .catch(() => {
-        if (active) setUser(null);
+      .catch((error) => {
+        if (!active) return;
+        if (error instanceof ApiError && error.status === 401) setUser(null);
+        else setInitializationError(error instanceof Error ? error.message : "Could not restore your session. Please retry.");
       })
       .finally(() => {
         if (active) setIsInitializing(false);
@@ -45,7 +54,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [initializationAttempt]);
 
   useEffect(() => {
     const clearExpiredSession = () => setUser(null);
@@ -55,6 +64,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const login = useCallback(async (input: LoginInput) => {
     const session = await authApi.login(input);
+    setInitializationError(null);
     setUser(session.user);
   }, []);
 
@@ -64,6 +74,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const confirmRegistration = useCallback(async (id: string, code: string) => {
     const session = await authApi.confirmRegistration(id, code);
+    setInitializationError(null);
     setUser(session.user);
   }, []);
 
@@ -80,8 +91,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, isInitializing, login, register, confirmRegistration, logout, refreshUser }),
-    [user, isInitializing, login, register, confirmRegistration, logout, refreshUser],
+    () => ({ user, isInitializing, initializationError, retryInitialization, login, register, confirmRegistration, logout, refreshUser }),
+    [user, isInitializing, initializationError, retryInitialization, login, register, confirmRegistration, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

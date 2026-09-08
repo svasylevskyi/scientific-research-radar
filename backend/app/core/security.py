@@ -45,11 +45,12 @@ def token_hash_matches(token: str, expected_hash: str) -> bool:
     return secrets.compare_digest(hash_token(token), expected_hash)
 
 
-def create_access_token(user_id: UUID, settings: Settings, auth_version: int = 0) -> tuple[str, datetime]:
+def create_access_token(user_id: UUID, settings: Settings, auth_version: int = 0, session_id: UUID | None = None) -> tuple[str, datetime]:
     expires_at = datetime.now(UTC) + timedelta(minutes=settings.access_token_minutes)
     token = _encode_token(
         user_id=user_id,
         token_type="access",
+        session_id=session_id,
         auth_version=auth_version,
         expires_at=expires_at,
         settings=settings,
@@ -62,8 +63,9 @@ def create_refresh_token(
     session_id: UUID,
     settings: Settings,
     auth_version: int = 0,
+    expires_at: datetime | None = None,
 ) -> tuple[str, datetime]:
-    expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_days)
+    expires_at = expires_at or datetime.now(UTC) + timedelta(days=settings.refresh_token_days)
     token = _encode_token(
         user_id=user_id,
         token_type="refresh",

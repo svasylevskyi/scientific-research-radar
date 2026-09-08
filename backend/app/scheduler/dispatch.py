@@ -11,6 +11,7 @@ from app.radar.prompt_builder import RadarPromptBuilder
 from app.radar.runner import RadarRunner, RadarRunAlreadyActiveError
 from app.schemas.digest_schedule import DigestSchedule
 from app.scheduler.recurrence import around, utc
+from app.services.rate_limit_service import RateLimitExceeded
 
 
 class ScheduleDispatcher:
@@ -53,7 +54,7 @@ class ScheduleDispatcher:
                     db.commit()
                     continue
                 try:
-                    run = RadarRunner(db, client=self.client, prompt_builder=RadarPromptBuilder(),
+                    run = RadarRunner(db, settings=self.settings, client=self.client, prompt_builder=RadarPromptBuilder(),
                         history_limit=self.settings.radar_history_runs,
                         summary_batch_size=self.settings.openai_radar_summary_batch_size,
                         reasoning_efforts={}).start_digest(
@@ -63,7 +64,7 @@ class ScheduleDispatcher:
                         db.add(DigestEmailDelivery(run_id=run.id, next_attempt_at=now))
                     db.commit()
                     queued += 1
-                except (RadarRunAlreadyActiveError, IntegrityError):
+                except (RadarRunAlreadyActiveError, RateLimitExceeded, IntegrityError):
                     # Keep the occurrence due until this user's other run finishes.
                     db.rollback()
         return queued

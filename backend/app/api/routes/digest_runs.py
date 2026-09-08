@@ -38,6 +38,7 @@ def get_radar_runner(db: DbSession, settings: AppSettings) -> RadarRunner:
     return RadarRunner(
         db,
         client=client,
+        settings=settings,
         prompt_builder=RadarPromptBuilder(),
         history_limit=settings.radar_history_runs,
         summary_batch_size=settings.openai_radar_summary_batch_size,

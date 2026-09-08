@@ -72,9 +72,11 @@ class AdminUserService:
             if existing is not None and existing.id != target.id:
                 raise UserEmailConflictError("An account with this email already exists")
 
+        identity_changed = email is not None and email != target.email
         for field, value in values.items():
             setattr(target, field, value)
-        if values.get("is_active") is False:
+        if values.get("is_active") is False or identity_changed:
+            target.auth_version += 1
             self.sessions.revoke_all_for_user(target.id)
 
         return self._commit(target)
@@ -85,6 +87,9 @@ class AdminUserService:
             raise AdminActionForbiddenError("The super-admin cannot be demoted")
         if role != UserRole.ADMIN and target.id == actor.id:
             raise AdminActionForbiddenError("Administrators cannot demote their own account")
+        if target.role != role:
+            target.auth_version += 1
+            self.sessions.revoke_all_for_user(target.id)
         target.role = role
         return self._commit(target)
 

@@ -3,6 +3,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,6 +26,8 @@ from app.radar.contracts import (
 )
 from app.radar.prompt_builder import RadarPromptBuilder
 from app.schemas.digest import DigestRead
+from app.core.config import get_settings
+from app.services.rate_limit_service import enforce
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +56,9 @@ class RadarRunner:
         reasoning_efforts: dict[DigestRunStageType, str],
         worker_id: str | None = None,
         lease_seconds: int = 60,
+        settings=None,
     ) -> None:
+        self.settings = settings or get_settings()
         self.db = db
         self.client = client
         self.prompt_builder = prompt_builder
@@ -77,6 +82,7 @@ class RadarRunner:
                 "Wait for it to finish before starting a new run."
             )
 
+        self._reserve_run_budget(owner_id)
         digest_snapshot = DigestRead.model_validate(digest).model_dump(
             mode="json", exclude={"schedule", "schedule_next_at"}
         )
@@ -135,6 +141,13 @@ class RadarRunner:
                 "Another digest run is already in progress for your account. "
                 "Wait for it to finish before retrying this run."
             )
+        self._reserve_run_budget(owner_id)
+        claimed = self.db.execute(update(DigestRun).where(
+            DigestRun.id == run.id, DigestRun.status == DigestRunStatus.FAILED
+        ).values(status=DigestRunStatus.QUEUED), execution_options={"synchronize_session": False})
+        if claimed.rowcount != 1:
+            self.db.rollback()
+            raise RadarRunNotRetryableError("This run was already retried. Refresh its progress.")
         self.runs.requeue_failed(run=run)
         try:
             self.db.commit()
@@ -144,6 +157,11 @@ class RadarRunner:
                 "Another digest run is already in progress for your account."
             ) from exc
         return self.runs.get(run_id) or run
+
+    def _reserve_run_budget(self, owner_id):
+        # Count accepted starts/retries atomically with enqueue. Failed enqueue rolls back.
+        enforce(self.db, self.settings, "radar-hour", str(owner_id), self.settings.radar_runs_per_hour, 3600, commit=False)
+        enforce(self.db, self.settings, "radar-day", str(owner_id), self.settings.radar_runs_per_day, 86400, commit=False)
 
     def execute_run(self, *, run_id: UUID) -> None:
         run = self.runs.get(run_id)

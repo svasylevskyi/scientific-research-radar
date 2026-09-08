@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     jwt_issuer: str = "scientific-research-radar"
     jwt_audience: str = "scientific-research-radar-web"
     access_token_minutes: int = Field(default=15, ge=1, le=1440)
+    session_absolute_days: int = Field(default=30, ge=1, le=90)
+    refresh_race_grace_seconds: int = Field(default=10, ge=1, le=30)
+    radar_runs_per_hour: int = Field(default=5, ge=1, le=100)
+    radar_runs_per_day: int = Field(default=20, ge=1, le=1000)
     refresh_token_days: int = Field(default=7, ge=1, le=90)
 
     refresh_cookie_name: str = "research_radar_refresh"

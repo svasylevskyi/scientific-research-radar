@@ -123,7 +123,7 @@ def test_reset_rate_limit_and_request_ip_budget(client, db_session_factory):
     for index in range(21):
         assert client.post("/api/v1/auth/forgot-password", json={"email": f"unknown{index}@example.com"}).status_code == 202
     with db_session_factory() as db:
-        assert len(list(db.scalars(select(RecoveryRateLimit)))) == 41
+        assert len(list(db.scalars(select(RecoveryRateLimit)))) == 42  # Includes the shared API-IP bucket.
     for _ in range(30):
         assert reset(client, "x" * 43).status_code == 400
     assert reset(client, "x" * 43).status_code == 429

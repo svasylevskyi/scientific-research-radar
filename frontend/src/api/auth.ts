@@ -1,4 +1,4 @@
-import { apiRequest, refreshAccessToken, setAccessToken } from "./client";
+import { apiRequest, refreshAccessToken, setAccessToken, withSessionLock, announceSignOut } from "./client";
 import type { AuthResponse, LoginInput, RegisterInput, User } from "../types/auth";
 import type { EmailVerification } from "../components/EmailVerificationForm";
 
@@ -30,19 +30,21 @@ export const authApi = {
   },
 
   async confirmRegistration(id: string, code: string): Promise<AuthResponse> {
-    return acceptSession(await apiRequest<AuthResponse>(`/auth/register/${id}/confirm`, {
+    return withSessionLock(async () => acceptSession(await apiRequest<AuthResponse>(`/auth/register/${id}/confirm`, {
       method: "POST", body: { code }, authenticate: false, retryAfterRefresh: false,
-    }));
+    })));
   },
 
   async login(input: LoginInput): Promise<AuthResponse> {
-    const result = await apiRequest<AuthResponse>("/auth/login", {
-      method: "POST",
-      body: input,
-      authenticate: false,
-      retryAfterRefresh: false,
+    return withSessionLock(async () => {
+      const result = await apiRequest<AuthResponse>("/auth/login", {
+        method: "POST",
+        body: input,
+        authenticate: false,
+        retryAfterRefresh: false,
+      });
+      return acceptSession(result);
     });
-    return acceptSession(result);
   },
 
   async refresh(): Promise<AuthResponse> {
@@ -51,13 +53,13 @@ export const authApi = {
 
   async logout(): Promise<void> {
     try {
-      await apiRequest<{ message: string }>("/auth/logout", {
+      await withSessionLock(() => apiRequest<{ message: string }>("/auth/logout", {
         method: "POST",
         authenticate: false,
         retryAfterRefresh: false,
-      });
+      }));
     } finally {
-      setAccessToken(null);
+      announceSignOut();
     }
   },
 

@@ -31,10 +31,6 @@ class AuthSessionRepository:
         self.db.add(auth_session)
         return auth_session
 
-    def rotate(self, auth_session: AuthSession, *, token_hash: str, expires_at: datetime) -> None:
-        auth_session.token_hash = token_hash
-        auth_session.expires_at = expires_at
-
     def revoke(self, auth_session: AuthSession) -> None:
         if auth_session.revoked_at is None:
             auth_session.revoked_at = datetime.now(UTC)

@@ -1,3 +1,5 @@
+from sqlalchemy import update, delete
+from app.models.email_verification import EmailVerification
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -49,7 +51,14 @@ class UserProfileService:
         if verify_password(new_password, user.password_hash):
             raise PasswordReuseError("New password must be different from the current password")
 
-        user.password_hash = hash_password(new_password)
-        user.auth_version += 1
+        changed = self.db.execute(update(User).where(
+            User.id == user.id, User.password_hash == user.password_hash,
+            User.auth_version == user.auth_version, User.is_active.is_(True)
+        ).values(password_hash=hash_password(new_password), auth_version=User.auth_version + 1),
+            execution_options={"synchronize_session": False})
+        if changed.rowcount != 1:
+            self.db.rollback()
+            raise CurrentPasswordInvalidError("Your account changed. Please sign in again.")
+        self.db.execute(delete(EmailVerification).where(EmailVerification.user_id == user.id))
         self.sessions.revoke_all_for_user(user.id)
         self.db.commit()
