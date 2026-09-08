@@ -73,3 +73,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build images and test stack, backup, and restore
         run: bash infra/scripts/ci-smoke.sh
+      - name: Save verified images for publication
+        if: github.event_name == 'workflow_dispatch'
+        run: docker save radar-ci-backend radar-ci-web | gzip > "$RUNNER_TEMP/radar-images.tar.gz"
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: verified-images
+          path: ${{ runner.temp }}/radar-images.tar.gz
+          retention-days: 1

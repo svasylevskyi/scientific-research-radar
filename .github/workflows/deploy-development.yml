@@ -30,15 +30,19 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-images
+          path: ${{ runner.temp }}/verified-images
       - name: Login to GHCR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-      - name: Build and publish exact commit
+      - name: Publish verified images for exact commit
         run: |
-          docker build -t "ghcr.io/${GITHUB_REPOSITORY}-backend:${GITHUB_SHA}" backend
-          docker build -t "ghcr.io/${GITHUB_REPOSITORY}-web:${GITHUB_SHA}" frontend
+          gunzip -c "$RUNNER_TEMP/verified-images/radar-images.tar.gz" | docker load
+          docker tag radar-ci-backend "ghcr.io/${GITHUB_REPOSITORY}-backend:${GITHUB_SHA}"
+          docker tag radar-ci-web "ghcr.io/${GITHUB_REPOSITORY}-web:${GITHUB_SHA}"
           docker push "ghcr.io/${GITHUB_REPOSITORY}-backend:${GITHUB_SHA}"
           docker push "ghcr.io/${GITHUB_REPOSITORY}-web:${GITHUB_SHA}"
       - name: Deployment command
@@ -67,13 +71,13 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
       - name: Request deployment
         env:
-          HOST: ${{ vars.DEV_SSH_HOST }}
-          USER: ${{ vars.DEV_SSH_USER }}
+          DEPLOY_HOST: ${{ vars.DEV_SSH_HOST }}
+          DEPLOY_USER: ${{ vars.DEV_SSH_USER }}
           MODE: ${{ inputs.mode }}
         run: |
-          [[ "$HOST" =~ ^[a-zA-Z0-9.-]+$ && "$USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ && "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
-            "$USER@$HOST" "deploy $GITHUB_SHA $MODE"
+            "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA $MODE"
       - name: Remove deployment key
         if: always()
         run: rm -f ~/.ssh/id_ed25519

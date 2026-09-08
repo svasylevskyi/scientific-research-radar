@@ -45,7 +45,10 @@ services:
       retries: 20
   api:
     <<: *backend
-    networks: [data, proxy]
+    networks:
+      data:
+      proxy:
+        ipv4_address: 172.29.10.3
     healthcheck:
       test: [CMD, python, -m, app.ops, ready]
       interval: 15s

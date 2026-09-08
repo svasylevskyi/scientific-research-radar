@@ -13,6 +13,12 @@ def heartbeat() -> None:
 
 def main() -> None:
     command = sys.argv[1]
+    if command == "configuration":
+        from app.core.config import get_settings
+        settings = get_settings()
+        if sys.argv[2] != "base" and not settings.openai_api_key:
+            raise SystemExit("Set OPENAI_API_KEY before enabling research or schedules")
+        return
     if command == "worker-health":
         age = time.time() - Path(os.environ["RADAR_HEARTBEAT_FILE"]).stat().st_mtime
         from app.core.config import get_settings

@@ -15,6 +15,7 @@ install -d -m 750 "$RELEASE"
 git -C "$SOURCE" archive "$TARGET_SHA" | tar -x -C "$RELEASE"
 dc config --quiet
 dc pull "${SERVICES[@]}"
+dc run --rm --no-deps -T api python -m app.ops configuration "$TARGET_MODE"
 if [[ -f $STATE ]]; then
   load_release
   # Block new manual and scheduled enqueues before checking active work.
