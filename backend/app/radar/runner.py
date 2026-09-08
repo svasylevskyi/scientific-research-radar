@@ -84,7 +84,7 @@ class RadarRunner:
 
         self._reserve_run_budget(owner_id)
         digest_snapshot = DigestRead.model_validate(digest).model_dump(
-            mode="json", exclude={"schedule", "schedule_next_at"}
+            mode="json", exclude={"schedule", "schedule_next_at", "schedule_exhausted"}
         )
         if scheduled_for is not None:
             from zoneinfo import ZoneInfo

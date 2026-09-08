@@ -1,7 +1,7 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from app.models.digest import DigestFrequency, TargetAudience
 from app.schemas.digest_schedule import DigestSchedule
@@ -159,6 +159,16 @@ class DigestRead(BaseModel):
     maximum_papers: int
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def schedule_exhausted(self) -> bool:
+        # Dispatch advances the cursor before execution. A null cursor means even
+        # the next recurrence is beyond the exclusive end, not just "not running".
+        return self.schedule is not None and self.schedule.ends_at is not None and (
+            self.schedule_next_at is None
+            or (self.schedule.ends_at is not None and self.schedule.ends_at <= datetime.now(timezone.utc))
+        )
 
 
 class DigestListResponse(BaseModel):

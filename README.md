@@ -222,3 +222,10 @@ See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for findings, fixes, default limits
 Run `alembic upgrade head` for migration `20260908_0012`, and deploy the API, frontend and scheduler together. Refresh/logout API calls now require `X-Radar-Request: 1`; the frontend supplies it automatically. Browser origins must match configured trusted origins.
 
 Sessions have a default seven-day renewal window and a 30-day absolute lifetime. Role changes and deactivation invalidate existing sessions. Shared database limits cover auth requests, API traffic, and accepted manual/scheduled run starts and retries (default 5/hour and 20/day per user). Rate-limited scheduled runs remain due. Subscription billing quotas remain future work.
+
+
+## Active-run and schedule awareness
+
+Digest details checks for an account-wide active run every five seconds while idle and every 2.5 seconds during a run. Polling pauses in hidden tabs and refreshes immediately on focus/visibility return. An observed scheduled run disables Run now (including an open confirmation) for that user; the existing server-side conflict check remains the final safeguard between polls.
+
+Digest responses expose `schedule_exhausted`, derived from the saved dispatch cursor and exclusive cutoff. Once the last scheduled occurrence has been dispatched, no next occurrence remains, even if the cutoff is still in the future. The schedule details then show a message suggesting an update/extension or deletion; an already accepted run continues. Expired schedules also show the message when the dispatcher has not yet cleared a stale cursor. A deferred occurrence before its cutoff remains pending, not exhausted. Extending or deleting the schedule refreshes this state immediately. The field is excluded from LLM prompt snapshots, and no database migration is needed.

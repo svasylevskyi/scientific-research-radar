@@ -4,7 +4,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { ApiError } from "../api/client";
 import { digestsApi } from "../api/digests";
 import { useAuth } from "../auth/AuthContext";
-import type { DigestFrequency, DigestSchedule } from "../types/digest";
+import type { Digest, DigestFrequency, DigestSchedule } from "../types/digest";
 
 const frequencies: DigestFrequency[] = ["daily", "weekly", "monthly", "quarterly"];
 const label = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
@@ -21,7 +21,7 @@ function describeDate(value: string, timeZone: string) {
 function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
   digestId: string;
   schedule: DigestSchedule | null;
-  onSaved: (schedule: DigestSchedule | null) => void;
+  onSaved: (digest: Digest | null) => void;
   onCancel: () => void;
 }) {
   const [frequency, setFrequency] = useState<DigestFrequency>(schedule?.frequency ?? "weekly");
@@ -54,7 +54,7 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
       const saved = await digestsApi.saveSchedule(digestId, {
         frequency, starts_at: start.toISOString(), ends_at: end?.toISOString() ?? null, time_zone: timeZone, send_email: sendEmail,
       });
-      onSaved(saved.schedule!);
+      onSaved(saved);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "Could not save the schedule. Please try again.");
       setBusy(false);
@@ -108,11 +108,12 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
   );
 }
 
-export function DigestScheduleControl({ digestId, schedule, onSaved, runButton }: {
+export function DigestScheduleControl({ digestId, schedule, exhausted, onSaved, runButton }: {
   runButton: ReactNode;
+  exhausted: boolean;
   digestId: string;
   schedule: DigestSchedule | null;
-  onSaved: (schedule: DigestSchedule | null) => void;
+  onSaved: (digest: Digest | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
   return (
@@ -125,7 +126,10 @@ export function DigestScheduleControl({ digestId, schedule, onSaved, runButton }
         </Button>
       </Stack>
       <Box sx={{ mt: 2 }}>
-        {!editing && (schedule ? <Box>
+        {!editing && (schedule ? exhausted ? <Alert severity="info">
+          <Typography variant="body2" fontWeight={700}>No more runs are scheduled.</Typography>
+          <Typography variant="body2">The next recurring date would reach or pass this schedule’s end date. Update or extend the schedule to continue automatic runs, or delete it. Any run already in progress will continue.</Typography>
+        </Alert> : <Box>
           <Typography variant="body2" fontWeight={700}>{label(schedule.frequency)} · Schedule saved</Typography>
           <Typography variant="body2" color="text.secondary">
             First digest: {describeDate(schedule.starts_at, schedule.time_zone)}. {schedule.ends_at ? `Stop before: ${describeDate(schedule.ends_at, schedule.time_zone)}.` : "No end date."} Time zone: {schedule.time_zone}.
