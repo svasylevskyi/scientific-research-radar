@@ -229,3 +229,12 @@ Sessions have a default seven-day renewal window and a 30-day absolute lifetime.
 Digest details checks for an account-wide active run every five seconds while idle and every 2.5 seconds during a run. Polling pauses in hidden tabs and refreshes immediately on focus/visibility return. An observed scheduled run disables Run now (including an open confirmation) for that user; the existing server-side conflict check remains the final safeguard between polls.
 
 Digest responses expose `schedule_exhausted`, derived from the saved dispatch cursor and exclusive cutoff. Once the last scheduled occurrence has been dispatched, no next occurrence remains, even if the cutoff is still in the future. The schedule details then show a message suggesting an update/extension or deletion; an already accepted run continues. Expired schedules also show the message when the dispatcher has not yet cleared a stale cursor. A deferred occurrence before its cutoff remains pending, not exhausted. Extending or deleting the schedule refreshes this state immediately. The field is excluded from LLM prompt snapshots, and no database migration is needed.
+
+
+## Upcoming scheduled runs
+
+`GET /api/v1/digests/{digest_id}/schedule/preview` is owner-scoped and returns the next three planned occurrences, the schedule time zone and email setting, and an observed state: scheduled, due, waiting for another run, waiting for usage allowance, queued, running, or ended (or not scheduled). It uses the same recurrence and missed-occurrence coalescing as the dispatcher, and reads the same hourly/daily run-allowance windows without incrementing them. Merely viewing a preview does not enqueue runs or contact OpenAI.
+
+The schedule panel shows the next date and an expandable Upcoming runs list. It refreshes every five seconds on visible pages and immediately on return to the tab. An actual active scheduled run is displayed as queued/running even if it is the final occurrence. Future dates remain separate from that accepted run. Due dates are not presented as queued until a run record exists; a stopped scheduler may therefore leave a due/waiting state visible. Planned times are not guaranteed execution, completion or delivery times. Shared allowances, other active runs and scheduler/worker availability can delay execution; existing missed-date coalescing and exclusive cutoff rules still apply.
+
+The preview is computed from existing data. No database migration or new dependencies are needed.

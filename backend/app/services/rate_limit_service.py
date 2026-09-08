@@ -42,12 +42,29 @@ class RateLimitExceeded(Exception):
         super().__init__(f"Too many requests. Please try again in {retry_after} seconds.")
 
 
-def consume(db, settings, scope, subject, limit, seconds, *, commit=True):
-    now = datetime.now(timezone.utc)
+def window_key(settings, scope, subject, seconds, now):
     bucket = int(now.timestamp()) // seconds
     deadline = datetime.fromtimestamp((bucket + 1) * seconds, timezone.utc)
-    retry_after = max(1, math.ceil((deadline - now).total_seconds()))
     key = hmac.new(settings.jwt_secret.encode(), f"{scope}:{subject}:{bucket}".encode(), hashlib.sha256).hexdigest()
+    return key, deadline
+
+
+def run_allowance_available_at(db, settings, owner_id, now):
+    """Read the same windows as enqueue without incrementing or reserving counters."""
+    blocked_until = []
+    for scope, limit, seconds in (("radar-hour", settings.radar_runs_per_hour, 3600),
+                                   ("radar-day", settings.radar_runs_per_day, 86400)):
+        key, deadline = window_key(settings, scope, str(owner_id), seconds, now)
+        record = db.get(RateLimitBucket, key)
+        if record is not None and record.count >= limit:
+            blocked_until.append(deadline)
+    return max(blocked_until) if blocked_until else None
+
+
+def consume(db, settings, scope, subject, limit, seconds, *, commit=True):
+    now = datetime.now(timezone.utc)
+    key, deadline = window_key(settings, scope, subject, seconds, now)
+    retry_after = max(1, math.ceil((deadline - now).total_seconds()))
     statement = update(RateLimitBucket).where(RateLimitBucket.key == key, RateLimitBucket.count < limit).values(count=RateLimitBucket.count + 1)
     accepted = db.execute(statement).rowcount == 1
     if not accepted and db.get(RateLimitBucket, key) is None:

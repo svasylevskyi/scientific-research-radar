@@ -1,3 +1,4 @@
+import { ScheduleOutlook } from "./ScheduleOutlook";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import { Alert, Box, Button, Checkbox, FormControlLabel, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import { useState, type FormEvent, type ReactNode } from "react";
@@ -14,9 +15,6 @@ function localInput(value: Date): string {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
 }
 
-function describeDate(value: string, timeZone: string) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(value));
-}
 
 function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
   digestId: string;
@@ -125,18 +123,11 @@ export function DigestScheduleControl({ digestId, schedule, exhausted, onSaved, 
           {schedule ? "Update schedule" : "Schedule runs"}
         </Button>
       </Stack>
-      <Box sx={{ mt: 2 }}>
-        {!editing && (schedule ? exhausted ? <Alert severity="info">
-          <Typography variant="body2" fontWeight={700}>No more runs are scheduled.</Typography>
-          <Typography variant="body2">The next recurring date would reach or pass this schedule’s end date. Update or extend the schedule to continue automatic runs, or delete it. Any run already in progress will continue.</Typography>
-        </Alert> : <Box>
-          <Typography variant="body2" fontWeight={700}>{label(schedule.frequency)} · Schedule saved</Typography>
-          <Typography variant="body2" color="text.secondary">
-            First digest: {describeDate(schedule.starts_at, schedule.time_zone)}. {schedule.ends_at ? `Stop before: ${describeDate(schedule.ends_at, schedule.time_zone)}.` : "No end date."} Time zone: {schedule.time_zone}.
-          </Typography>
-          <Typography variant="caption" color="text.secondary">{schedule.send_email !== false ? "Completed briefings will be emailed to your profile address." : "Email delivery is off."} Runs stop at the end date, if set. Changes apply to future runs.</Typography>
-        </Box> : <Typography variant="body2" color="text.secondary">Schedule automatic research runs and optional email delivery.</Typography>)}
-      </Box>
+      {!editing && schedule && (
+        <Box sx={{ mt: 2 }}>
+          <ScheduleOutlook key={`${digestId}:${JSON.stringify(schedule)}`} digestId={digestId} schedule={schedule} exhausted={exhausted} />
+        </Box>
+      )}
       {editing && <ScheduleForm digestId={digestId} schedule={schedule} onCancel={() => setEditing(false)} onSaved={(saved) => { onSaved(saved); setEditing(false); }} />}
     </Box>
   );
