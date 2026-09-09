@@ -27,6 +27,7 @@ from app.models.digest_run import (
 )
 from app.radar.client import OpenAIRadarClient, RadarClientResult, RadarTokenUsage
 from app.radar.contracts import (
+    HistoricalChange,
     DigestBriefingOutput,
     DiscoveryRelevanceOutput,
     PaperSummariesOutput,
@@ -811,7 +812,7 @@ def test_stage_prompts_are_versioned_compact_and_compliant() -> None:
         papers=[],
     )
 
-    assert discovery.version == "2026-09-07.1"
+    assert discovery.version == "2026-09-09.1"
     assert "untrusted data" in discovery.system
     assert "Public accessibility does not establish" in discovery.system
     assert "could substitute for a source" in discovery.system
@@ -849,3 +850,68 @@ def test_stage_briefing_contract_rejects_overlapping_paper_selections() -> None:
 
     with pytest.raises(ValueError, match="must not overlap"):
         DigestBriefingOutput.model_validate({"digest_briefing": briefing})
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_rejected_trend_response_retry_starts_fresh_and_preserves_completed_stages(
+    client, db_session_factory, legacy,
+):
+    user = _register(client, "rejected@example.com", "Rejected Output")
+    authorization = _authorization(user)
+    digest = _create_digest(client, authorization)
+
+    class RejectingClient(RecordingRadarClient):
+        reject = True
+        resumed = []
+
+        def execute(self, prompt, **kwargs):
+            if prompt.stage == DigestRunStageType.TREND_ANALYSIS:
+                self.resumed.append(kwargs.get("existing_response_id"))
+            result = super().execute(prompt, **kwargs)
+            if prompt.stage == DigestRunStageType.TREND_ANALYSIS and self.reject:
+                result.output.trend_analysis.changes_vs_previous_digest = [HistoricalChange.model_validate({
+                    "change_type": "unclear", "description": "Historical comparison",
+                    "supporting_external_ids": ["arXiv:2507.20984"],
+                    "previous_digest_reference": "prior-run", "confidence": "low",
+                })]
+            return result
+
+    radar_client = RejectingClient()
+    _override_runner(radar_client)
+    run = client.post(f"/api/v1/digests/{digest['id']}/runs", headers=authorization).json()
+    _execute_next(db_session_factory, radar_client)
+    with db_session_factory() as db:
+        stored = DigestRunRepository(db).get(UUID(run["id"]))
+        trend = next(s for s in stored.stages if s.stage == DigestRunStageType.TREND_ANALYSIS)
+        assert stored.status == DigestRunStatus.FAILED
+        assert "referenced unknown papers" in trend.error_message
+        assert trend.active_response_id is None
+        if legacy:
+            trend.active_response_id = "old-rejected-response"
+            db.commit()
+    radar_client.reject = False
+    response = client.post(
+        f"/api/v1/digests/{digest['id']}/runs/{run['id']}/retry", headers=authorization,
+    )
+    assert response.status_code == 202
+    _execute_next(db_session_factory, radar_client)
+    assert radar_client.resumed == [None, None]
+    assert [c["prompt"].stage for c in radar_client.calls] == [
+        DigestRunStageType.DISCOVERY_RELEVANCE, DigestRunStageType.PAPER_SUMMARIES,
+        DigestRunStageType.TREND_ANALYSIS, DigestRunStageType.TREND_ANALYSIS,
+        DigestRunStageType.DIGEST_BRIEFING,
+    ]
+    with db_session_factory() as db:
+        assert DigestRunRepository(db).get(UUID(run["id"])).status == DigestRunStatus.COMPLETED
+
+
+def test_requeue_preserves_response_after_poll_timeout():
+    stage = DigestRunStage(
+        stage=DigestRunStageType.TREND_ANALYSIS, status=DigestRunStageStatus.FAILED,
+        active_response_id="still-running-job",
+        error_message="Trend analysis failed: OpenAI trend_analysis exceeded the background time limit",
+    )
+    run = DigestRun(status=DigestRunStatus.FAILED, stages=[stage])
+    DigestRunRepository(None).requeue_failed(run=run)
+    assert stage.active_response_id == "still-running-job"
+    assert stage.status == DigestRunStageStatus.PENDING

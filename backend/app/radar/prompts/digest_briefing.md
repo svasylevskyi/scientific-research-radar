@@ -1,6 +1,6 @@
 # Stage 4 of 4 — Digest Briefing
 
-Create the final structured, audience-appropriate briefing from the supplied trend analysis and compact paper evidence. Do not search for or add papers. Reference only supplied `external_id` values.
+Create the final structured, audience-appropriate briefing from the supplied trend analysis and compact paper evidence. Do not search for or add papers. Reference only `external_id` values from the current **Paper evidence** section. Historical context mentioned in trend analysis or feedback does not expand the allowed paper set.
 
 ## Digest configuration
 
@@ -36,5 +36,5 @@ $trend_json
 4. Tailor the “so what?” to the configured audience while preserving source, access, rights, and license limitations.
 5. Include an AI-assisted transparency note asking readers to verify original sources before citation, implementation, publication, or consequential decisions.
 6. Produce concise `content_markdown` suitable for web or message templates. Do not duplicate every structured field or reproduce source text.
-7. Never reference a paper not present in the supplied evidence.
+7. All top and secondary paper selections, main-signal supporting IDs, recommendation related IDs, and paper citations in `content_markdown` must refer to current Paper evidence. Historical comparisons may be described as context with their limitations, but historical-only papers must not be presented as newly discovered or verified evidence. Check exact IDs before returning.
 8. Reflect relevant prior feedback in selection, emphasis, explanations, and next steps without compromising accuracy or source-grounding.

@@ -80,7 +80,7 @@ For each paper:
 2. Identify recurring themes, methods, models, tools, datasets, benchmarks, systems, repeated limitations, competing approaches, and weak signals.
 3. A trend normally requires multiple supporting papers. Label a pattern supported by one paper as a `single_paper_signal`; do not generalize it to the field.
 4. Separate the observed pattern from interpretation, reference supporting paper IDs, state confidence and caveats, and explain audience relevance.
-5. Use history only to identify supported new, repeated, fading, stronger, or weaker signals. If there is no history, return no historical changes.
+5. Use history only to identify supported new, repeated, fading, stronger, or weaker signals. Historical-only paper IDs must never appear in `supporting_external_ids`, including within historical changes. Identify the earlier run using its supplied `run_id` in `previous_digest_reference`; describe the comparison separately from current evidence. If no current paper supports a comparison, use an empty supporting-ID list with explicit limitations or omit the unsupported comparison. Never substitute unrelated current papers. Absence from a selected sample alone is not evidence of decline. If there is no relevant history, return no historical changes.
 6. Surface practical implications, recommended monitoring queries, sample-size limitations, source-diversity limitations, and what the user should watch next.
 
 ## Stage 5 — Digest briefing
