@@ -22,6 +22,8 @@ Only ports 80/443 are public. Mailpit binds to server loopback port 8025; Postgr
 and the API have no host port mappings. The proxy has a fixed address on an
 isolated network; Uvicorn trusts forwarded client addresses only from that proxy.
 Caddy overwrites incoming forwarded addresses, preserving per-IP rate limits.
+Temporary configuration and migration commands use a dedicated `ops` service
+on the data network, so they can run while the API occupies its fixed proxy address.
 The 172.29.10.0/24 subnet must not overlap an existing server/VPN network.
 
 ## 1. Before the first release
