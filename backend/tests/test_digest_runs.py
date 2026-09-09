@@ -265,6 +265,7 @@ class RecordingRadarClient:
         on_response_started=None,
         on_response_lost=None,
         on_poll=None,
+        on_usage=None,
     ) -> RadarClientResult:
         self.calls.append(
             {
@@ -274,6 +275,8 @@ class RecordingRadarClient:
                 "reasoning_effort": reasoning_effort,
             }
         )
+        if on_usage and not existing_response_id:
+            on_usage({"event": "submitted"})
         if prompt.stage == self.fail_stage:
             raise RuntimeError("Deliberate test failure")
         response_id = existing_response_id or f"recorded-response-{len(self.calls)}"
@@ -281,6 +284,14 @@ class RecordingRadarClient:
             on_response_started(response_id)
         if on_poll:
             on_poll()
+        if on_usage:
+            event = {"event": "response", "response_id": response_id,
+                     "model_name": self.model_name, "status": "completed",
+                     "usage": RadarTokenUsage(input_tokens=100, output_tokens=50).as_dict(),
+                     "web_search_calls": 1 if use_web_search else 0,
+                     "service_tier": "default"}
+            on_usage(event)
+            on_usage(event)  # Repeated observation must be idempotent.
         return RadarClientResult(
             output=_stage_output(response_format),
             response_id=response_id,
@@ -705,6 +716,18 @@ def test_feedback_is_owner_scoped_and_admin_can_review_it(
     )
     assert detail.status_code == 200
     assert detail.json()["feedback_text"] == "Useful, but make the briefing shorter."
+    costs_url = f"/api/v1/admin/digests/{digest['id']}/runs/{run.json()['id']}/costs"
+    assert client.get(costs_url, headers=owner_access).status_code == 403
+    costs = client.get(costs_url, headers=admin_access)
+    assert costs.status_code == 200
+    data = costs.json()
+    assert data["request_count"] == 4
+    assert data["unknown_requests"] == 4
+    assert not data["complete"]
+    assert not data["historical_gap"]
+    assert all(row["outcome"] == "accepted" for stage in data["stages"] for row in stage["requests"])
+    assert "pricing" not in detail.json()
+
 
 
 def test_missing_openai_configuration_prevents_a_run(client: TestClient) -> None:
@@ -886,6 +909,12 @@ def test_rejected_trend_response_retry_starts_fresh_and_preserves_completed_stag
         assert stored.status == DigestRunStatus.FAILED
         assert "referenced unknown papers" in trend.error_message
         assert trend.active_response_id is None
+        from app.services.radar_cost_service import run_costs
+        accounting = run_costs(db, stored)
+        attempts = accounting["stages"][2]["requests"]
+        assert len(attempts) == 1
+        assert attempts[0]["outcome"] == "rejected"
+        assert attempts[0]["usage"]["input_tokens"] == 100
         if legacy:
             trend.active_response_id = "old-rejected-response"
             db.commit()
@@ -902,7 +931,12 @@ def test_rejected_trend_response_retry_starts_fresh_and_preserves_completed_stag
         DigestRunStageType.DIGEST_BRIEFING,
     ]
     with db_session_factory() as db:
-        assert DigestRunRepository(db).get(UUID(run["id"])).status == DigestRunStatus.COMPLETED
+        stored = DigestRunRepository(db).get(UUID(run["id"]))
+        assert stored.status == DigestRunStatus.COMPLETED
+        accounting = run_costs(db, stored)
+        assert accounting["request_count"] == 5
+        assert [r["outcome"] for r in accounting["stages"][2]["requests"]].count("rejected") == 1
+
 
 
 def test_requeue_preserves_response_after_poll_timeout():

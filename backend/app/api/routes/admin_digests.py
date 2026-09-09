@@ -90,6 +90,19 @@ def get_digest_run(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
+@router.get("/{digest_id}/runs/{run_id}/costs")
+def get_digest_run_costs(
+    digest_id: UUID, run_id: UUID, current_admin: CurrentAdmin,
+    service: RunHistoryServiceDep, db: DbSession,
+):
+    from app.services.radar_cost_service import run_costs
+    try:
+        run = service.get_for_admin(actor=current_admin, digest_id=digest_id, run_id=run_id)
+        return run_costs(db, run)
+    except (DigestNotFoundError, DigestRunNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/{digest_id}", response_model=AdminDigestRead)
 def get_digest(
     digest_id: UUID,
