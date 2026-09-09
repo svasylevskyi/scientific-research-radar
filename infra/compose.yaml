@@ -13,6 +13,8 @@ x-backend: &backend
     SMTP_USERNAME: ${SMTP_USERNAME:-}
     SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     EMAIL_FROM: ${EMAIL_FROM:-radar@example.com}
+    # Organization billing credentials belong only in the API service.
+    OPENAI_ADMIN_API_KEY: ""
   init: true
   restart: unless-stopped
   security_opt: [no-new-privileges:true]
@@ -45,6 +47,9 @@ services:
       retries: 20
   api:
     <<: *backend
+    environment:
+      <<: *backend-env
+      OPENAI_ADMIN_API_KEY: ${OPENAI_ADMIN_API_KEY:-}
     networks:
       data:
       proxy:

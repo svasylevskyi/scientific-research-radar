@@ -8,6 +8,7 @@ import { matchPath, Navigate, Route, Routes, useLocation, useParams } from "reac
 
 import { RequireAuth } from "./auth/RequireAuth";
 import { RequireAdmin } from "./auth/RequireAdmin";
+import { AdminSpendingPage } from "./pages/AdminSpendingPage";
 import { AdminPricingPage } from "./pages/AdminPricingPage";
 import { AdminDigestsPage } from "./pages/AdminDigestsPage";
 import { AdminUserDetailPage } from "./pages/AdminUserDetailPage";
@@ -124,6 +125,7 @@ export default function App() {
               </RequireAuth>
             }
           />
+          <Route path="/admin/spending" element={<RequireAuth><RequireAdmin superAdmin><AdminSpendingPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/pricing" element={<RequireAuth><RequireAdmin superAdmin><AdminPricingPage /></RequireAdmin></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -12,15 +12,9 @@ Sign in as super-admin and select **Pricing** in the header (`/admin/pricing`). 
 
 Read/create APIs: `GET /api/v1/admin/pricing?offset=0&limit=50` and `POST /api/v1/admin/pricing`. Both are super-admin only, including reads. The payload is the model name (`model_name`) plus all fields from `RadarPricing`. Duplicate model/version pairs return 409. The UI shows current and historical versions with pagination. Ordinary admins can still review run estimates, but cannot manage tariffs.
 
-### Migrating existing environment prices
+### Legacy environment configuration
 
-Runtime no longer reads `RADAR_PRICING`. You may enter existing values through the page. Alternatively, after migrating the database, run once in an environment with access to the database and the old environment variable:
-
-```bash
-python -m app.radar.import_pricing
-```
-
-For local development, the importer also reads `backend/.env` when run from `backend`. For Docker, run this module in the Compose **ops** service using the same environment file and image configuration as the deployment. It validates the entire JSON input and publishes only models that have no database prices; it never replaces an existing model's rates. Repeating it is safe. After successful import, remove `RADAR_PRICING` from the environment file. If you skip import, accounting continues with unknown monetary estimates until tariffs are entered in the UI. Existing request snapshots require no migration or repricing.
+`RADAR_PRICING` and its one-time importer have been retired. Prices entered through the UI remain in the database. The old environment variable can be removed; use the Pricing page for all changes.
 
 Only flat standard-tier tariffs are currently supported. A different returned model, non-default service tier, reported cache writes, or input exceeding the configured limit remains unpriced. Models with fixed search-token blocks, special cache-write tariffs, regional uplifts, discounts or other special pricing require a future tariff extension; do not configure a flat tariff for them.
 
@@ -33,3 +27,20 @@ The calculation is `(input - cached input) × input rate + cached input × cache
 A missing response, unavailable usage or unsupported/missing price is **unknown**, never a zero-cost request. The UI shows only a known subtotal while any request is unpriced, while a run is active, or while historical coverage is incomplete. Submitted attempts without a response ID may or may not have incurred charges. A provider error before the SDK exposes a response can prevent exact usage recovery; these attempts remain visible and unknown. Worker interruption can leave an unconfirmed outcome until recovery.
 
 Old runs are not backfilled with invented request records or current prices. Their accepted-stage usage remains visible when available; historical rejected responses and retry spend cannot be reconstructed. A resumed pre-ledger response can capture usage, but has no original pricing snapshot. No aggregate dashboard or user-facing cost display is included.
+
+## OpenAI spending page
+
+Super-admin → Pricing → **View OpenAI spending** (`/admin/spending`) shows reported project spending alongside local known estimates, daily figures, and charge-line breakdowns. All API access is super-admin only. Loading is explicit, with a five-minute bounded per-process cache and no background scheduler.
+
+Configure these on the API server, then recreate the container through normal deployment:
+
+```dotenv
+OPENAI_ADMIN_API_KEY=your-separate-openai-admin-key
+OPENAI_COSTS_PROJECT_ID=proj_your_radar_project
+```
+
+Use an OpenAI organization admin key authorized to read costs, not the ordinary research key. Keep it server-side; never add it to frontend environment variables. The supplied Compose configuration exposes this credential only to the API service and explicitly clears it for research, scheduler, and ops containers. No credentials are accepted through the page or returned by the endpoint. No new database migration is required for this page. The legacy importer and its tests are removed; persisted pricing and request snapshots are untouched.
+
+The backend calls the [Costs API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/costs) at a fixed HTTPS URL, filters by the configured project, groups by project and charge line, and follows pagination with bounded requests/timeouts. Invalid, non-USD, wrong-project, truncated, and failed responses produce an error instead of a partial total. Provider errors are sanitized. Negative amounts (credits) are preserved. Repeated refreshes within five minutes reuse provider results; local estimates are queried anew.
+
+`GET /api/v1/admin/spending?from_date=YYYY-MM-DD&to_date=YYYY-MM-DD` accepts inclusive UTC dates spanning at most 93 days. Missing daily buckets show “Not reported”. Billing can lag, including current-day data. Local totals cover this environment's ledger by request creation time, with unpriced requests and detectable legacy gaps identified. Provider totals may include other applications and environments in the same project; the two scopes and time attribution are not necessarily identical. The page deliberately does not claim exact reconciliation, reprice old runs, or assign provider charges to individual runs. Switching the configured project changes only the provider side, not historical local ledger scope.

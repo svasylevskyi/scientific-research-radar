@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Alert, Box, Button, Chip, Container, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
+import { Link as RouterLink } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { apiRequest, ApiError } from "../api/client";
 
@@ -52,6 +53,7 @@ export function AdminPricingPage() {
   return <Box><AppHeader /><Container component="main" maxWidth="lg" sx={{ py: { xs: 3, sm: 6 } }}>
     <Typography variant="h3" component="h1" gutterBottom>Radar pricing</Typography>
     <Typography color="text.secondary" sx={{ mb: 3 }}>Manage estimated research costs in USD. Only the super-admin can view or publish these rates.</Typography>
+    <Button component={RouterLink} to="/admin/spending" sx={{ mb: 2 }}>View OpenAI spending</Button>
     <Stack spacing={3}>
       {error && <Alert severity="error">{error}</Alert>}
       {success && <Alert severity="success">Pricing published. New requests will use this version; existing estimates are unchanged.</Alert>}
