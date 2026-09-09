@@ -65,6 +65,6 @@ export function AdminCostDetails({ data, error }: ReturnType<typeof useAdminRunC
         </Table></TableContainer>
       </AccordionDetails>
     </Accordion>)}
-    <Typography variant="body2" color="text.secondary">Pricing is snapshotted per request from server configuration. Unknown pricing, unsupported tariffs, and missing provider usage are excluded from known subtotals. Older runs are not retroactively assigned prices.</Typography>
+    <Typography variant="body2" color="text.secondary">Pricing is snapshotted per request from database-managed pricing. Unknown pricing, unsupported tariffs, and missing provider usage are excluded from known subtotals. Older runs are not retroactively assigned prices.</Typography>
   </Stack>;
 }

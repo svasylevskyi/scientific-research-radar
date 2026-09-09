@@ -71,3 +71,12 @@ def require_admin(current_user: CurrentUser) -> User:
 
 
 CurrentAdmin = Annotated[User, Depends(require_admin)]
+
+
+def require_super_admin(current_admin: CurrentAdmin) -> User:
+    if not current_admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Super-administrator access required")
+    return current_admin
+
+
+CurrentSuperAdmin = Annotated[User, Depends(require_super_admin)]

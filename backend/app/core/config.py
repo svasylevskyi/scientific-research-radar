@@ -6,9 +6,6 @@ from urllib.parse import urlsplit
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-from app.schemas.radar_pricing import RadarPricing
-
-
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -55,7 +52,6 @@ class Settings(BaseSettings):
     refresh_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 
-    radar_pricing: dict[str, RadarPricing] = Field(default_factory=dict)
     openai_api_key: SecretStr | None = None
     openai_radar_model: str = Field(default="gpt-6-astra", min_length=1, max_length=100)
     openai_radar_discovery_reasoning_effort: Literal["low", "medium", "high", "xhigh"] = "medium"
