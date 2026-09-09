@@ -13,6 +13,10 @@ ENV
 # HTTP is limited to this disposable CI override; deployed cookies remain Secure.
 cat > "$RUNNER_TEMP/compose-ci.yaml" <<'YAML'
 services:
+  ops:
+    environment:
+      FRONTEND_BASE_URL: http://localhost
+      CORS_ORIGINS: '["http://localhost"]'
   api:
     environment:
       FRONTEND_BASE_URL: http://localhost
@@ -30,8 +34,14 @@ docker build -t "$BACKEND_IMAGE" backend
 docker build -t "$WEB_IMAGE" frontend
 dc config --quiet
 dc up -d --wait db mailpit
-dc run --rm --no-deps -T api alembic upgrade head
+dc run --rm --no-deps -T ops alembic upgrade head
 dc up -d --wait --wait-timeout 180 api web
+# Regression: one-off operations must work while API owns its fixed address.
+api_id=$(dc ps -q api)
+dc run --rm --no-deps -T ops python -m app.ops configuration base
+dc run --rm --no-deps -T ops python -m app.ops active
+dc run --rm --no-deps -T ops alembic upgrade head
+test "$(dc ps -q api)" = "$api_id"
 curl --fail --retry 5 --retry-delay 2 http://localhost/health
 curl --fail http://localhost/ | grep -q '<div id="root">'
 # Exercise the actual operator scripts against this disposable project.

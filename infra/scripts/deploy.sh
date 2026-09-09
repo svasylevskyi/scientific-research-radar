@@ -15,12 +15,18 @@ install -d -m 750 "$RELEASE"
 git -C "$SOURCE" archive "$TARGET_SHA" | tar -x -C "$RELEASE"
 dc config --quiet
 dc pull "${SERVICES[@]}"
-dc run --rm --no-deps -T api python -m app.ops configuration "$TARGET_MODE"
+dc run --rm --no-deps -T ops python -m app.ops configuration "$TARGET_MODE"
 if [[ -f $STATE ]]; then
   load_release
   # Block new manual and scheduled enqueues before checking active work.
   dc stop web api scheduler
-  active=$(dc run --rm --no-deps -T api python -m app.ops active)
+  # Use the existing database container: older releases have no ops service.
+  if ! active=$(dc exec -T db psql -U radar -d radar -At -v ON_ERROR_STOP=1 \
+      -c "SELECT count(*) FROM digest_runs WHERE status IN ('queued', 'running')"); then
+    echo 'Could not check active work. Restoring current services.' >&2
+    dc up -d --wait --wait-timeout 120 "${SERVICES[@]}"
+    exit 1
+  fi
   if [[ $active != 0 ]]; then
     echo 'Active or queued research remains. Restoring current services; retry after runs finish.' >&2
     dc up -d --wait --wait-timeout 120 "${SERVICES[@]}"
@@ -34,7 +40,7 @@ dc up -d --wait --wait-timeout 120 db mailpit
 if [[ ! -f $STATE ]]; then backup_database; fi
 # From this point a failure leaves the application stopped for operator inspection.
 # Never automatically restart an old image against a possibly changed schema.
-dc run --rm --no-deps -T api alembic upgrade head
+dc run --rm --no-deps -T ops alembic upgrade head
 dc up -d --wait --wait-timeout 180 "${SERVICES[@]}"
 printf '%s %s\n' "$SHA" "$MODE" > "$STATE.tmp"
 mv "$STATE.tmp" "$STATE"

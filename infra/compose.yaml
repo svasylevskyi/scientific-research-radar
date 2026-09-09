@@ -55,6 +55,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+  ops:
+    <<: *backend
+    profiles: [ops]
+    restart: 'no'
+    command: [python, -m, app.ops, configuration, base]
   research:
     <<: *backend
     profiles: [research]
