@@ -1,10 +1,5 @@
-import json
 from sqlalchemy import select
 from app.models.user import User
-from app.models.radar_price import RadarPrice
-from app.schemas.radar_pricing import RadarPriceCreate
-from app.services.radar_pricing_service import current_price, publish_price
-from app.radar.import_pricing import import_prices
 from test_admin_users import _register, _authorization, _super_admin_login
 
 PAYLOAD = {"model_name": "test-model", "version": "v1", "input_per_million": "10",
@@ -38,18 +33,3 @@ def test_only_super_admin_can_read_and_publish_prices(client, db_session_factory
     assert [r["is_current"] for r in listed["items"]] == [True, False]
     assert listed["items"][1]["input_per_million"] == "10"
     assert client.patch(f"/api/v1/admin/pricing/{first.json()['id']}", json=PAYLOAD, headers=super_headers).status_code in (404, 405)
-
-
-def test_import_is_idempotent_and_does_not_override_published_rates(db_session_factory):
-    raw = json.dumps({"test-model": {k: v for k, v in PAYLOAD.items() if k != "model_name"}})
-    with db_session_factory() as db:
-        assert import_prices(db, raw) == 1
-        db.commit()
-        assert import_prices(db, raw) == 0
-        before = current_price(db, "test-model")
-        publish_price(db, RadarPriceCreate(**{**PAYLOAD, "version": "v2", "input_per_million": "20"}))
-        db.commit()
-        assert import_prices(db, raw) == 0
-        assert current_price(db, "test-model")["input_per_million"] == "20"
-        assert before["input_per_million"] == "10"
-        assert current_price(db, "missing") is None

@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     refresh_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 
+    openai_admin_api_key: SecretStr | None = None
+    openai_costs_project_id: str | None = Field(default=None, min_length=1, max_length=200)
     openai_api_key: SecretStr | None = None
     openai_radar_model: str = Field(default="gpt-6-astra", min_length=1, max_length=100)
     openai_radar_discovery_reasoning_effort: Literal["low", "medium", "high", "xhigh"] = "medium"
