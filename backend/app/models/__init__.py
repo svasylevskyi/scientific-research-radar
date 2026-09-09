@@ -1,3 +1,4 @@
+from app.models.radar_price import RadarPrice
 from app.models.radar_request import RadarRequest
 from app.models.auth_session import AuthSession
 from app.models.password_reset import PasswordReset, RecoveryRateLimit

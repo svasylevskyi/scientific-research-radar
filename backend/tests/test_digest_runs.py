@@ -676,6 +676,13 @@ def test_feedback_is_owner_scoped_and_admin_can_review_it(
     owner = _register(client, "feedback.owner@example.com", "Feedback Owner")
     other = _register(client, "feedback.other@example.com", "Other User")
     owner_access = _authorization(owner)
+    from app.schemas.radar_pricing import RadarPriceCreate
+    from app.services.radar_pricing_service import publish_price
+    with db_session_factory() as db:
+        publish_price(db, RadarPriceCreate(model_name="recording-test-model", version="v1",
+            input_per_million="10", cached_input_per_million="1", output_per_million="50",
+            web_search_per_call="0.01", max_input_tokens=272000))
+        db.commit()
     digest = _create_digest(client, owner_access)
     radar_client = RecordingRadarClient()
     _override_runner(radar_client)
@@ -722,8 +729,15 @@ def test_feedback_is_owner_scoped_and_admin_can_review_it(
     assert costs.status_code == 200
     data = costs.json()
     assert data["request_count"] == 4
-    assert data["unknown_requests"] == 4
-    assert not data["complete"]
+    assert data["unknown_requests"] == 0
+    assert data["complete"]
+    assert float(data["known_estimated_usd"]) == 0.024
+    with db_session_factory() as db:
+        publish_price(db, RadarPriceCreate(model_name="recording-test-model", version="v2",
+            input_per_million="99", cached_input_per_million="1", output_per_million="50",
+            web_search_per_call="0.01", max_input_tokens=272000))
+        db.commit()
+    assert client.get(costs_url, headers=admin_access).json()["known_estimated_usd"] == data["known_estimated_usd"]
     assert not data["historical_gap"]
     assert all(row["outcome"] == "accepted" for stage in data["stages"] for row in stage["requests"])
     assert "pricing" not in detail.json()

@@ -1,4 +1,5 @@
 import AdminPanelSettingsRoundedIcon from "@mui/icons-material/AdminPanelSettingsRounded";
+import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
 import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
@@ -60,6 +61,7 @@ export function AppHeader() {
                 </Tooltip>
               </>
             )}
+            {user?.is_super_admin && <Tooltip title="Radar pricing"><Button component={RouterLink} to="/admin/pricing" color="inherit" aria-label="Radar pricing" sx={{ minWidth: 44 }}><PaymentsRoundedIcon /><Box component="span" sx={{ ml: 1, display: { xs: "none", lg: "inline" } }}>Pricing</Box></Button></Tooltip>}
             <Tooltip title="Profile">
               <IconButton component={RouterLink} to="/profile" aria-label="Profile" sx={{ ml: { xs: 0.5, sm: 1 }, p: 0.5 }}>
                 <Avatar sx={{ width: 38, height: 38, bgcolor: "primary.dark", fontSize: "0.85rem", fontWeight: 800 }}>

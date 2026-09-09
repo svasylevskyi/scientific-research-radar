@@ -412,11 +412,12 @@ class RadarRunner:
             nonlocal current_request
             self._renew_lease(run)
             if event["event"] == "submitted":
-                price = self.settings.radar_pricing.get(self.client.model_name)
+                from app.services.radar_pricing_service import current_price
+                price = current_price(self.db, self.client.model_name)
                 current_request = RadarRequest(
                     run_id=run.id, stage_id=stage.id, model_name=self.client.model_name,
                     reasoning_effort=reasoning_effort,
-                    pricing=price.model_dump(mode="json") if price else None,
+                    pricing=price,
                 )
                 self.db.add(current_request)
             else:

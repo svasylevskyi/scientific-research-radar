@@ -4,15 +4,25 @@ Admin → Digests → select digest → run review contains a cost summary and *
 
 ## Deployment and pricing
 
-Run `alembic upgrade head` (revision `20260909_0013`) before restarting the API and research worker. The normal deployment script performs migrations. No external calls are needed to initialize accounting.
+Run `alembic upgrade head` (revision `20260909_0014`) before restarting the API and research worker. The normal deployment script performs migrations.
 
-Set `RADAR_PRICING` in the backend environment (on development: `/etc/radar/development.env`) to a JSON object mapping **exact model IDs** to validated price versions. This operator-owned setting is not editable by ordinary users or admins in the UI. Example flat standard-tier tariff, in USD:
+Sign in as super-admin and select **Pricing** in the header (`/admin/pricing`). Enter the exact model ID, a unique version label for that model, USD rates for input/cached-input/output tokens per million, web search per call, and the maximum input size covered by that tariff. Verify against the [official pricing page](https://developers.openai.com/api/docs/pricing) and your account agreement.
 
-```dotenv
-RADAR_PRICING='{"gpt-6-astra":{"version":"2026-09-09-standard-v1","input_per_million":"10","cached_input_per_million":"1","output_per_million":"50","web_search_per_call":"0.01","max_input_tokens":272000}}'
+**Save pricing version** publishes immediately for new requests. To update, select **Use as new version**, adjust fields, and give it a new version label. Historical versions cannot be edited or deleted through the API. The highest published database ID for a model is current; concurrent publications have a deterministic order. Each request snapshots the selected rates, so ongoing response polling and old estimates keep their original prices. No restart or deployment is needed for subsequent pricing changes. A new request within an ongoing run can use newly published prices.
+
+Read/create APIs: `GET /api/v1/admin/pricing?offset=0&limit=50` and `POST /api/v1/admin/pricing`. Both are super-admin only, including reads. The payload is the model name (`model_name`) plus all fields from `RadarPricing`. Duplicate model/version pairs return 409. The UI shows current and historical versions with pagination. Ordinary admins can still review run estimates, but cannot manage tariffs.
+
+### Migrating existing environment prices
+
+Runtime no longer reads `RADAR_PRICING`. You may enter existing values through the page. Alternatively, after migrating the database, run once in an environment with access to the database and the old environment variable:
+
+```bash
+python -m app.radar.import_pricing
 ```
 
-Verify rates against your project billing agreement and the [official pricing page](https://developers.openai.com/api/docs/pricing) before enabling them. The example covers standard short-context text requests only. Rates are deliberately **not enabled by default**. Decimal strings avoid binary floating-point calculations. Change the version whenever rates change, then redeploy/restart the worker. Each new attempt saves the full price configuration; changing configuration cannot change an existing request's estimate. No price is inferred from model name prefixes. A different returned model, non-default service tier, reported cache writes, or input exceeding the configured limit remains unpriced. Models with fixed search-token blocks, special cache-write tariffs, regional uplifts, discounts or other special pricing require a future tariff extension; do not configure a flat tariff for them.
+For local development, the importer also reads `backend/.env` when run from `backend`. For Docker, run this module in the Compose **ops** service using the same environment file and image configuration as the deployment. It validates the entire JSON input and publishes only models that have no database prices; it never replaces an existing model's rates. Repeating it is safe. After successful import, remove `RADAR_PRICING` from the environment file. If you skip import, accounting continues with unknown monetary estimates until tariffs are entered in the UI. Existing request snapshots require no migration or repricing.
+
+Only flat standard-tier tariffs are currently supported. A different returned model, non-default service tier, reported cache writes, or input exceeding the configured limit remains unpriced. Models with fixed search-token blocks, special cache-write tariffs, regional uplifts, discounts or other special pricing require a future tariff extension; do not configure a flat tariff for them.
 
 ## What the numbers mean
 
