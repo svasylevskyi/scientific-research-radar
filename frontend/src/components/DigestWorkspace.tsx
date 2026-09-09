@@ -34,7 +34,9 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
   }).sort();
   const [fromOverride, setFrom] = useState<string | null>(null);
   const [toOverride, setTo] = useState<string | null>(null);
-  const [successfulOnly, setSuccessfulOnly] = useState(true);
+  const [showInProgress, setShowInProgress] = useState(true);
+  const [showSuccessful, setShowSuccessful] = useState(true);
+  const [showFailed, setShowFailed] = useState(false);
   const from = fromOverride ?? runDays[0] ?? "";
   const to = toOverride ?? runDays.at(-1) ?? "";
   const [tab, setTab] = useState("briefing");
@@ -65,7 +67,12 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
   };
   const activeTab = available[tab as keyof typeof available] ? tab : "steps";
   const invalidRange = Boolean(from && to && from > to);
-  const filtered = filterRuns(runs, from, to).filter((item) => !successfulOnly || item.status === "completed");
+  const filtered = filterRuns(runs, from, to).filter((item) => {
+    if (item.status === "queued" || item.status === "running") return showInProgress;
+    if (item.status === "completed") return showSuccessful;
+    if (item.status === "failed") return showFailed;
+    return false;
+  });
   const selectionOutsideFilter = !filtered.some((item) => item.id === selectedId);
 
   function selectRun(id: string) {
@@ -92,10 +99,20 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
             <TextField label="To" type="date" value={to} onChange={(event) => setTo(event.target.value)}
               error={invalidRange} helperText={invalidRange ? "To must be on or after From." : "Run start dates, in your local time. Both dates included."}
               slotProps={{ inputLabel: { shrink: true } }} />
-            <FormControlLabel
-              control={<Checkbox checked={successfulOnly} onChange={(event) => setSuccessfulOnly(event.target.checked)} />}
-              label="Successful runs only"
-            />
+            <Stack>
+              <FormControlLabel
+                control={<Checkbox checked={showInProgress} onChange={(event) => setShowInProgress(event.target.checked)} />}
+                label="Runs in progress"
+              />
+              <FormControlLabel
+                control={<Checkbox checked={showSuccessful} onChange={(event) => setShowSuccessful(event.target.checked)} />}
+                label="Successful runs"
+              />
+              <FormControlLabel
+                control={<Checkbox checked={showFailed} onChange={(event) => setShowFailed(event.target.checked)} />}
+                label="Failed runs"
+              />
+            </Stack>
             <Typography variant="body2" color="text.secondary">{filtered.length} of {runs.length} runs</Typography>
           </Stack>
           <Stack sx={{ maxHeight: { md: "65vh" }, overflowY: "auto" }}>
@@ -118,7 +135,7 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
         {run && <Typography color="text.secondary" sx={{ mb: 2 }}>
           Run: {runDate(run.started_at).toLocaleString()} · {run.status}
         </Typography>}
-        {selectionOutsideFilter && (from || to || successfulOnly) && <Alert severity="info" sx={{ mb: 2 }}>The displayed run is outside the current filters. Adjust the filters or select a matching run.</Alert>}
+        {selectionOutsideFilter && <Alert severity="info" sx={{ mb: 2 }}>The displayed run is outside the current filters. Adjust the filters or select a matching run.</Alert>}
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden", mb: 3 }}>
           <Tabs value={activeTab} onChange={(_event, value) => setTab(value)} variant="scrollable" scrollButtons="auto" aria-label="Digest results and settings">

@@ -51,7 +51,7 @@ function resultSummary(run: DigestRunDetail, stage: DigestRunStage) {
     if (stage.stage === "paper_summaries" && stage.progress_total > 0) {
       return `${stage.progress_current} of ${stage.progress_total} paper summaries saved.`;
     }
-    return "OpenAI is processing this stage. You can leave this page safely.";
+    return "Radar is processing this stage. You can leave this page safely.";
   }
 
   if (stage.stage === "discovery_relevance") {
