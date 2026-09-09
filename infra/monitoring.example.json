@@ -1,0 +1,7 @@
+{
+  "backup": "https://hc-ping.com/REPLACE_WITH_BACKUP_CHECK_UUID",
+  "disk": "https://hc-ping.com/REPLACE_WITH_DISK_CHECK_UUID",
+  "api": "https://hc-ping.com/REPLACE_WITH_API_CHECK_UUID",
+  "research": "https://hc-ping.com/REPLACE_WITH_RESEARCH_WORKER_CHECK_UUID",
+  "scheduler": "https://hc-ping.com/REPLACE_WITH_SCHEDULER_CHECK_UUID"
+}

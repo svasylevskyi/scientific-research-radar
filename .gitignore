@@ -17,3 +17,6 @@ frontend/dist/
 infra/*.env
 *.dump
 *.dump.sha256
+
+# Healthchecks ping URLs
+*.monitoring.json

@@ -262,6 +262,93 @@ The workflow checks, publishes, and then deploys the exact commit. Failures befo
 SSH leave the running application unchanged. Active runs still block deployment
 safely; wait for them to finish before trying again.
 
+## Healthchecks.io monitoring
+
+Monitoring is opt-in and uses Python's standard library on the host. No SMTP
+configuration change is required; application test emails can stay in Mailpit.
+Create five checks in a Radar Development project, with email notifications enabled:
+
+| Check | Simple period | Grace time |
+| --- | --- | --- |
+| radar-dev-backup | 1 day | 1 hour |
+| radar-dev-disk | 5 minutes | 10 minutes |
+| radar-dev-api | 5 minutes | 10 minutes |
+| radar-dev-research-worker | 5 minutes | 10 minutes |
+| radar-dev-scheduler | 5 minutes | 10 minutes |
+
+After merging the monitoring changes, update the host script checkout:
+
+```bash
+cd /opt/radar/source
+sudo git pull --ff-only
+sudo test -e /etc/radar/development.monitoring.json || sudo install -o root -g root -m 600 infra/monitoring.example.json /etc/radar/development.monitoring.json
+sudo nano /etc/radar/development.monitoring.json
+sudo python3 infra/scripts/healthchecks.py validate
+```
+
+Replace each placeholder with that check's complete `https://hc-ping.com/UUID`
+URL. Keep the URLs out of git, screenshots, tickets and logs. Validation checks
+permissions, unique URLs and supported URL format without sending any requests.
+Actual configuration files ending in `.monitoring.json` are git-ignored.
+
+Run the first checks and a real backup to establish the initial success signals:
+
+```bash
+sudo bash infra/scripts/monitor.sh
+sudo bash infra/scripts/backup.sh
+```
+
+The monitor checks root filesystem space (at least 3 GiB free, less than 85% used)
+and inode availability (at least 15% free). These thresholds assume the current
+single-disk layout; add checks for other mounts if database or backups move.
+It locates containers by Compose project/service labels, excluding one-off jobs,
+requires exactly one running healthy service container, and executes the existing
+API/database readiness or worker heartbeat-age probe. It never initiates research.
+It does not establish that each research output succeeded or an email reached an inbox.
+
+Healthy checks send success pings. Unhealthy checks withhold pings, allowing the
+configured grace period to absorb normal deployments. Independent checks continue
+even if a service or ping fails. If a service stays unhealthy, the monitoring host
+stops, or outbound connectivity fails, Healthchecks alerts when the grace expires.
+Long maintenance can be paused in the Healthchecks dashboard. Pause the research
+and scheduler checks when intentionally running base/research-only modes as appropriate;
+resume and verify pings when the services are enabled again.
+
+`backup.sh` reports success only after backup, archive validation, checksum and
+retention cleanup succeed. It reports failures via `/fail`; monitoring outages do
+not change the original backup exit code. With no monitoring file, backup behavior
+is unchanged. Deployment-triggered backups do not refresh this check, so they cannot
+mask a broken daily backup cron job. This is not a substitute for restore drills.
+
+In `sudo crontab -e`, retain the existing daily backup entry (do not duplicate it)
+and add monitoring every five minutes. Example:
+
+```cron
+17 3 * * * /bin/bash /opt/radar/source/infra/scripts/backup.sh >> /var/log/radar-backup.log 2>&1
+*/5 * * * * /bin/bash /opt/radar/source/infra/scripts/monitor.sh >> /var/log/radar-monitor.log 2>&1
+```
+
+Install the updated log rotation configuration:
+
+```bash
+sudo install -m 644 infra/radar-backup.logrotate /etc/logrotate.d/radar-backup
+sudo systemctl is-active cron
+sudo crontab -l
+```
+
+`monitor.sh` uses a separate nonblocking lock to avoid overlapping monitor runs
+without blocking backups/deployments. Each subprocess and HTTP call has a timeout.
+URLs and captured container output are never logged. No logs are sent to Healthchecks.
+The optional environment override is `RADAR_ENVIRONMENT=production`; this selects
+`/etc/radar/production.monitoring.json` and Compose project `radar-production`.
+Use separate checks for production. Monitoring runs from the host checkout, so no
+container rebuild or restart is needed for this integration.
+
+Confirm all five checks turn green after the initial manual calls. Use the email
+integration's test notification to verify delivery. A later controlled missed-ping
+test should use a disposable check, not stop application services. This monitors
+server-side readiness; an external public website uptime check is still separate.
+
 ## Operations and recovery
 
 ```bash
