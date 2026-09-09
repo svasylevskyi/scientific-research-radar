@@ -46,6 +46,10 @@ class RadarRunNotRetryableError(ValueError):
     pass
 
 
+class RadarOutputValidationError(RadarClientError):
+    """A completed response cannot be reused because its output was rejected."""
+
+
 class RadarRunner:
     def __init__(
         self,
@@ -210,6 +214,8 @@ class RadarRunner:
                 )
                 return
             failed_stage = self._stage(failed_run, active_stage)
+            if isinstance(exc, RadarOutputValidationError):
+                self.runs.clear_active_response(stage=failed_stage)
             message = f"{self._stage_label(active_stage)} failed: {exc}"
             self.runs.mark_failed(
                 run=failed_run,
@@ -240,7 +246,7 @@ class RadarRunner:
         )
         maximum_papers = int(run.digest_snapshot["maximum_papers"])
         if len(result.output.search.papers) > maximum_papers:
-            raise RadarClientError(
+            raise RadarOutputValidationError(
                 "The discovery stage returned more papers than the digest maximum"
             )
         self.runs.save_discovery_relevance(run=run, stage=stage, result=result)
@@ -287,7 +293,7 @@ class RadarRunner:
                 summary.external_id for summary in result.output.paper_summaries
             }
             if actual_ids != expected_ids:
-                raise RadarClientError(
+                raise RadarOutputValidationError(
                     "The summary stage must return exactly one summary for each batch paper"
                 )
             self.runs.save_summary_batch(
@@ -571,6 +577,6 @@ class RadarRunner:
     ) -> None:
         unknown = referenced_ids - known_ids
         if unknown:
-            raise RadarClientError(
+            raise RadarOutputValidationError(
                 f"The {stage} referenced unknown papers: " + ", ".join(sorted(unknown))
             )

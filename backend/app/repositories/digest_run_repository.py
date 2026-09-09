@@ -386,6 +386,17 @@ class DigestRunRepository:
         )
         if failed is None:
             raise ValueError("This run has no failed stage to retry")
+        # Older releases retained completed responses rejected by runner validation.
+        # Recover these existing failures on explicit retry without dropping live jobs
+        # retained after polling timeouts or connection failures.
+        rejected_prefixes = (
+            "Discovery relevance failed: The discovery stage returned more papers",
+            "Paper summaries failed: The summary stage must return exactly one summary",
+            "Trend analysis failed: The trend analysis referenced unknown papers:",
+            "Digest briefing failed: The digest briefing referenced unknown papers:",
+        )
+        if (failed.error_message or "").startswith(rejected_prefixes):
+            self.clear_active_response(stage=failed)
         failed.status = DigestRunStageStatus.PENDING
         failed.error_message = None
         failed.completed_at = None
