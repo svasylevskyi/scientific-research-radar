@@ -54,17 +54,49 @@ jobs:
           echo "sudo bash infra/scripts/deploy.sh $GITHUB_SHA $MODE" >> "$GITHUB_STEP_SUMMARY"
   deploy:
     needs: publish
-    # Start with scripted SSH from your laptop. Enable only after configuring a
-    # reachable, authenticated deployment path and the GitHub environment below.
+    # Enable only after configuring WireGuard and the development environment.
     if: vars.DEV_SSH_DEPLOY_ENABLED == 'true'
     environment: development
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install WireGuard
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wireguard-tools
+      - name: Connect deployment tunnel
+        env:
+          WG_PRIVATE_KEY: ${{ secrets.DEV_WG_PRIVATE_KEY }}
+          WG_SERVER_PUBLIC_KEY: ${{ vars.DEV_WG_SERVER_PUBLIC_KEY }}
+          WG_ENDPOINT: ${{ vars.DEV_WG_ENDPOINT }}
+          DEPLOY_HOST: ${{ vars.DEV_SSH_HOST }}
+        run: |
+          python3 infra/scripts/wireguard_config.py "$RUNNER_TEMP/radar-wireguard.conf"
+          sudo install -d -m 700 /etc/wireguard
+          sudo install -m 600 "$RUNNER_TEMP/radar-wireguard.conf" /etc/wireguard/wg-radar.conf
+          rm -f "$RUNNER_TEMP/radar-wireguard.conf"
+          sudo wg-quick up wg-radar
+          python3 - <<'PY'
+          import socket, time
+          for attempt in range(10):
+              try:
+                  with socket.create_connection(("10.77.0.1", 22), timeout=2):
+                      break
+              except OSError:
+                  if attempt == 9:
+                      raise SystemExit("SSH is unreachable through WireGuard; check UDP 51820, peer keys, and server firewall.")
+                  time.sleep(1)
+          PY
       - name: Configure SSH
         env:
           DEPLOY_KEY: ${{ secrets.DEV_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEV_SSH_KNOWN_HOSTS }}
         run: |
+          test -n "$DEPLOY_KEY" && test -n "$KNOWN_HOSTS"
+          umask 077
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
@@ -76,8 +108,14 @@ jobs:
           MODE: ${{ inputs.mode }}
         run: |
           [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ && "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
             "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA $MODE"
-      - name: Remove deployment key
+      - name: Remove deployment credentials and tunnel
         if: always()
-        run: rm -f ~/.ssh/id_ed25519
+        run: |
+          rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts "$RUNNER_TEMP/radar-wireguard.conf"
+          if sudo ip link show wg-radar > /dev/null 2>&1; then
+            sudo wg-quick down wg-radar || sudo ip link delete wg-radar
+          fi
+          sudo rm -f /etc/wireguard/wg-radar.conf

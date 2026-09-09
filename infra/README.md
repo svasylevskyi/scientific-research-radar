@@ -188,12 +188,20 @@ Initially GitHub publishes images and you run the printed deployment command ove
 your existing SSH session. This is intentional: your current Hetzner SSH rule only
 allows your home IP, not GitHub runners. No infrastructure token is needed in CI.
 
-To enable the optional SSH deployment job, first arrange a reachable deployment
-path (for example a runner with a controlled egress IP or an authenticated VPN).
-Do not open SSH to all addresses merely to work around a failed workflow. The
-standard hosted runner needs firewall access separately; setting secrets alone
-will not establish connectivity. If using a private runner, adjust `runs-on` for
-the deploy job and never use that runner for untrusted pull-request builds.
+The deployment job now uses WireGuard on the standard GitHub-hosted runner.
+The server listens on UDP 51820, with VPN address `10.77.0.1/32`; the runner uses
+`10.77.0.2/32`. Allow inbound UDP 51820 in the Hetzner firewall while keeping public
+TCP 22 restricted to your admin IP. Authorize the runner public key as a server peer
+with AllowedIPs `10.77.0.2/32`. Restrict tunnel INPUT to TCP 22 from that peer to
+`10.77.0.1`, drop other tunnel INPUT, and drop tunnel forwarding in DOCKER-USER.
+Start the server tunnel after Docker so that chain exists. No VPN default route,
+NAT, DNS override, or access to container networks is required.
+
+The workflow creates a private configuration, permits only the server VPN address
+as AllowedIPs, checks TCP 22, and removes the tunnel and key files on exit. Its
+concurrency group serializes deployments because they share one runner peer key.
+The initial real connection must be tested by a manual workflow run; CI uses dummy
+keys and never contacts the deployment server.
 
 Use a separate locked-password account named `radar-deploy` and a dedicated SSH
 key, not your personal admin key. Install these scripts as root-owned executables:
@@ -220,12 +228,39 @@ evals SSH input. This key still has deployment authority and must be protected.
 The deployment source and wrapper must remain root-owned. Update installed
 wrappers intentionally when their reviewed implementation changes.
 
-Create a GitHub Environment `development`, restricted to main, with secrets
-DEV_SSH_KEY and DEV_SSH_KNOWN_HOSTS, and variables DEV_SSH_HOST and DEV_SSH_USER.
-Verify the host public key fingerprint through your existing trusted session or
-Hetzner console before recording known_hosts; do not trust an unchecked ssh-keyscan.
-Enable the repository variable DEV_SSH_DEPLOY_ENABLED=true only once that path is
-configured. The manual workflow then publishes and deploys automatically.
+Create a GitHub Environment `development`, restricted to the `main` branch.
+Configure these environment secrets:
+
+| Secret | Value |
+| --- | --- |
+| `DEV_SSH_KEY` | Dedicated deployment SSH private key, including PEM/OpenSSH boundaries |
+| `DEV_SSH_KNOWN_HOSTS` | Verified server SSH public host key prefixed with `10.77.0.1` |
+| `DEV_WG_PRIVATE_KEY` | Runner WireGuard private key matching the authorized server peer |
+
+Configure these environment variables:
+
+| Variable | Value |
+| --- | --- |
+| `DEV_SSH_HOST` | `10.77.0.1` |
+| `DEV_SSH_USER` | `radar-deploy` |
+| `DEV_WG_ENDPOINT` | Server public IPv4 or hostname followed by `:51820` |
+| `DEV_WG_SERVER_PUBLIC_KEY` | Server WireGuard public key |
+
+Obtain the known-hosts entry over your existing trusted admin SSH connection:
+
+```bash
+sudo awk '{print "10.77.0.1 " $1 " " $2}' /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+Do not confuse the SSH host key, SSH deployment key, and WireGuard peer keys.
+Never commit private keys or paste them into logs or pull requests.
+Enable the **repository** variable `DEV_SSH_DEPLOY_ENABLED=true` only after these
+settings and server firewall rules are ready and this workflow is merged. The job
+condition cannot use an environment-only variable for this switch. Dispatch
+Deploy development from `main`, choosing `scheduled` to retain recurring runs.
+The workflow checks, publishes, and then deploys the exact commit. Failures before
+SSH leave the running application unchanged. Active runs still block deployment
+safely; wait for them to finish before trying again.
 
 ## Operations and recovery
 
