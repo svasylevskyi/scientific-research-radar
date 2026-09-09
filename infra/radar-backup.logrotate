@@ -1,4 +1,4 @@
-/var/log/radar-backup.log {
+/var/log/radar-backup.log /var/log/radar-monitor.log {
     weekly
     rotate 4
     compress
