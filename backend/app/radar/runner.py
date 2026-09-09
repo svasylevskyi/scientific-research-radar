@@ -214,6 +214,16 @@ class RadarRunner:
                 )
                 return
             failed_stage = self._stage(failed_run, active_stage)
+            from sqlalchemy import select
+            from app.models.radar_request import RadarRequest
+            latest_request = self.db.scalar(select(RadarRequest).where(
+                RadarRequest.run_id == run_id,
+                RadarRequest.stage_id == failed_stage.id,
+                RadarRequest.outcome == "unconfirmed",
+            ).order_by(RadarRequest.created_at.desc(), RadarRequest.observed_at.desc()).limit(1))
+            if latest_request is not None:
+                latest_request.outcome = "rejected" if latest_request.status == "completed" else "interrupted"
+
             if isinstance(exc, RadarOutputValidationError):
                 self.runs.clear_active_response(stage=failed_stage)
             message = f"{self._stage_label(active_stage)} failed: {exc}"
@@ -393,11 +403,56 @@ class RadarRunner:
         use_web_search: bool,
         reasoning_effort: str,
     ):
+        from sqlalchemy import select
+        from app.models.radar_request import RadarRequest
+
+        current_request = None
+
+        def observe(event: dict) -> None:
+            nonlocal current_request
+            self._renew_lease(run)
+            if event["event"] == "submitted":
+                price = self.settings.radar_pricing.get(self.client.model_name)
+                current_request = RadarRequest(
+                    run_id=run.id, stage_id=stage.id, model_name=self.client.model_name,
+                    reasoning_effort=reasoning_effort,
+                    pricing=price.model_dump(mode="json") if price else None,
+                )
+                self.db.add(current_request)
+            else:
+                existing = self.db.scalar(select(RadarRequest).where(
+                    RadarRequest.response_id == event["response_id"],
+                    RadarRequest.run_id == run.id,
+                ))
+                if existing:
+                    current_request = existing
+                if current_request is None:
+                    # Resuming a pre-ledger job: usage is real, original pricing unknown.
+                    current_request = RadarRequest(
+                        run_id=run.id, stage_id=stage.id, model_name=event["model_name"],
+                        reasoning_effort=reasoning_effort,
+                    )
+                    self.db.add(current_request)
+                current_request.response_id = event["response_id"]
+                if current_request.model_name != event["model_name"]:
+                    # Never silently apply an alias tariff to a different returned model.
+                    current_request.pricing = None
+                current_request.model_name = event["model_name"]
+                current_request.status = event["status"]
+                if event["usage"] is not None:
+                    current_request.usage = event["usage"]
+                current_request.web_search_calls = event["web_search_calls"]
+                current_request.service_tier = event["service_tier"]
+                current_request.observed_at = datetime.now(timezone.utc)
+            self.db.commit()
+
         def persist_response_id(response_id: str) -> None:
             self._renew_lease(run)
             self.runs.record_response_started(
                 run=run, stage=stage, response_id=response_id
             )
+            if current_request is not None:
+                current_request.response_id = response_id
             self.db.commit()
 
         def clear_lost_response() -> None:
@@ -413,6 +468,7 @@ class RadarRunner:
             on_response_started=persist_response_id,
             on_response_lost=clear_lost_response,
             on_poll=lambda: self._heartbeat(run),
+            on_usage=observe,
         )
 
     def _heartbeat(self, run: DigestRun) -> None:

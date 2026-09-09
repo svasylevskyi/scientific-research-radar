@@ -16,6 +16,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { Link as RouterLink, useLocation, useParams, useSearchParams } from "react-router-dom";
 
+import { AdminCostDetails, AdminCostSummary, useAdminRunCosts } from "../components/AdminRunCosts";
 import { ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi, digestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
@@ -55,7 +56,8 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
   const [digest, setDigest] = useState<Digest | null>(null);
   const [runs, setRuns] = useState<DigestRunSummary[]>([]);
   const [selectedRun, setSelectedRun] = useState<DigestRunDetail | null>(null);
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState<number | "costs">(0);
+  const costs = useAdminRunCosts(admin, digestId, selectedRun);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingRun, setIsLoadingRun] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -194,11 +196,12 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
       selectedRun.status === "completed",
     ];
     if (selectedRunIsInProgress) availability.splice(3, 1);
-    if (!availability[tab]) {
+    if (tab === "costs" && admin) return;
+    if (tab === "costs" || !availability[tab]) {
       const firstAvailable = availability.findIndex(Boolean);
       if (firstAvailable >= 0) setTab(firstAvailable);
     }
-  }, [selectedRun, selectedRunIsInProgress, tab]);
+  }, [admin, selectedRun, selectedRunIsInProgress, tab]);
 
   return (
     <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
@@ -286,6 +289,7 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
                       batches can make this number exceed four.
                     </Alert>
                   )}
+                  {admin && <AdminCostSummary {...costs} />}
                   {!admin && selectedRun.status === "failed" && (
                     <Alert severity="error">
                       {selectedRun.error_message ?? "This radar run failed."}
@@ -319,8 +323,10 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
                           <Tab label="Run Steps" />
                         )}
                         <Tab label="Feedback" disabled={selectedRun.status !== "completed"} />
+                        {admin && <Tab label="Usage & Cost" value="costs" />}
                       </Tabs>
                     </Paper>
+                    {admin && <TabPanel active={tab === "costs"}><AdminCostDetails {...costs} /></TabPanel>}
                     <TabPanel active={tab === 0 && Boolean(selectedRun.briefing)}>
                       <DigestBriefingResult run={selectedRun} />
                     </TabPanel>

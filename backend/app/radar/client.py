@@ -58,6 +58,7 @@ class RadarClient(Protocol):
         on_response_started: Callable[[str], None] | None = None,
         on_response_lost: Callable[[], None] | None = None,
         on_poll: Callable[[], None] | None = None,
+        on_usage: Callable[[dict], None] | None = None,
     ) -> RadarClientResult[OutputT]: ...
 
 
@@ -94,6 +95,7 @@ class OpenAIRadarClient:
         on_response_started: Callable[[str], None] | None = None,
         on_response_lost: Callable[[], None] | None = None,
         on_poll: Callable[[], None] | None = None,
+        on_usage: Callable[[dict], None] | None = None,
     ) -> RadarClientResult[OutputT]:
         try:
             from openai import OpenAI
@@ -138,9 +140,13 @@ class OpenAIRadarClient:
                     if on_response_lost:
                         on_response_lost()
             if response is None:
+                if on_usage:
+                    on_usage({"event": "submitted"})
                 response = client.responses.parse(**request)
                 if on_response_started:
                     on_response_started(response.id)
+            if on_usage:
+                on_usage(self._observation(response))
             deadline = time.monotonic() + self.background_poll_timeout_seconds
             transient_poll_failures = 0
             while response.status in {"queued", "in_progress"}:
@@ -158,6 +164,8 @@ class OpenAIRadarClient:
                     transient_poll_failures += 1
                     if transient_poll_failures >= 3:
                         raise
+                if on_usage:
+                    on_usage(self._observation(response))
 
             if response.status != "completed":
                 detail = self._response_failure_detail(response)
@@ -193,9 +201,27 @@ class OpenAIRadarClient:
         return RadarClientResult(
             output=parsed,
             response_id=response.id,
-            model_name=self.model_name,
+            model_name=getattr(response, "model", None) or self.model_name,
             usage=self._usage(response),
         )
+
+    def _observation(self, response) -> dict:
+        usage = getattr(response, "usage", None)
+        return {
+            "event": "response",
+            "response_id": response.id,
+            "model_name": getattr(response, "model", None) or self.model_name,
+            "status": response.status,
+            "usage": {
+                **self._usage(response).as_dict(),
+                "cache_write_tokens": getattr(getattr(usage, "input_tokens_details", None), "cache_write_tokens", 0) or 0,
+            } if usage is not None else None,
+            "web_search_calls": sum(
+                getattr(item, "type", None) == "web_search_call"
+                for item in (getattr(response, "output", None) or [])
+            ) if response.status not in {"queued", "in_progress"} else None,
+            "service_tier": getattr(response, "service_tier", None),
+        }
 
     @staticmethod
     def _response_failure_detail(response) -> str:

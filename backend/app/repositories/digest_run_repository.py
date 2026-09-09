@@ -531,6 +531,12 @@ class DigestRunRepository:
         result: RadarClientResult,
     ) -> None:
         if result.response_id:
+            from app.models.radar_request import RadarRequest
+            request = self.db.scalar(select(RadarRequest).where(
+                RadarRequest.response_id == result.response_id, RadarRequest.run_id == run.id,
+            ))
+            if request is not None:
+                request.outcome = "accepted"
             stage.response_ids = [*stage.response_ids, result.response_id]
             run.openai_response_id = result.response_id
         stage.active_response_id = None
