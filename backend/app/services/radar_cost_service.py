@@ -42,8 +42,8 @@ def estimate(request):
     ) / Decimal(1000000) + request.web_search_calls * Decimal(p["web_search_per_call"])
 
 
-def run_costs(db, run):
-    requests = list(db.scalars(select(RadarRequest).where(RadarRequest.run_id == run.id).order_by(RadarRequest.created_at, RadarRequest.id)))
+def run_costs(db, run, requests=None):
+    requests = requests if requests is not None else list(db.scalars(select(RadarRequest).where(RadarRequest.run_id == run.id).order_by(RadarRequest.created_at, RadarRequest.id)))
     rows = []
     total = Decimal(0)
     unknown = 0
@@ -76,3 +76,23 @@ def run_costs(db, run):
             "complete": not unknown and not historical_gap and run.status in {"completed", "failed"},
             "unknown_requests": unknown, "historical_gap": historical_gap,
             "request_count": len(requests), "stages": stages}
+
+
+def digest_costs(db, digest_id):
+    """Sum every recorded attempt, independent of history pagination or run status."""
+    from collections import defaultdict
+    from sqlalchemy.orm import load_only, selectinload
+    from app.models.digest_run import DigestRun, DigestRunStage
+    runs = list(db.scalars(select(DigestRun).where(DigestRun.digest_id == digest_id).options(
+        load_only(DigestRun.id, DigestRun.status, DigestRun.request_count),
+        selectinload(DigestRun.stages).load_only(DigestRunStage.id, DigestRunStage.position,
+            DigestRunStage.stage, DigestRunStage.response_ids, DigestRunStage.usage_data))))
+    requests = defaultdict(list)
+    for request in db.scalars(select(RadarRequest).join(DigestRun).where(DigestRun.digest_id == digest_id)):
+        requests[request.run_id].append(request)
+    totals = [run_costs(db, run, requests[run.id]) for run in runs]
+    return {"digest_id": str(digest_id), "currency": "USD", "run_count": len(runs),
+            "known_estimated_usd": str(sum((Decimal(t["known_estimated_usd"]) for t in totals), Decimal(0))),
+            "complete": all(t["complete"] for t in totals),
+            "unknown_requests": sum(t["unknown_requests"] for t in totals),
+            "incomplete_runs": sum(not t["complete"] for t in totals)}

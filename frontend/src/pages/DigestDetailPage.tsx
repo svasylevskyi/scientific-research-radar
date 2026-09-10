@@ -1,3 +1,4 @@
+import { AdminDigestCostSummary } from "../components/AdminDigestCostSummary";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
@@ -339,6 +340,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
             {error && <Alert severity="error" sx={{ mb: 2.5 }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 2.5 }}>{success}</Alert>}
 
+            {admin && <AdminDigestCostSummary key={digestId} digestId={digestId} />}
             {!admin && (
               <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3 }, mb: 3, borderRadius: 3 }}>
                 <Typography variant="h6" sx={{ mb: 0.75 }}>Radar controls</Typography>

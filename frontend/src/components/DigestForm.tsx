@@ -275,7 +275,7 @@ export function DigestForm({
       <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
         <Typography variant="h6" sx={{ mb: 0.75 }}>Reporting settings</Typography>
         <Typography color="text.secondary" sx={{ mb: 2.5 }}>
-          Choose the reporting window, schedule, and size of the digest.
+          Choose the reporting window and maximum number of papers. Scheduled runs use a rolling reporting window of the same length.
         </Typography>
         <Stack spacing={2.25}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
