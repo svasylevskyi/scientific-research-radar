@@ -128,7 +128,7 @@ export function AdminSubscriptionPlansPage() {
         <Typography variant="h6" gutterBottom>Revision history · {historyCode}</Typography>
         {historyError ? <Alert severity="error">History could not be loaded. Reload the catalogue to retry.</Alert> : !history ? <Typography role="status">Loading history…</Typography> : history.items.map((row) => <Box key={row.id} sx={{ mb: 2 }}>
           <Typography fontWeight={700}>Revision {row.revision} · {title(row.configuration.state)}</Typography>
-          <Typography variant="body2">{new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(row.created_at) ? row.created_at : `${row.created_at}Z`).toLocaleString()} · Admin ID: {row.created_by ?? "Deleted account"}</Typography>
+          <Typography variant="body2">{new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(row.created_at) ? row.created_at : `${row.created_at}Z`).toLocaleString()} · Admin ID: {row.created_by ?? "System or deleted account"}</Typography>
           <Typography>{row.change_note}</Typography>
           <Box component="details"><Box component="summary" sx={{ cursor: "pointer" }}>View saved configuration</Box><Stack spacing={0.5} sx={{ mt: 1 }}>
             <Typography>Name: {row.configuration.name}</Typography>
