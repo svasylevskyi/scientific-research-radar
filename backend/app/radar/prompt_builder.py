@@ -6,7 +6,7 @@ from typing import Any
 
 from app.models.digest_run import DigestRunStageType
 
-PROMPT_VERSION = "2026-09-09.1"
+PROMPT_VERSION = "2026-09-10.1"
 PROMPT_DIRECTORY = Path(__file__).resolve().parent / "prompts"
 
 

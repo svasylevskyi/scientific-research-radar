@@ -62,17 +62,19 @@ class SearchPaper(RadarContract):
     _validate_urls = field_validator("url", "pdf_url")(validate_http_url)
 
 
-class SearchStage(RadarContract):
+class SearchMetadata(RadarContract):
     queries: list[str]
     sources_used: list[str]
-    papers: list[SearchPaper]
     deduplication_notes: list[str]
     coverage_notes: list[str]
     next_step_recommendations: list[str]
 
 
-class RelevanceAssessment(RadarContract):
-    external_id: str
+class SearchStage(SearchMetadata):
+    papers: list[SearchPaper]
+
+
+class RelevanceDetails(RadarContract):
     topic_relevance_score: int = Field(ge=1, le=10)
     novelty_signal_score: int = Field(ge=1, le=10)
     practical_value_score: int = Field(ge=1, le=10)
@@ -94,6 +96,10 @@ class RelevanceAssessment(RadarContract):
     potential_value_for_audience: str
     caveats: list[str]
     next_step_recommendations: list[str]
+
+
+class RelevanceAssessment(RelevanceDetails):
+    external_id: str
 
 
 class RelevanceStage(RadarContract):
@@ -304,6 +310,34 @@ class DiscoveryRelevanceOutput(RadarContract):
         if set(assessment_ids) != set(paper_ids):
             raise ValueError("Every searched paper must have one relevance assessment")
         return self
+
+
+class AssessedPaper(RadarContract):
+    paper: SearchPaper
+    assessment: RelevanceDetails
+
+
+class DiscoveryResponse(RadarContract):
+    """Wire contract: one ID and one required assessment per paper.
+
+    The internal/history contract stays unchanged for existing runs and consumers.
+    """
+    search: SearchMetadata
+    papers: list[AssessedPaper]
+    methodology: str
+    recommendations: list[str]
+    quality_warnings: list[str]
+
+    def to_output(self) -> DiscoveryRelevanceOutput:
+        return DiscoveryRelevanceOutput(
+            search=SearchStage(**self.search.model_dump(), papers=[item.paper for item in self.papers]),
+            relevance=RelevanceStage(
+                methodology=self.methodology, recommendations=self.recommendations,
+                quality_warnings=self.quality_warnings,
+                assessments=[RelevanceAssessment(external_id=item.paper.external_id,
+                    **item.assessment.model_dump()) for item in self.papers],
+            ),
+        )
 
 
 class PaperSummariesOutput(RadarContract):
