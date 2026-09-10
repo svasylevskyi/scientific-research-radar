@@ -23,7 +23,9 @@ def list_plans(actor: CurrentAdmin, db: DbSession,
                     SubscriptionPlanRevision.code).group_by(SubscriptionPlanRevision.code).subquery()
     statement = select(SubscriptionPlanRevision).join(latest,
         (SubscriptionPlanRevision.code == latest.c.code) & (SubscriptionPlanRevision.revision == latest.c.revision))
-    return {"items": [serialize(row) for row in db.scalars(statement.order_by(SubscriptionPlanRevision.code).offset(offset).limit(limit))],
+    return {"items": [serialize(row) for row in db.scalars(statement.order_by(
+        func.coalesce(SubscriptionPlanRevision.configuration["display_order"].as_integer(), 0),
+        SubscriptionPlanRevision.code).offset(offset).limit(limit))],
             "total": db.scalar(select(func.count()).select_from(latest))}
 
 

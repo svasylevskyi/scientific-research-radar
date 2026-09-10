@@ -73,3 +73,15 @@ def test_database_rejects_competing_revision_writes(db_session_factory):
             second.commit()
         second.rollback()
         assert second.scalar(select(SubscriptionPlanRevision)).change_note == 'A'
+
+
+def test_display_order_uses_latest_revision_before_pagination(client, db_session_factory):
+    admin = _authorization(_super_admin_login(client, db_session_factory))
+    for code, order in [('zebra', 2), ('alpha', 10), ('beta', 2), ('first', 0)]:
+        assert client.post(URL, json={**payload(display_order=order), 'code': code}, headers=admin).status_code == 201
+    assert client.post(URL, json={**payload(display_order=20), 'code': 'first', 'expected_revision': 1}, headers=admin).status_code == 201
+    first = client.get(URL + '?limit=2', headers=admin).json()
+    second = client.get(URL + '?limit=2&offset=2', headers=admin).json()
+    assert first['total'] == second['total'] == 4
+    assert [p['code'] for p in first['items']] == ['beta', 'zebra']
+    assert [p['code'] for p in second['items']] == ['alpha', 'first']
