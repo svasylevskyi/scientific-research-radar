@@ -1,3 +1,4 @@
+from app.api.routes import admin_subscriptions
 from fastapi import APIRouter, Depends
 from app.api.security import guard_request
 
@@ -27,3 +28,5 @@ api_router.include_router(
 api_router.include_router(admin_pricing.router, prefix="/admin/pricing", tags=["administration", "pricing"])
 
 api_router.include_router(admin_spending.router, prefix="/admin/spending", tags=["administration", "spending"])
+
+api_router.include_router(admin_subscriptions.router, prefix="/admin/subscription-plans", tags=["administration", "subscriptions"])

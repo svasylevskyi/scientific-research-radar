@@ -9,6 +9,6 @@ read -r verb sha mode extra <<< "${1:-}"
 [[ $mode == base || $mode == research || $mode == scheduled ]] || exit 1
 cd /opt/radar/source
 # This checkout and installed command must be owned by root, not the SSH user.
-git fetch origin main
-git merge-base --is-ancestor "$sha" origin/main
+source infra/scripts/deploy-ref.sh
+verify_deploy_ref /opt/radar/source "$sha" development
 exec bash infra/scripts/deploy.sh "$sha" "$mode"

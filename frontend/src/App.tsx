@@ -1,3 +1,4 @@
+import { AdminSubscriptionPlansPage } from "./pages/AdminSubscriptionPlansPage";
 import { Box } from "@mui/material";
 import { SiteFooter } from "./components/SiteFooter";
 import { LandingPage } from "./pages/LandingPage";
@@ -126,6 +127,7 @@ export default function App() {
             }
           />
           <Route path="/admin/spending" element={<RequireAuth><RequireAdmin superAdmin><AdminSpendingPage /></RequireAdmin></RequireAuth>} />
+          <Route path="/admin/subscription-plans" element={<RequireAuth><RequireAdmin><AdminSubscriptionPlansPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/pricing" element={<RequireAuth><RequireAdmin superAdmin><AdminPricingPage /></RequireAdmin></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

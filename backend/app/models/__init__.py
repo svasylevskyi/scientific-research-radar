@@ -1,3 +1,4 @@
+from app.models.subscription_plan import SubscriptionPlanRevision
 from app.models.radar_price import RadarPrice
 from app.models.radar_request import RadarRequest
 from app.models.auth_session import AuthSession

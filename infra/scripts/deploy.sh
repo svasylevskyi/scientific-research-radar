@@ -6,11 +6,8 @@ TARGET_SHA=${1:?Provide a tested full commit SHA}
 TARGET_MODE=${2:-base}
 set_release "$TARGET_SHA" "$TARGET_MODE"
 SOURCE=$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)
-git -C "$SOURCE" fetch origin main
-# Production credentials must never execute an unreviewed feature-branch image.
-git -C "$SOURCE" merge-base --is-ancestor "$TARGET_SHA" origin/main || {
-  echo 'Only commits merged into main can be deployed.' >&2; exit 1;
-}
+source "$SOURCE/infra/scripts/deploy-ref.sh"
+verify_deploy_ref "$SOURCE" "$TARGET_SHA" "$RADAR_ENVIRONMENT"
 install -d -m 750 "$RELEASE"
 git -C "$SOURCE" archive "$TARGET_SHA" | tar -x -C "$RELEASE"
 dc config --quiet
