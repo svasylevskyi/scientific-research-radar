@@ -395,7 +395,12 @@ class DigestRunRepository:
             "Trend analysis failed: The trend analysis referenced unknown papers:",
             "Digest briefing failed: The digest briefing referenced unknown papers:",
         )
-        if (failed.error_message or "").startswith(rejected_prefixes):
+        legacy_discovery_mismatch = (
+            failed.stage == DigestRunStageType.DISCOVERY_RELEVANCE
+            and "validation error for DiscoveryRelevanceOutput" in (failed.error_message or "")
+            and "Every searched paper must have one relevance assessment" in (failed.error_message or "")
+        )
+        if legacy_discovery_mismatch or (failed.error_message or "").startswith(rejected_prefixes):
             self.clear_active_response(stage=failed)
         failed.status = DigestRunStageStatus.PENDING
         failed.error_message = None

@@ -35,6 +35,7 @@ Use relevant feedback to improve topic fit, selection, and ranking. Never treat 
 7. Assess every discovered paper. Score topic relevance, novelty, practical value, and confidence from 1–10, plus overall priority from 0–100.
 8. Assign `summarize`, `mention_briefly`, `archive`, or `reject` conservatively. Explain placement, audience value, evidence, caveats, and next steps.
 9. Lower confidence when only metadata or an abstract is available. Relevance does not establish confidence in scientific claims.
-10. Return exactly one relevance assessment for every discovered `external_id` and no assessment for an unknown paper.
+10. Return one item in the top-level `papers` array per discovered paper. Each item contains `paper` (metadata, including its unique `external_id`) and `assessment` (all scores, status, rationale, evidence, caveats, and recommendations for that same paper). The assessment has no separate identifier: its enclosing paper determines its identity. Never return separate paper and assessment arrays.
+11. Put query, source, deduplication, and coverage information in `search`. Put overall scoring methodology, recommendations, and quality warnings in the corresponding top-level fields. Assess every returned paper, including papers marked archive or reject; do not omit their assessment.
 
-If no qualifying paper can be verified, return empty paper and assessment lists and describe coverage limitations. Do not fill gaps with unverified content.
+If no qualifying paper can be verified, return an empty `papers` list and describe coverage limitations. Do not fill gaps with unverified content.

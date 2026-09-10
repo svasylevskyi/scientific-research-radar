@@ -3,7 +3,8 @@ import time
 from collections.abc import Callable
 from typing import Generic, Protocol, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+from app.radar.contracts import DiscoveryResponse, DiscoveryRelevanceOutput
 
 from app.core.config import Settings
 from app.radar.prompt_builder import RadarPrompt
@@ -105,6 +106,7 @@ class OpenAIRadarClient:
                 timeout=self.request_timeout_seconds,
                 max_retries=0,
             )
+            wire_format = DiscoveryResponse if response_format is DiscoveryRelevanceOutput else response_format
             request: dict = {
                 "model": self.model_name,
                 "reasoning": {"effort": reasoning_effort},
@@ -116,7 +118,7 @@ class OpenAIRadarClient:
                 "background": True,
                 "store": False,
                 "prompt_cache_key": f"scientific-radar-{prompt.version}",
-                "text_format": response_format,
+                "text_format": wire_format,
             }
             if use_web_search:
                 request.update(
@@ -185,12 +187,17 @@ class OpenAIRadarClient:
                     raise RadarClientError(
                         f"OpenAI {prompt.stage.value} returned no structured data"
                     )
-                try:
-                    parsed = response_format.model_validate_json(output_text)
-                except Exception:
-                    if on_response_lost:
-                        on_response_lost()
-                    raise
+                parsed = wire_format.model_validate_json(output_text)
+            if isinstance(parsed, DiscoveryResponse):
+                parsed = parsed.to_output()
+        except ValidationError as exc:
+            if on_response_lost:
+                on_response_lost()
+            # Do not expose raw model output and Pydantic internals in the UI.
+            raise RadarClientError(
+                f"The {prompt.stage.value} response did not pass data validation. "
+                "Retry the failed stage to request a fresh response."
+            ) from exc
         except RadarClientError:
             raise
         except Exception as exc:

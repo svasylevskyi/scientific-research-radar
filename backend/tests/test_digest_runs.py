@@ -30,6 +30,7 @@ from app.radar.contracts import (
     HistoricalChange,
     DigestBriefingOutput,
     DiscoveryRelevanceOutput,
+    DiscoveryResponse,
     PaperSummariesOutput,
     RadarOutput,
     TrendAnalysisOutput,
@@ -781,7 +782,12 @@ def test_openai_client_starts_background_structured_response(monkeypatch) -> Non
         def retrieve(self, response_id):
             retrieved.append(response_id)
             return SimpleNamespace(
-                output_text=output.model_dump_json(),
+                output_text=DiscoveryResponse(
+                    search=output.search.model_dump(exclude={"papers"}),
+                    papers=[{"paper": p.model_dump(), "assessment": a.model_dump(exclude={"external_id"})}
+                            for p, a in zip(output.search.papers, output.relevance.assessments)],
+                    **output.relevance.model_dump(exclude={"assessments"}),
+                ).model_dump_json(),
                 id=response_id,
                 status="completed",
                 usage=None,
@@ -833,7 +839,7 @@ def test_openai_client_starts_background_structured_response(monkeypatch) -> Non
     ]
     assert calls[0]["max_tool_calls"] == 8
     assert calls[0]["store"] is False
-    assert calls[0]["text_format"] is DiscoveryRelevanceOutput
+    assert calls[0]["text_format"] is DiscoveryResponse
 
 
 def test_stage_prompts_are_versioned_compact_and_compliant() -> None:
@@ -849,7 +855,7 @@ def test_stage_prompts_are_versioned_compact_and_compliant() -> None:
         papers=[],
     )
 
-    assert discovery.version == "2026-09-09.1"
+    assert discovery.version == "2026-09-10.1"
     assert "untrusted data" in discovery.system
     assert "Public accessibility does not establish" in discovery.system
     assert "could substitute for a source" in discovery.system
