@@ -48,3 +48,24 @@ Use an OpenAI organization admin key authorized to read costs, not the ordinary 
 The backend calls the [Costs API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/costs) at a fixed HTTPS URL, filters by the configured project, groups by project and charge line, and follows pagination with bounded requests/timeouts. Invalid, non-USD, wrong-project, truncated, and failed responses produce an error instead of a partial total. Provider errors are sanitized. Negative amounts (credits) are preserved. Repeated refreshes within five minutes reuse provider results; local estimates are queried anew.
 
 `GET /api/v1/admin/spending?from_date=YYYY-MM-DD&to_date=YYYY-MM-DD` accepts inclusive UTC dates spanning at most 93 days. Missing daily buckets show “Not reported”. Billing can lag, including current-day data. Local totals cover this environment's ledger by request creation time, with unpriced requests and detectable legacy gaps identified. Provider totals may include other applications and environments in the same project; the two scopes and time attribution are not necessarily identical. The page deliberately does not claim exact reconciliation, reprice old runs, or assign provider charges to individual runs. Switching the configured project changes only the provider side, not historical local ledger scope.
+
+## One-time backfill for recent runs
+
+When historical prices are known to match today's configuration, explicitly fill missing estimates using current database pricing. This is an administrative correction, not automatic historical repricing. It updates request pricing snapshots; the existing admin UI calculates run totals from them immediately.
+
+After deploying the version containing this script, on the server from `/opt/radar/source`:
+
+```bash
+# Preview only (no changes):
+sudo bash infra/scripts/backfill-costs.sh
+# Apply the reviewed correction:
+sudo bash infra/scripts/backfill-costs.sh --apply
+```
+
+For a local backend installation, use `python -m app.radar.backfill_costs` from `backend`, with the same arguments. Run inside the deployed API container via the wrapper above, not the host's Python.
+
+Optional arguments: `--run-id UUID` limits the operation to one run; `--reprice-known` also replaces already known estimates with the current version. Without that flag, only unknown estimates are eligible. Preview and apply each select the current versions at invocation, so avoid publishing pricing between them.
+
+Only completed or failed runs are eligible, including recorded retry requests. Each applied snapshot retains its prior value and a backfill timestamp for audit. Applying the same version again makes no further changes. The transaction locks selected rows on PostgreSQL and commits all corrections together; errors roll it back. No OpenAI calls occur.
+
+Exact recorded model pricing is preferred; the saved tariff model is a fallback only when available. No model-name prefix guessing is performed. Missing usage, unsupported service tiers, absent cache-write rates, or missing tariffs are reported and left unchanged. Requests that predate the accounting ledger cannot be reconstructed; run totals with such gaps remain incomplete. Configure any required cache-write rates before running this command.
