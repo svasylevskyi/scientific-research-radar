@@ -46,3 +46,29 @@ API (all routes require admin authentication):
 - `GET /api/v1/admin/subscription-plans/{code}/revisions?offset=0&limit=25`: immutable history.
 
 Apply migration `20260910_0015` before running the new API (`alembic upgrade head`; automated deployment already does this). It adds only `subscription_plan_revisions`. Downgrading this migration removes the catalogue and its history; existing users, digests and runs are unchanged. Provider credentials and existing super-admin-only cost/pricing settings are not exposed to ordinary admins.
+
+## Create initial draft plans (optional, one-time script)
+
+After deploying the code containing this script, run from `/opt/radar/source`:
+
+```bash
+# Preview full proposed values without writing:
+sudo bash infra/scripts/seed-subscription-plans.sh
+# Create only plan codes that do not exist:
+sudo bash infra/scripts/seed-subscription-plans.sh --apply
+```
+
+For local backend development use `python -m app.subscriptions.seed_plans` from `backend`, adding `--apply` to write. No Stripe keys or API calls are needed. No additional migration is added by this script; the catalogue migration must already be applied.
+
+| Draft | Monthly / annual EUR | Digests | Papers per run / month | Total / manual runs per month | Schedules |
+| --- | --- | --- | --- | --- | --- |
+| Preview | 0 / not proposed | 1 | 10 / 10 | 1 / 1 | None |
+| Explorer | 9 / 90 | 2 | 20 / 50 | 5 / 1 | Weekly, monthly, quarterly |
+| Researcher | 19 / 190 | 5 | 30 / 200 | 20 / 5 | Daily, weekly, monthly, quarterly |
+| Professional | 39 / 390 | 10 | 30 / 500 | 50 / 15 | Daily, weekly, monthly, quarterly |
+
+These are starting proposals, not validated commercial allowances. Monthly prices and paper/topic/manual-run limits follow the earlier discussion; total-run limits of 1/5/20/50 are provisional protections for discovery and synthesis costs. Annual prices reflect two months' discount. Professional is capped at the currently supported 30 papers per run. Quarterly schedules are included on all paid drafts. A permitted daily frequency does not promise unlimited daily runs; total allowances will still apply once enforcement is implemented.
+
+Preview proposes a 14-day, one-run trial with no scheduling, rather than recurring free research. The current catalogue cannot enforce one-time trial eligibility or expiry; implement those rules before offering Preview publicly. Paid draft trial days are zero. All drafts include email and leave the tax-display policy undecided.
+
+The script never replaces an existing code, even if archived or customized, and never adds a revision to an existing plan. Repeating it is safe. Concurrent attempts are guarded by the unique code/revision constraint. Created entries record a system-origin change note; a missing admin ID can mean a system action or a subsequently deleted admin. Review and customize all values in Plans before moving beyond the draft stage. No public pricing, access, subscriptions, or radar usage changes.
