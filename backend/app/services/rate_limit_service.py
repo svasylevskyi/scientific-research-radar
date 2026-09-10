@@ -12,6 +12,7 @@ from app.models.rate_limit import RateLimitBucket
 
 # Central policy: these count attempts, including successful ones. No permanent locks.
 POLICIES = {
+    "sandbox-billing-user": (20, 60),
     "api-ip": (1200, 60),
     "api-user": (600, 60),
     "login-ip": (60, 900),

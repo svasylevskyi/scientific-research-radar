@@ -75,6 +75,9 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api/v1")
 
+from app.api.routes.stripe_sandbox import webhook_router
+app.include_router(webhook_router, prefix="/api/v1/webhooks", tags=["sandbox billing"])
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(request, exc):

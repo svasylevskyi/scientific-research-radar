@@ -1,6 +1,6 @@
 # Paid subscriptions implementation branch
 
-Work is isolated on `feature/paid-subscriptions`. Do not merge this branch into main until the subscription implementation is reviewed and ready.
+Work continues on `feature/paid-subscriptions`, with each reviewed increment merged separately. Sandbox checkout is disabled by default, so catalogue changes can be deployed without enabling billing.
 
 ## Development deployment
 
@@ -29,15 +29,15 @@ This replaces the application in the existing development environment; it does n
 4. User subscription/usage pages and admin subscription review. Handle renewal, cancellation, payment failures, tier changes, and period boundaries explicitly.
 5. Abuse/concurrency tests, provider test-mode lifecycle tests, deployment configuration, and operational documentation before live payments.
 
-Business decisions still needed: payment provider; initial tiers/prices/currency/quotas; trial and existing-user policy; upgrade/downgrade timing; failed-run quota rules. Prices and quotas should be managed in the database rather than hardcoded. Start with test payments only.
+Stripe is the selected provider; the first sandbox test uses the configured Explorer EUR 9 monthly / EUR 90 annual prices with inclusive tax behavior. Decisions still needed before public billing: final tiers and quotas, trial and existing-user policy, upgrade/downgrade timing, and failed-run quota rules. Prices and quotas should be managed in the database rather than hardcoded. Start with test payments only.
 
 ## Implemented: internal plan catalogue
 
-All active admins, including ordinary admins, can use **Plans** in the header (`/admin/subscription-plans`). The catalogue starts empty; create draft plans with the editor. There are no automatic plan seeds, public catalogue changes, user assignments, billing requests or radar quota checks.
+All active admins, including ordinary admins, can use **Plans** in the header (`/admin/subscription-plans`). The catalogue starts empty; create draft plans with the editor. Catalogue editing itself does not seed plans, change the public catalogue, assign users, make billing requests or enforce radar quotas. Admin-only sandbox billing is a separate explicit flow described below.
 
 Configurable fields: stable plan code, name, description, internal state (Draft / Reviewed / Archived), currency (EUR/USD/GBP/PLN), monthly price, optional annual price, proposed tax display, maximum digests, papers per run (1–30), monthly papers, total monthly runs, manual runs within that total, scheduling frequencies, email delivery, trial days and future display order. Monthly allowances are separate from the proposed billing interval; annual billing does not imply an annual lump-sum allowance. These are planning values, not promises enforced in the product.
 
-Every save appends a complete revision with UTC creation time, admin ID and required change note. Codes are stable; archive a plan instead of deleting audit history. Reviewed means internally reviewed, never purchasable. Multiple administrators may collaborate: the API requires `expected_revision`, and a unique database constraint prevents concurrent revision collisions. A stale save returns 409 and the editor preserves the unsaved input. Reload the catalogue and select Edit on the latest plan to reconcile it. Previous revisions are read-only.
+Every save appends a complete revision with UTC creation time, admin ID and required change note. Codes are stable; archive a plan instead of deleting audit history. Reviewed means internally reviewed, never published for user purchase. Admin sandbox testing is separately gated. Multiple administrators may collaborate: the API requires `expected_revision`, and a unique database constraint prevents concurrent revision collisions. A stale save returns 409 and the editor preserves the unsaved input. Reload the catalogue and select Edit on the latest plan to reconcile it. Previous revisions are read-only.
 
 API (all routes require admin authentication):
 
@@ -75,7 +75,7 @@ The script never replaces an existing code, even if archived or customized, and 
 
 ## Stripe sandbox mapping and read-only verification
 
-Plan revisions can now hold an optional `stripe_sandbox` mapping containing `product_id`, `monthly_price_id` and optional `annual_price_id`. These are identifiers, not API credentials. There is no mapping to live payments or checkout. Existing plans have no mapping until an admin saves one. Changing a mapping creates a new audited plan revision; historical mappings remain intact.
+Plan revisions can now hold an optional `stripe_sandbox` mapping containing `product_id`, `monthly_price_id` and optional `annual_price_id`. These are identifiers, not API credentials. There is no mapping to live payments. The admin sandbox checkout described below uses this mapping. Existing plans have no mapping until an admin saves one. Changing a mapping creates a new audited plan revision; historical mappings remain intact.
 
 In the selected Stripe development sandbox, create a restricted API key with **Read** access to **Products** and **Prices**, leaving unrelated permissions disabled. Store it only on the server, in `/etc/radar/development.env`:
 
@@ -93,7 +93,7 @@ After deploying, open Plans → Edit Explorer. Set the tax-display policy to Inc
 | Monthly price | `price_1UE7Iw6NGESYebbCG0nKIFeL` |
 | Annual price | `price_1UE7Og6NGESYebbCrbdzlLve` |
 
-Save with a change note, then click **Check saved revision in Stripe** on the Explorer card. All admins may perform this check. It issues only GET requests for that product and its mapped prices, verifying sandbox mode, active status, product ownership, expected amount/currency, non-metered monthly/yearly intervals and explicit inclusive tax behavior. The result applies to the selected saved revision at the displayed time; it is not a permanent authorization for checkout. It does not run automatically on page load or catalogue edits. Future checkout must validate eligibility and current provider state independently.
+Save with a change note, then click **Check saved revision in Stripe** on the Explorer card. All admins may perform this check. It issues only GET requests for that product and its mapped prices, verifying sandbox mode, active status, product ownership, expected amount/currency, non-metered monthly/yearly intervals and explicit inclusive tax behavior. The result applies to the selected saved revision at the displayed time; it is not a permanent authorization for checkout. It does not run automatically on page load or catalogue edits. The sandbox checkout validates eligibility and current provider state independently before creating each new attempt.
 
 Endpoint: `POST /api/v1/admin/subscription-plans/{code}/revisions/{revision}/check-stripe`. This initiates read-only provider checks; it never creates or updates a Stripe object. Provider failures return sanitized messages. No secrets or full provider objects are returned to the browser.
 
@@ -104,3 +104,83 @@ Sandbox and live mode should not be assumed to have different tax behavior. Stri
 Check the actual returned behavior before changing anything. Once a price explicitly has inclusive or exclusive tax behavior, Stripe does not allow switching between them; a replacement price is needed if the explicit choice was wrong. Setting inclusive behavior alone neither enables automatic tax calculation nor establishes tax registrations.
 
 References: [Stripe tax behavior](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior), [restricted keys](https://docs.stripe.com/keys/restricted-api-keys), [retrieve prices](https://docs.stripe.com/api/prices/retrieve).
+
+## Admin-only sandbox checkout and subscription lifecycle
+
+Open **Admin → Plans → Test sandbox billing**. Any admin can test their own Explorer subscription, choose monthly or annual checkout, review saved status, refresh from Stripe, and open the customer portal. Ordinary users cannot access these endpoints. This does not publish plans, assign user entitlements, enforce quotas, enable real payments, or change radar usage. Draft and reviewed Explorer revisions may be tested; archived revisions and nonzero trials are rejected. The return page does not grant access or claim payment success.
+
+Each attempt pins the immutable plan revision, Stripe price, and creation parameters. New attempts re-check current prices, including explicit inclusive tax behavior. Pending attempts resume their original revision even if the catalogue has changed. Completed work is not silently re-priced. A changed subscription price/quantity in Stripe is shown as a mismatch. A pending or nonterminal subscription blocks a second checkout for that admin. Only `canceled` and `incomplete_expired` subscriptions permit another; cancellation scheduled for period end does not yet permit one.
+
+### Server setup (development sandbox only)
+
+1. Deploy this revision. Migration `20260910_0016` creates isolated sandbox account-lock, checkout, and processed-event tables. The usual deployment script runs migrations. Local development needs `alembic upgrade head`.
+2. In the **same Stripe sandbox** used for the mapped prices, extend or replace the read-only restricted key. The application now calls these resources:
+
+   | Resource | Access needed |
+   | --- | --- |
+   | Products and Prices | Read |
+   | Checkout Sessions | Write, including retrieval |
+   | Subscriptions | Read |
+   | Customer portal | Write for sessions, Read for configurations |
+
+   Permission labels may be grouped in Stripe's key editor. Checkout creates its test customer and subscription; use the sandbox key editor's required dependencies if it requests additional permissions. Keep unrelated permissions disabled. The app itself never creates products/prices, updates subscriptions directly, or accepts live keys. Store the key only as `STRIPE_SANDBOX_API_KEY` on the API server; do not paste it into chat or the browser.
+3. Configure the **sandbox customer portal** in Stripe. Enable cancellation (preferably at period end), payment-method updates and invoice history. Disable subscription/plan/quantity updates. Save the configuration and record its `bpc_…` ID. If the Dashboard does not show the ID, use the authenticated Stripe Workbench API explorer or CLI to list `GET /v1/billing_portal/configurations` in that sandbox; choose the active configuration whose settings you just saved. No new Radar secret is needed for this ID. The API validates the configuration before opening each portal session. A billing-email change in Stripe does not change the verified Radar login email.
+4. In Stripe Workbench → Webhooks, create a **snapshot event** destination for **Your account** in that sandbox, with this public HTTPS endpoint:
+
+   ```text
+   https://research-radar-dev.duckdns.org/api/v1/webhooks/stripe-sandbox
+   ```
+
+   Subscribe to:
+
+   ```text
+   checkout.session.completed
+   checkout.session.expired
+   customer.subscription.created
+   customer.subscription.updated
+   customer.subscription.deleted
+   ```
+
+   Copy this endpoint's `whsec_…` signing secret to the server. A CLI listener uses a different signing secret; do not mix them. Thin events and Connect account events are not part of this integration.
+5. Update `/etc/radar/development.env`:
+
+   ```env
+   STRIPE_SANDBOX_API_KEY=rk_test_your_restricted_key
+   STRIPE_SANDBOX_WEBHOOK_SECRET=whsec_your_sandbox_endpoint_secret
+   STRIPE_SANDBOX_PORTAL_CONFIGURATION_ID=bpc_your_sandbox_configuration
+   STRIPE_SANDBOX_CHECKOUT_ENABLED=true
+   ```
+
+   Keep `FRONTEND_BASE_URL=https://research-radar-dev.duckdns.org`. Redeploy/recreate the API to load environment changes. Compose passes the Stripe credentials and enable flag only to the API, not research/scheduler/email workers. Setting checkout to false prevents new/resumed checkout and new portal sessions; webhook processing and explicit status refresh remain available for reconciliation. It does **not** cancel existing Stripe sandbox subscriptions or their test renewals.
+
+No new Python/JavaScript dependency or paid middleware is needed for this increment. It uses the existing HTTP client and database. Stripe-hosted Checkout and portal handle test card data; Radar stores no card details, raw webhook payloads or customer billing addresses. Automatic tax is explicitly **disabled** in this sandbox checkout: the inclusive price is charged as configured, but no tax calculation or registration validation is implemented. Do not treat a successful sandbox payment as tax or production readiness.
+
+### Manual acceptance tests after deployment
+
+- As an admin, open Plans → Test sandbox billing; test the monthly Explorer price. In hosted Checkout use Stripe's successful test card `4242 4242 4242 4242`, a future expiry and any valid test CVC. Never use a real card. Return to Radar and wait for `active`; verify the event destination reports successful deliveries.
+- Confirm repeated clicks/refreshes resume the same open Checkout session. Returning via Cancel leaves it open; it expires after one hour. Use **Refresh from Stripe** after expiry, or wait for the expiry webhook, to start a different interval.
+- With a separate admin account, try Stripe's generic decline card `4000 0000 0000 0002`. Checkout should report the decline; Radar must not claim an active subscription. Correcting the card may complete that same checkout. Initial card-decline reasons stay in hosted Checkout; this page tracks checkout/subscription state, not a payment-attempt ledger.
+- Open the portal after success. Update the test payment method, view invoices, and cancel at period end. On return, the cancellation notice should appear after the webhook or an explicit refresh. Immediate cancellation in the sandbox Dashboard should yield `canceled` and allow a new annual test checkout.
+- Resend an actual event for this checkout from Workbench. Duplicate delivery should be acknowledged without duplicate data. Resending an older event after cancellation must still show the current canceled state.
+- Renewal and failed-renewal state transitions are covered with mocked provider data in automated tests. For provider-level renewal tests, use Stripe Billing's sandbox simulation/test-clock tools. This checkout creates customers without a test clock, so existing checkout customers cannot simply be attached to a clock afterward. A separate clock-backed test fixture is a future addition; do not claim the automated tests performed a Stripe renewal. Ordinary sandbox renewals will be reflected through subscription updates and the current billing period.
+- Confirm normal users have no sandbox page access and their digests/runs still work without subscription checks.
+
+### Recovery and operational boundaries
+
+The database records the exact checkout intent before the external POST. An ambiguous timeout is retried with the same Stripe idempotency key and parameters; concurrent requests serialize on a per-admin database row. If an unresolved intent is older than 23 hours, the app refuses to replay it because Stripe may prune keys after 24 hours. An operator must reconcile that attempt's `radar_attempt_id` metadata in the sandbox before clearing it; do not delete pending database rows to bypass this protection. If an unissued intent's one-hour expiry has already elapsed, Stripe can reject the frozen creation parameters; this also requires reconciliation rather than changing the idempotent request. Known sessions can be refreshed regardless of age.
+
+Webhooks verify the original raw body with the endpoint secret, a constant-time signature comparison, and a five-minute timestamp tolerance. Keep the server clock synchronized. Processing fetches current provider state under the same per-admin lock rather than trusting event order. State and the event ID commit together; duplicate IDs are ignored, and a failed provider request is not acknowledged as processed, allowing Stripe to retry. Unknown events/unrelated sandbox objects are acknowledged without attaching them to a user. Provider operations have bounded timeouts. This small admin test handles events inline; a durable webhook inbox/worker and broader invoice/reconciliation monitoring should precede public billing scale.
+
+Status polling reads only the database every ten seconds. **Refresh from Stripe** reconciles the latest attempt explicitly if events are delayed. A successful return URL alone has no effect. Deleting a Radar test account does not cancel its Stripe sandbox subscription; cancel it in Stripe before removing the account. Full invoices, tax outcomes, refunds, disputes, trials, plan switching, public checkout, entitlements and dunning policies remain future work.
+
+API surface:
+
+- `GET /api/v1/admin/subscription-testing` — own sandbox state and recent 20 attempts.
+- `POST /api/v1/admin/subscription-testing/checkout` — `{ "revision": 1, "interval": "monthly" }` (or `annual`); uses server-side Explorer mapping.
+- `POST /api/v1/admin/subscription-testing/refresh` — retrieve current Stripe state for own latest attempt.
+- `POST /api/v1/admin/subscription-testing/portal` — own customer, fixed server-controlled return URL.
+- `POST /api/v1/webhooks/stripe-sandbox` — public, signed Stripe snapshot events only.
+
+Admin write/refresh operations share a limit of 20 attempts per minute per admin, in addition to existing API guards. Checkout URLs and customer IDs cannot be supplied by the browser. API errors exclude provider error bodies and secrets.
+
+References: [Stripe webhooks](https://docs.stripe.com/webhooks), [idempotent requests](https://docs.stripe.com/api/idempotent_requests), [portal configurations](https://docs.stripe.com/api/customer_portal/configurations/retrieve), [Billing tests](https://docs.stripe.com/billing/testing), [test cards](https://docs.stripe.com/testing).

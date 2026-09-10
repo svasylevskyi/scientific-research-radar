@@ -16,6 +16,8 @@ x-backend: &backend
     # Provider billing/catalogue credentials belong only in the API service.
     OPENAI_ADMIN_API_KEY: ""
     STRIPE_SANDBOX_API_KEY: ""
+    STRIPE_SANDBOX_WEBHOOK_SECRET: ""
+    STRIPE_SANDBOX_CHECKOUT_ENABLED: "false"
   init: true
   restart: unless-stopped
   security_opt: [no-new-privileges:true]
@@ -52,6 +54,8 @@ services:
       <<: *backend-env
       OPENAI_ADMIN_API_KEY: ${OPENAI_ADMIN_API_KEY:-}
       STRIPE_SANDBOX_API_KEY: ${STRIPE_SANDBOX_API_KEY:-}
+      STRIPE_SANDBOX_WEBHOOK_SECRET: ${STRIPE_SANDBOX_WEBHOOK_SECRET:-}
+      STRIPE_SANDBOX_CHECKOUT_ENABLED: ${STRIPE_SANDBOX_CHECKOUT_ENABLED:-false}
     networks:
       data:
       proxy:
