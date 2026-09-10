@@ -69,3 +69,7 @@ Optional arguments: `--run-id UUID` limits the operation to one run; `--reprice-
 Only completed or failed runs are eligible, including recorded retry requests. Each applied snapshot retains its prior value and a backfill timestamp for audit. Applying the same version again makes no further changes. The transaction locks selected rows on PostgreSQL and commits all corrections together; errors roll it back. No OpenAI calls occur.
 
 Exact recorded model pricing is preferred; the saved tariff model is a fallback only when available. No model-name prefix guessing is performed. Missing usage, unsupported service tiers, absent cache-write rates, or missing tariffs are reported and left unchanged. Requests that predate the accounting ledger cannot be reconstructed; run totals with such gaps remain incomplete. Configure any required cache-write rates before running this command.
+
+## Digest totals in the admin panel
+
+Admin digest details and run history show the estimated total across all runs, including failed runs and recorded retries. The summary refreshes every 15 seconds and uses the same saved pricing and calculation rules as individual run costs. It includes all runs regardless of history pagination. Active runs, unknown request costs, and gaps in historical accounting make the total an explicitly incomplete known subtotal. Regular users cannot access the aggregate endpoint (`GET /api/v1/admin/digests/{digest_id}/costs`); existing admin ownership protections also apply.

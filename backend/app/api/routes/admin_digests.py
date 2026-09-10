@@ -103,6 +103,14 @@ def get_digest_run_costs(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.get("/{digest_id}/costs")
+def get_digest_costs(digest_id: UUID, current_admin: CurrentAdmin,
+                     service: DigestServiceDep, db: DbSession):
+    from app.services.radar_cost_service import digest_costs
+    _run(lambda: service.get_for_admin(actor=current_admin, digest_id=digest_id))
+    return digest_costs(db, digest_id)
+
+
 @router.get("/{digest_id}", response_model=AdminDigestRead)
 def get_digest(
     digest_id: UUID,

@@ -1,3 +1,4 @@
+import { AdminDigestCostSummary } from "../components/AdminDigestCostSummary";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import {
   Alert,
@@ -223,6 +224,7 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
         <Typography color="text.secondary" sx={{ mb: 3 }}>
           {digest?.topic ?? "Review previous radar runs and their stored output stages."}
         </Typography>
+        {admin && digest && <AdminDigestCostSummary key={digestId} digestId={digestId} />}
         {routeState?.success && <Alert severity="success" sx={{ mb: 2.5 }}>{routeState.success}</Alert>}
         {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
