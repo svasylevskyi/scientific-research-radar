@@ -61,6 +61,7 @@ export function AppHeader() {
                 </Tooltip>
               </>
             )}
+            {user?.role === "admin" && <Tooltip title="Subscription plans"><Button component={RouterLink} to="/admin/subscription-plans" color="inherit" aria-label="Subscription plans">Plans</Button></Tooltip>}
             {user?.is_super_admin && <Tooltip title="Radar pricing"><Button component={RouterLink} to="/admin/pricing" color="inherit" aria-label="Radar pricing" sx={{ minWidth: 44 }}><PaymentsRoundedIcon /><Box component="span" sx={{ ml: 1, display: { xs: "none", lg: "inline" } }}>Pricing</Box></Button></Tooltip>}
             <Tooltip title="Profile">
               <IconButton component={RouterLink} to="/profile" aria-label="Profile" sx={{ ml: { xs: 0.5, sm: 1 }, p: 0.5 }}>
