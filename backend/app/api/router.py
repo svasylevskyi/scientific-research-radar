@@ -33,3 +33,6 @@ api_router.include_router(admin_subscriptions.router, prefix="/admin/subscriptio
 
 from app.api.routes import stripe_sandbox
 api_router.include_router(stripe_sandbox.router, prefix="/admin/subscription-testing", tags=["administration", "sandbox billing"])
+
+from app.api.routes import subscription_observation
+api_router.include_router(subscription_observation.router, prefix='/admin/subscription-observation', tags=['administration', 'subscriptions'])

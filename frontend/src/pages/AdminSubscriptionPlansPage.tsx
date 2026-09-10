@@ -97,6 +97,7 @@ export function AdminSubscriptionPlansPage() {
   return <Box><AppHeader /><Container component="main" maxWidth="lg" sx={{ py: { xs: 3, sm: 6 } }}>
     <Typography component="h1" variant="h3" gutterBottom>Subscription plans</Typography>
     <Button component={Link} to="/admin/subscription-testing" variant="outlined" sx={{ mb: 2 }}>Test sandbox billing</Button>
+    <Button component={Link} to="/admin/subscription-observation" variant="outlined" sx={{ mb: 2, ml: 1 }}>Assignments and usage</Button>
     <Alert severity="info" sx={{ mb: 3 }}>Internal catalogue for administrators. Prices, allowances and plan states are proposals only. They do not change the public plans page, assign subscriptions, charge customers or limit radar usage.</Alert>
     <Stack spacing={3}>
       {error && <Alert severity="error">{error}</Alert>}

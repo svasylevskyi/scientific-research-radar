@@ -259,6 +259,8 @@ class DigestRunRepository:
         )
 
     def mark_completed(self, *, run: DigestRun) -> None:
+        from app.services.subscription_observation_service import settle
+        settle(self.db, run, success=True)
         run.status = DigestRunStatus.COMPLETED
         run.error_message = None
         run.completed_at = datetime.now(timezone.utc)
@@ -276,6 +278,8 @@ class DigestRunRepository:
         stage.status = DigestRunStageStatus.FAILED
         stage.error_message = message[:2000]
         stage.completed_at = now
+        from app.services.subscription_observation_service import settle
+        settle(self.db, run, success=False)
         run.status = DigestRunStatus.FAILED
         run.error_message = message[:2000]
         run.completed_at = now
