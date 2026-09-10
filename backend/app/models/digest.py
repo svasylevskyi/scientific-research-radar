@@ -2,10 +2,11 @@ from datetime import date, datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, String, func, select
+from sqlalchemy.orm import Mapped, mapped_column, relationship, column_property
 
 from app.db.base import Base
+from app.models.digest_run import DigestRun
 
 
 class TargetAudience(StrEnum):
@@ -61,6 +62,12 @@ class Digest(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    latest_successful_run_at: Mapped[datetime | None] = column_property(
+        select(func.max(DigestRun.completed_at)).where(
+            DigestRun.digest_id == id, DigestRun.status == "completed",
+        ).correlate_except(DigestRun).scalar_subquery()
     )
 
     owner: Mapped["User"] = relationship(back_populates="digests")  # noqa: F821

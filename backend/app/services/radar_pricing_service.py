@@ -3,10 +3,12 @@ from app.models.radar_price import RadarPrice
 from app.schemas.radar_pricing import RadarPriceCreate
 
 
-def current_price(db, model_name):
+def current_price(db, model_name, *, as_of=None):
     # IDs provide a deterministic publication order, including concurrent saves.
-    row = db.scalar(select(RadarPrice).where(RadarPrice.model_name == model_name)
-                    .order_by(RadarPrice.id.desc()).limit(1))
+    statement = select(RadarPrice).where(RadarPrice.model_name == model_name)
+    if as_of is not None:
+        statement = statement.where(RadarPrice.created_at <= as_of)
+    row = db.scalar(statement.order_by(RadarPrice.id.desc()).limit(1))
     return dict(row.pricing) if row else None
 
 

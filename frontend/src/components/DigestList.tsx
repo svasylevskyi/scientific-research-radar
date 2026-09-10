@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Chip,
+  Link,
   Paper,
   Stack,
   Table,
@@ -33,6 +34,14 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
     new Date(`${value}T00:00:00`),
   );
+}
+
+function LatestSuccessfulRun({ digest, admin }: { digest: Digest; admin: boolean }) {
+  const value = digest.latest_successful_run_at;
+  if (!value) return <>Never</>;
+  const timestamp = /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}Z`;
+  const formatted = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(timestamp));
+  return admin ? <Link component={RouterLink} to={`/admin/digests/${digest.id}/runs`}>{formatted}</Link> : <>{formatted}</>;
 }
 
 function frequencyLabel(value: string) {
@@ -69,6 +78,7 @@ export function DigestList({
               {showOwner && <TableCell>Owner</TableCell>}
               <TableCell>Reporting period</TableCell>
               <TableCell>Schedule</TableCell>
+              <TableCell>Latest successful run</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -97,6 +107,7 @@ export function DigestList({
                   {formatDate(digest.reporting_from)} – {formatDate(digest.reporting_to)}
                 </TableCell>
                 <TableCell><Chip size="small" label={digest.schedule ? frequencyLabel(digest.schedule.frequency) : "Not scheduled"} /></TableCell>
+                <TableCell><LatestSuccessfulRun digest={digest} admin={showOwner} /></TableCell>
                 <TableCell align="right">
                   <Button
                     component={RouterLink}
@@ -126,6 +137,7 @@ export function DigestList({
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>
                   {formatDate(digest.reporting_from)} – {formatDate(digest.reporting_to)}
                 </Typography>
+                <Typography variant="body2" sx={{ mb: 1.25 }}>Latest successful run: <LatestSuccessfulRun digest={digest} admin={showOwner} /></Typography>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <Chip size="small" label={digest.schedule ? frequencyLabel(digest.schedule.frequency) : "Not scheduled"} />
                   <Typography variant="body2" color="text.secondary">

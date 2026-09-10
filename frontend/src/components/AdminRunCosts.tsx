@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import { apiRequest } from "../api/client";
 import type { DigestRunDetail } from "../types/digest";
 
-type Usage = { input_tokens: number; cached_input_tokens: number; output_tokens: number; reasoning_tokens: number };
+type Usage = { input_tokens: number; cached_input_tokens: number; output_tokens: number; reasoning_tokens: number; cache_write_tokens?: number };
 type RequestCost = {
   id: string; response_id: string | null; model: string; reasoning_effort: string;
   status: string; outcome: string; usage: Usage | null; web_search_calls: number | null;
-  estimated_usd: string | null; pricing: { version: string } | null;
+  estimated_usd: string | null; unknown_cost_reason: string | null; pricing: { version: string; model_name?: string } | null;
   created_at: string; observed_at: string | null;
 };
 type Costs = { run_id: string; known_estimated_usd: string; complete: boolean; unknown_requests: number;
@@ -47,20 +47,20 @@ export function AdminCostSummary({ data, error }: ReturnType<typeof useAdminRunC
 export function AdminCostDetails({ data, error }: ReturnType<typeof useAdminRunCosts>) {
   if (error || !data) return <AdminCostSummary data={data} error={error} />;
   return <Stack spacing={2}>
-    <Typography color="text.secondary">Usage includes rejected responses and retries recorded since accounting was enabled. Polling an existing response does not add another request. Cached input is part of input; reasoning is part of output and is not charged twice. Expand a stage for request details.</Typography>
+    <Typography color="text.secondary">Usage includes rejected responses and retries recorded since accounting was enabled. Polling an existing response does not add another request. Cached reads and cache writes are part of input; reasoning is part of output and is not charged twice. Expand a stage for request details.</Typography>
     {data.stages.map((stage) => <Accordion key={stage.stage}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography sx={{ textTransform: "capitalize" }}>{stageName(stage.stage)} · {stage.requests.length} requests · known subtotal {money(String(stage.requests.reduce((sum, row) => sum + Number(row.estimated_usd ?? 0), 0)))}</Typography></AccordionSummary>
       <AccordionDetails>
         {!stage.requests.length && <Typography color="text.secondary">No request ledger is available for this stage.{stage.legacy_accepted_usage && ` Legacy accepted-output usage: ${stage.legacy_accepted_usage.input_tokens ?? 0} input and ${stage.legacy_accepted_usage.output_tokens ?? 0} output tokens. Retry and rejected-response usage may be missing.`}</Typography>}
         <TableContainer><Table size="small" aria-label={`${stageName(stage.stage)} usage`}>
-          <TableHead><TableRow>{["Request / model", "Outcome", "Input (cached)", "Output (reasoning)", "Search calls", "Estimated USD"].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+          <TableHead><TableRow>{["Request / model", "Outcome", "Input (cached / writes)", "Output (reasoning)", "Search calls", "Estimated USD"].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
           <TableBody>{stage.requests.map((row) => <TableRow key={row.id}>
-            <TableCell sx={{ overflowWrap: "anywhere", minWidth: 150 }}>{row.response_id ?? "Response ID unavailable"}<Typography variant="body2">{row.model} · {row.reasoning_effort}</Typography><Typography variant="caption">{new Date(row.created_at).toLocaleString()}<br />Pricing: {row.pricing?.version ?? "Unconfigured"}</Typography></TableCell>
+            <TableCell sx={{ overflowWrap: "anywhere", minWidth: 150 }}>{row.response_id ?? "Response ID unavailable"}<Typography variant="body2">{row.model} · {row.reasoning_effort}</Typography><Typography variant="caption">{new Date(row.created_at).toLocaleString()}<br />Pricing: {row.pricing?.version ?? "Not saved"}{row.pricing?.model_name && <> · {row.pricing.model_name}</>}</Typography></TableCell>
             <TableCell>{row.status}<br />{row.outcome}</TableCell>
-            <TableCell>{row.usage ? `${row.usage.input_tokens} (${row.usage.cached_input_tokens})` : "Unknown"}</TableCell>
+            <TableCell>{row.usage ? `${row.usage.input_tokens} (${row.usage.cached_input_tokens} / ${row.usage.cache_write_tokens ?? 0})` : "Unknown"}</TableCell>
             <TableCell>{row.usage ? `${row.usage.output_tokens} (${row.usage.reasoning_tokens})` : "Unknown"}</TableCell>
             <TableCell>{row.web_search_calls ?? "Unknown"}</TableCell>
-            <TableCell>{money(row.estimated_usd)}</TableCell>
+            <TableCell>{money(row.estimated_usd)}{row.unknown_cost_reason && <Typography variant="caption" display="block">{row.unknown_cost_reason}</Typography>}</TableCell>
           </TableRow>)}</TableBody>
         </Table></TableContainer>
       </AccordionDetails>
