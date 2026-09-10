@@ -3,6 +3,13 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+class StripeSandboxMapping(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    product_id: str = Field(pattern=r"^prod_[A-Za-z0-9]+$", max_length=255)
+    monthly_price_id: str = Field(pattern=r"^price_[A-Za-z0-9]+$", max_length=255)
+    annual_price_id: str | None = Field(default=None, pattern=r"^price_[A-Za-z0-9]+$", max_length=255)
+
+
 class SubscriptionPlanConfiguration(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=100)
@@ -20,6 +27,7 @@ class SubscriptionPlanConfiguration(BaseModel):
     schedule_frequencies: list[Literal["daily", "weekly", "monthly", "quarterly"]] = Field(default_factory=list, max_length=4)
     email_delivery: bool = True
     trial_days: int = Field(default=0, ge=0, le=365, strict=True)
+    stripe_sandbox: StripeSandboxMapping | None = None
     display_order: int = Field(default=0, ge=0, le=10000, strict=True)
 
     @model_validator(mode="after")
@@ -30,6 +38,11 @@ class SubscriptionPlanConfiguration(BaseModel):
             raise ValueError("Papers per run cannot exceed the monthly paper allowance")
         if len(set(self.schedule_frequencies)) != len(self.schedule_frequencies):
             raise ValueError("Schedule frequencies must be unique")
+        if self.stripe_sandbox:
+            if (self.annual_price is None) != (self.stripe_sandbox.annual_price_id is None):
+                raise ValueError("Annual Stripe price mapping must match whether the plan has an annual price")
+            if self.stripe_sandbox.monthly_price_id == self.stripe_sandbox.annual_price_id:
+                raise ValueError("Monthly and annual Stripe price IDs must differ")
         return self
 
 

@@ -1,9 +1,9 @@
 """Internal plan catalogue only: no checkout, assignment or quota enforcement."""
 from datetime import timezone
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from app.api.dependencies import CurrentAdmin, DbSession
+from app.api.dependencies import CurrentAdmin, DbSession, AppSettings
 from app.models.subscription_plan import SubscriptionPlanRevision
 from app.schemas.subscription_plan import SubscriptionPlanSave
 
@@ -51,3 +51,18 @@ def save_plan(payload: SubscriptionPlanSave, actor: CurrentAdmin, db: DbSession)
         db.rollback()
         raise HTTPException(status_code=409, detail="Another admin saved this plan. Reload and review the latest revision.") from exc
     return serialize(row)
+
+
+@router.post("/{code}/revisions/{revision}/check-stripe")
+def verify_stripe_mapping(code: str, revision: int, actor: CurrentAdmin, db: DbSession,
+                          settings: AppSettings, response: Response):
+    from app.services.stripe_catalogue_service import check_mapping, StripeCatalogueError
+    row = db.scalar(select(SubscriptionPlanRevision).where(
+        SubscriptionPlanRevision.code == code, SubscriptionPlanRevision.revision == revision))
+    if row is None:
+        raise HTTPException(status_code=404, detail="Plan revision not found.")
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return {"code": code, "revision": revision, **check_mapping(row.configuration, settings)}
+    except StripeCatalogueError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from None
