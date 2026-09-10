@@ -16,10 +16,14 @@ jobs:
   check-ref:
     runs-on: ubuntu-latest
     steps:
-      - name: Only deploy main
+      - name: Only deploy approved development branches
         env:
           REF: ${{ github.ref }}
-        run: test "$REF" = refs/heads/main
+        run: |
+          case "$REF" in
+            refs/heads/main|refs/heads/feature/paid-subscriptions) ;;
+            *) echo 'This branch is not approved for development deployment.' >&2; exit 1 ;;
+          esac
   checks:
     needs: check-ref
     uses: ./.github/workflows/ci.yml
