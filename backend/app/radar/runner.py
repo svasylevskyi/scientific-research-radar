@@ -417,7 +417,8 @@ class RadarRunner:
                 current_request = RadarRequest(
                     run_id=run.id, stage_id=stage.id, model_name=self.client.model_name,
                     reasoning_effort=reasoning_effort,
-                    pricing=price,
+                    pricing={**price, "model_name": self.client.model_name} if price else None,
+                    created_at=datetime.now(timezone.utc),
                 )
                 self.db.add(current_request)
             else:
@@ -436,8 +437,13 @@ class RadarRunner:
                     self.db.add(current_request)
                 current_request.response_id = event["response_id"]
                 if current_request.model_name != event["model_name"]:
-                    # Never silently apply an alias tariff to a different returned model.
-                    current_request.pricing = None
+                    from app.services.radar_pricing_service import current_price
+                    # Prefer an explicit returned-model tariff that existed at submission.
+                    # Otherwise retain the tariff for the model actually requested: an
+                    # alias resolving to a version must not erase that snapshot.
+                    actual_price = current_price(self.db, event["model_name"], as_of=current_request.created_at)
+                    if actual_price:
+                        current_request.pricing = {**actual_price, "model_name": event["model_name"]}
                 current_request.model_name = event["model_name"]
                 current_request.status = event["status"]
                 if event["usage"] is not None:
