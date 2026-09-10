@@ -72,3 +72,35 @@ These are starting proposals, not validated commercial allowances. Monthly price
 Preview proposes a 14-day, one-run trial with no scheduling, rather than recurring free research. The current catalogue cannot enforce one-time trial eligibility or expiry; implement those rules before offering Preview publicly. Paid draft trial days are zero. All drafts include email and leave the tax-display policy undecided.
 
 The script never replaces an existing code, even if archived or customized, and never adds a revision to an existing plan. Repeating it is safe. Concurrent attempts are guarded by the unique code/revision constraint. Created entries record a system-origin change note; a missing admin ID can mean a system action or a subsequently deleted admin. Review and customize all values in Plans before moving beyond the draft stage. No public pricing, access, subscriptions, or radar usage changes.
+
+## Stripe sandbox mapping and read-only verification
+
+Plan revisions can now hold an optional `stripe_sandbox` mapping containing `product_id`, `monthly_price_id` and optional `annual_price_id`. These are identifiers, not API credentials. There is no mapping to live payments or checkout. Existing plans have no mapping until an admin saves one. Changing a mapping creates a new audited plan revision; historical mappings remain intact.
+
+In the selected Stripe development sandbox, create a restricted API key with **Read** access to **Products** and **Prices**, leaving unrelated permissions disabled. Store it only on the server, in `/etc/radar/development.env`:
+
+```env
+STRIPE_SANDBOX_API_KEY=rk_test_your_restricted_key
+```
+
+Apply this configuration with the next deployment (recreating the API container is necessary; a simple process restart will not import changed container environment variables). Compose passes this key to the API only and clears it in research, scheduler and ops containers. No publishable key, webhook secret, new Python dependency or database migration is needed for this step. Missing or live API keys cannot trigger provider requests.
+
+After deploying, open Plans → Edit Explorer. Set the tax-display policy to Inclusive and verify the proposed EUR 9 monthly / EUR 90 annual amounts. Enable Stripe sandbox mapping and enter the identifiers from the prepared sandbox:
+
+| Field | Identifier |
+| --- | --- |
+| Product | `prod_VEaTQTY3rUT2ni` |
+| Monthly price | `price_1UE7Iw6NGESYebbCG0nKIFeL` |
+| Annual price | `price_1UE7Og6NGESYebbCrbdzlLve` |
+
+Save with a change note, then click **Check saved revision in Stripe** on the Explorer card. All admins may perform this check. It issues only GET requests for that product and its mapped prices, verifying sandbox mode, active status, product ownership, expected amount/currency, non-metered monthly/yearly intervals and explicit inclusive tax behavior. The result applies to the selected saved revision at the displayed time; it is not a permanent authorization for checkout. It does not run automatically on page load or catalogue edits. Future checkout must validate eligibility and current provider state independently.
+
+Endpoint: `POST /api/v1/admin/subscription-plans/{code}/revisions/{revision}/check-stripe`. This initiates read-only provider checks; it never creates or updates a Stripe object. Provider failures return sanitized messages. No secrets or full provider objects are returned to the browser.
+
+### If the tax setting was absent in the product editor
+
+Sandbox and live mode should not be assumed to have different tax behavior. Stripe supports a default under Stripe Tax settings → Include tax in prices, plus per-price `tax_behavior`. An unspecified price may inherit a default; an automatic default uses inclusive behavior for EUR, but the integration does not assume that the sandbox uses this setting. For now the verifier explicitly reports unspecified as needing attention rather than claiming an inclusive match.
+
+Check the actual returned behavior before changing anything. Once a price explicitly has inclusive or exclusive tax behavior, Stripe does not allow switching between them; a replacement price is needed if the explicit choice was wrong. Setting inclusive behavior alone neither enables automatic tax calculation nor establishes tax registrations.
+
+References: [Stripe tax behavior](https://docs.stripe.com/tax/products-prices-tax-codes-tax-behavior), [restricted keys](https://docs.stripe.com/keys/restricted-api-keys), [retrieve prices](https://docs.stripe.com/api/prices/retrieve).

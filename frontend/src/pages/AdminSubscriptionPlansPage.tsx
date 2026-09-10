@@ -3,11 +3,15 @@ import { Alert, Box, Button, Checkbox, Chip, Container, FormControlLabel, MenuIt
 import { AppHeader } from "../components/AppHeader";
 import { apiRequest, ApiError } from "../api/client";
 
+type StripeMapping = { product_id: string; monthly_price_id: string; annual_price_id: string | null };
+type StripeCheck = { matches: boolean; issues: string[]; checked_at: string;
+  prices: { interval: string; price_id: string; tax_behavior: string | null; currency: string; unit_amount: number }[] };
 type Configuration = {
   name: string; description: string; state: string; currency: string;
   monthly_price: string; annual_price: string | null; tax_display: string;
   max_digests: number; max_papers_per_run: number; papers_per_month: number;
   runs_per_month: number; manual_runs_per_month: number; schedule_frequencies: string[];
+  stripe_sandbox?: StripeMapping | null;
   email_delivery: boolean; trial_days: number; display_order: number;
 };
 type Plan = { id: number; code: string; revision: number; configuration: Configuration;
@@ -42,6 +46,8 @@ export function AdminSubscriptionPlansPage() {
   const [historyError, setHistoryError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [checking, setChecking] = useState<number | null>(null);
+  const [check, setCheck] = useState<{ id: number; result?: StripeCheck; error?: string } | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   useEffect(() => {
@@ -68,6 +74,14 @@ export function AdminSubscriptionPlansPage() {
     setForm(plan.configuration); setCode(plan.code); setRevision(plan.revision); setNote(""); setError(""); setSuccess("");
     document.getElementById("plan-editor")?.scrollIntoView({ behavior: "smooth" });
   }
+  async function verify(plan: Plan) {
+    setChecking(plan.id); setCheck(null);
+    try {
+      const result = await apiRequest<StripeCheck>(`/admin/subscription-plans/${plan.code}/revisions/${plan.revision}/check-stripe`, { method: "POST" });
+      setCheck({ id: plan.id, result });
+    } catch (caught) { setCheck({ id: plan.id, error: caught instanceof ApiError ? caught.message : "Could not check Stripe." }); }
+    finally { setChecking(null); }
+  }
   async function save(event: FormEvent) {
     event.preventDefault(); setSaving(true); setError(""); setSuccess("");
     try {
@@ -93,6 +107,14 @@ export function AdminSubscriptionPlansPage() {
             <Typography color="text.secondary">{plan.code} · Revision {plan.revision}</Typography>
             <Typography sx={{ mt: 1 }}>{plan.configuration.currency} {plan.configuration.monthly_price} / month{plan.configuration.annual_price !== null && ` · ${plan.configuration.currency} ${plan.configuration.annual_price} / year`}</Typography>
             <Typography variant="body2">{plan.configuration.max_digests} digests · {plan.configuration.papers_per_month} papers · {plan.configuration.runs_per_month} runs per monthly allowance period</Typography>
+            <Typography variant="body2" sx={{ mt: 1 }}>Stripe sandbox: {plan.configuration.stripe_sandbox ? "Mapped; verify before use" : "Not mapped"}</Typography>
+            {plan.configuration.stripe_sandbox && <Button disabled={checking !== null || saving} onClick={() => void verify(plan)}>{checking === plan.id ? "Checking Stripe…" : "Check saved revision in Stripe"}</Button>}
+            {check?.id === plan.id && (check.error ? <Alert severity="warning">{check.error}</Alert> : check.result && <Alert severity={check.result.matches ? "success" : "warning"}>
+              {check.result.matches ? "Sandbox prices match this revision, including explicit inclusive tax behavior." : "Sandbox mapping needs attention."}
+              {check.result.issues.map((issue) => <Typography key={issue} variant="body2">{issue}</Typography>)}
+              {check.result.prices.map((price) => <Typography key={price.price_id} variant="caption" display="block">{title(price.interval)}: {price.currency.toUpperCase()} {(price.unit_amount / 100).toFixed(2)} · Tax behavior: {price.tax_behavior ?? "Missing"}</Typography>)}
+              <Typography variant="caption" display="block">Checked {new Date(check.result.checked_at).toLocaleString()}. This does not enable checkout or verify tax registrations.</Typography>
+            </Alert>)}
             <Stack direction="row" spacing={1} sx={{ mt: 1 }}><Button disabled={saving} onClick={() => edit(plan)}>Edit plan</Button><Button onClick={() => { setHistoryCode(plan.code); setHistoryOffset(0); }}>Revision history</Button></Stack>
           </Paper>)}
         </Box>}
@@ -119,6 +141,14 @@ export function AdminSubscriptionPlansPage() {
             <Typography sx={{ mt: 2 }}>Permitted schedule frequencies (none selected = no scheduling)</Typography>
             <Stack direction="row" flexWrap="wrap">{frequencies.map((frequency) => <FormControlLabel key={frequency} label={title(frequency)} control={<Checkbox checked={form.schedule_frequencies.includes(frequency)} onChange={(e) => update("schedule_frequencies", e.target.checked ? [...form.schedule_frequencies, frequency] : form.schedule_frequencies.filter((f) => f !== frequency))} />} />)}</Stack>
             <FormControlLabel label="Email delivery included" control={<Checkbox checked={form.email_delivery} onChange={(e) => update("email_delivery", e.target.checked)} />} />
+            <Typography variant="h6" sx={{ mt: 3 }}>Stripe sandbox mapping</Typography>
+            <Typography color="text.secondary">Optional identifiers for testing only. Save a revision, then use its catalogue card to check Stripe. Checks read product and price details; they never create payments or modify Stripe. API keys belong in server configuration, not this form.</Typography>
+            <FormControlLabel label="Map this plan to Stripe sandbox prices" control={<Checkbox checked={!!form.stripe_sandbox} onChange={(e) => update("stripe_sandbox", e.target.checked ? { product_id: "", monthly_price_id: "", annual_price_id: null } : null)} />} />
+            {form.stripe_sandbox && <Box sx={{ ...grid, my: 2 }}>
+              <TextField required label="Product ID" value={form.stripe_sandbox.product_id} onChange={(e) => update("stripe_sandbox", { ...form.stripe_sandbox!, product_id: e.target.value })} inputProps={{ pattern: "prod_[A-Za-z0-9]+", maxLength: 255 }} />
+              <TextField required label="Monthly Price ID" value={form.stripe_sandbox.monthly_price_id} onChange={(e) => update("stripe_sandbox", { ...form.stripe_sandbox!, monthly_price_id: e.target.value })} inputProps={{ pattern: "price_[A-Za-z0-9]+", maxLength: 255 }} />
+              <TextField required={form.annual_price !== null} label="Annual Price ID" value={form.stripe_sandbox.annual_price_id ?? ""} onChange={(e) => update("stripe_sandbox", { ...form.stripe_sandbox!, annual_price_id: e.target.value || null })} inputProps={{ pattern: "price_[A-Za-z0-9]+", maxLength: 255 }} helperText="Required when the plan has an annual price; otherwise leave blank." />
+            </Box>}
             <TextField required fullWidth label="Change note" value={note} onChange={(e) => setNote(e.target.value)} inputProps={{ maxLength: 500 }} sx={{ my: 2 }} helperText="Explain this revision for other administrators." />
             <Stack direction="row" spacing={2}><Button type="submit" variant="contained">{saving ? "Saving…" : "Save revision"}</Button><Button onClick={reset}>Cancel editing</Button></Stack>
           </Box>
@@ -138,6 +168,7 @@ export function AdminSubscriptionPlansPage() {
             {limits.map(([key, label]) => <Typography key={key}>{label}: {row.configuration[key]}</Typography>)}
             <Typography>Schedule frequencies: {row.configuration.schedule_frequencies.map(title).join(", ") || "None"}</Typography>
             <Typography>Email delivery: {row.configuration.email_delivery ? "Included" : "Not included"}</Typography>
+            <Typography sx={{ overflowWrap: "anywhere" }}>Stripe sandbox: {row.configuration.stripe_sandbox ? `${row.configuration.stripe_sandbox.product_id} · Monthly ${row.configuration.stripe_sandbox.monthly_price_id} · Annual ${row.configuration.stripe_sandbox.annual_price_id ?? "Not mapped"}` : "Not mapped"}</Typography>
           </Stack></Box>
         </Box>)}
         <Stack direction="row" spacing={1}><Button disabled={!history || !historyOffset} onClick={() => setHistoryOffset((v) => v - 25)}>Previous</Button><Button disabled={!history || historyOffset + 25 >= history.total} onClick={() => setHistoryOffset((v) => v + 25)}>Next</Button><Button onClick={() => setHistoryCode("")}>Close history</Button></Stack>
