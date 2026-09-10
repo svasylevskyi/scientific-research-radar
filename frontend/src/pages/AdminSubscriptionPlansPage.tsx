@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useEffect, useState, type FormEvent } from "react";
 import { Alert, Box, Button, Checkbox, Chip, Container, FormControlLabel, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
 import { AppHeader } from "../components/AppHeader";
@@ -95,6 +96,7 @@ export function AdminSubscriptionPlansPage() {
   }
   return <Box><AppHeader /><Container component="main" maxWidth="lg" sx={{ py: { xs: 3, sm: 6 } }}>
     <Typography component="h1" variant="h3" gutterBottom>Subscription plans</Typography>
+    <Button component={Link} to="/admin/subscription-testing" variant="outlined" sx={{ mb: 2 }}>Test sandbox billing</Button>
     <Alert severity="info" sx={{ mb: 3 }}>Internal catalogue for administrators. Prices, allowances and plan states are proposals only. They do not change the public plans page, assign subscriptions, charge customers or limit radar usage.</Alert>
     <Stack spacing={3}>
       {error && <Alert severity="error">{error}</Alert>}

@@ -30,3 +30,6 @@ api_router.include_router(admin_pricing.router, prefix="/admin/pricing", tags=["
 api_router.include_router(admin_spending.router, prefix="/admin/spending", tags=["administration", "spending"])
 
 api_router.include_router(admin_subscriptions.router, prefix="/admin/subscription-plans", tags=["administration", "subscriptions"])
+
+from app.api.routes import stripe_sandbox
+api_router.include_router(stripe_sandbox.router, prefix="/admin/subscription-testing", tags=["administration", "sandbox billing"])
