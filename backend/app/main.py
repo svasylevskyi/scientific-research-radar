@@ -47,9 +47,15 @@ async def lifespan(_app: FastAPI):
                 "Database schema is not ready. Run `alembic upgrade head` before starting the API."
             ) from exc
     cleaner = asyncio.create_task(verification_cleanup_loop()) if settings.environment != "test" else None
+    from app.services.billing_sync_service import worker_loop
+    billing_worker = asyncio.create_task(worker_loop(SessionLocal, settings)) if settings.environment != "test" else None
     try:
         yield
     finally:
+        if billing_worker:
+            billing_worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await billing_worker
         if cleaner:
             cleaner.cancel()
             with suppress(asyncio.CancelledError):

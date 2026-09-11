@@ -51,6 +51,7 @@ export function AdminSandboxBillingPage() {
   const config = data?.plan?.configuration;
   return <Box><AppHeader /><Container component="main" maxWidth="md" sx={{ py: { xs: 3, sm: 6 } }}>
     <Button component={Link} to="/admin/subscription-plans" sx={{ mb: 2 }}>Back to plans</Button>
+    <Button component={Link} to="/admin/billing-sync" sx={{ mb: 2 }}>Synchronization status</Button>
     <Typography component="h1" variant="h3" gutterBottom>Sandbox billing</Typography>
     <Alert severity="info" sx={{ mb: 3 }}>For administrators testing their own Explorer subscription. Use Stripe test cards only.
       No real money is collected and Radar access and allowances are unchanged. Automatic tax calculation and trials are not enabled in this test.</Alert>

@@ -300,6 +300,10 @@ def test_admin_apis_ownership_and_public_signed_webhook(client, account, db_sess
     assert client.post(WEBHOOK, content=body).status_code == 400
     response = client.post(WEBHOOK, content=body, headers={**headers, 'X-Radar-Request': '', 'Origin': 'https://stripe.example'})
     assert response.status_code == 200, response.text
+    assert response.json()['queued'] is True
+    assert client.get(URL, headers=account[1]).json()['attempts'][0]['subscription_status'] is None
+    from app.services.billing_sync_service import tick
+    tick(db_session_factory, config, client=provider.client)
     assert client.get(URL, headers=account[1]).json()['attempts'][0]['subscription_status'] == 'active'
     # Regular browser endpoint origin guard is untouched.
     assert client.post(URL + '/refresh', headers={**account[1], 'Origin': 'https://hostile.example'}).status_code == 403

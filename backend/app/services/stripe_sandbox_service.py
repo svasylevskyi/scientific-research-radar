@@ -313,7 +313,7 @@ def verify_event(body, signature, settings, *, now=None):
         raise Error("Invalid sandbox webhook signature or payload.", 400) from None
 
 
-def handle_event(db, settings, event, *, client=None):
+def handle_event(db, settings, event, *, client=None, commit=True):
     if event["type"] not in EVENTS:
         return {"received": True}
     obj = (event.get("data") or {}).get("object")
@@ -332,7 +332,8 @@ def handle_event(db, settings, event, *, client=None):
     lock_account(db, row.user_id)
     db.refresh(row)
     if db.get(SandboxStripeEvent, event["id"]):
-        db.commit()
+        if commit:
+            db.commit()
         return {"received": True}
     client = client or StripeSandboxClient(settings)
     # Fetch canonical state while holding the account lock. Out-of-order event
@@ -344,5 +345,6 @@ def handle_event(db, settings, event, *, client=None):
         value = client.request("GET", f"checkout/sessions/{session_id}")
         observe_checkout(db, client, row, value)
     db.add(SandboxStripeEvent(id=event["id"], checkout_id=row.id, event_type=event["type"]))
-    db.commit()
+    if commit:
+        db.commit()
     return {"received": True}

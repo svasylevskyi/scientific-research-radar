@@ -169,7 +169,7 @@ No new Python/JavaScript dependency or paid middleware is needed for this increm
 
 The database records the exact checkout intent before the external POST. An ambiguous timeout is retried with the same Stripe idempotency key and parameters; concurrent requests serialize on a per-admin database row. If an unresolved intent is older than 23 hours, the app refuses to replay it because Stripe may prune keys after 24 hours. An operator must reconcile that attempt's `radar_attempt_id` metadata in the sandbox before clearing it; do not delete pending database rows to bypass this protection. If an unissued intent's one-hour expiry has already elapsed, Stripe can reject the frozen creation parameters; this also requires reconciliation rather than changing the idempotent request. Known sessions can be refreshed regardless of age.
 
-Webhooks verify the original raw body with the endpoint secret, a constant-time signature comparison, and a five-minute timestamp tolerance. Keep the server clock synchronized. Processing fetches current provider state under the same per-admin lock rather than trusting event order. State and the event ID commit together; duplicate IDs are ignored, and a failed provider request is not acknowledged as processed, allowing Stripe to retry. Unknown events/unrelated sandbox objects are acknowledged without attaching them to a user. Provider operations have bounded timeouts. This small admin test handles events inline; a durable webhook inbox/worker and broader invoice/reconciliation monitoring should precede public billing scale.
+Webhooks verify the original raw body with the endpoint secret, a constant-time signature comparison, and a five-minute timestamp tolerance. Keep the server clock synchronized. Processing fetches current provider state under the same per-admin lock rather than trusting event order. The HTTP endpoint acknowledges a relevant event after inbox persistence. The worker then commits provider state and the processed-event marker together; duplicate IDs are ignored. Failed provider reads retry through the local queue, while Stripe retries deliveries that were never durably received. Unknown events/unrelated sandbox objects are acknowledged without attaching them to a user. Provider operations have bounded timeouts. Events now enter the durable inbox described below. Broader invoice handling and external billing alerts remain prerequisites for public billing scale.
 
 Status polling reads only the database every ten seconds. **Refresh from Stripe** reconciles the latest attempt explicitly if events are delayed. A successful return URL alone has no effect. Deleting a Radar test account does not cancel its Stripe sandbox subscription; cancel it in Stripe before removing the account. Full invoices, tax outcomes, refunds, disputes, trials, plan switching, public checkout, entitlements and dunning policies remain future work.
 
@@ -223,3 +223,62 @@ API (admin-only, same protected-user rules as user management):
 - `GET /api/v1/admin/subscription-observation/{user_id}/assignments?offset=0&limit=25` — append-only assignment audit.
 
 The normal deployment applies migration `20260910_0017`; no new environment variables or provider permissions are required. Before paid access enforcement, we still need an explicit mapping from verified billing state to entitlements, decisions about billing-aligned allowance windows, user-facing subscription/usage pages, payment-failure policy, durable webhook processing and reconciliation. Observation data provides evidence for those choices without changing existing access.
+
+## Durable sandbox synchronization
+
+Migration `20260911_0018` adds a durable webhook inbox, recurring reconciliation jobs and an API-worker heartbeat. Deployment starts processing automatically through the API lifespan; no new container, queue service, Stripe key permissions, webhook event selections or required environment variables are needed. The existing test key and signing secret continue to apply. No provider calls occur in automated tests.
+
+The webhook endpoint verifies its raw-body signature and then saves a minimal relevant event (event ID/type, object ID, known checkout reference). It returns success only after that database transaction commits. It never waits for Stripe API calls. Duplicate event IDs preserve the original job and do not reset attempts. Unrelated event types, untagged objects and unknown checkout references are acknowledged as ignored. Raw provider payloads, card/billing details and arbitrary metadata are not retained. Previously processed event IDs are still honored after this migration.
+
+A background worker in each running API process claims database jobs with an exclusive two-minute lease. Multiple API processes can cooperate: compare-and-set claims and token/deadline checks prevent an expired worker from committing provider state. Current provider observations, the processed-event marker, and the completed queue state commit together. If a process dies, its saved work is reclaimed after lease expiry. API downtime pauses work without losing the inbox; Stripe retries requests that never committed.
+
+Provider/network failures use exponential retry delays: 30, 60, 120 seconds, continuing up to a one-hour cap. After eight consecutive failed executions by default, the job stays **failed** until reviewed and manually retried. Worker interruption/lease expiry is reclaimed separately. A manual retry records the requesting admin, timestamp and cumulative manual request count; it cannot duplicate already pending/actively processing work. Completed webhook jobs cannot be replayed through this API; a current-state reconciliation can be requested instead.
+
+Every known local checkout gets one reusable reconciliation job, including checkouts created before this migration. The worker discovers up to 25 missing jobs per tick, then processes one due job. Successful reconciliation repeats every 15 minutes by default for open/nonterminal attempts. Canceled/incomplete-expired subscriptions and expired checkouts without a subscription stop periodic polling after being observed; signed events and explicit admin reconciliation remain available. Terminal historical attempts therefore receive an initial check, not endless polling.
+
+Reconciliation retrieves existing checkout/subscription objects. It never issues a Stripe write or grants access. It repairs locally missed state changes such as checkout completion, renewal-period advancement, payment failure and cancellation. It covers locally known attempts rather than scanning the whole Stripe account. If an ambiguous checkout creation left no provider identifier, the job shows an actionable error asking the owner to resume the original idempotent checkout. It does not create a replacement checkout or guess an association from billing email. If that original checkout cannot be resumed safely, the previously documented operator reconciliation procedure still applies.
+
+### Admin synchronization view
+
+Open **Admin → Plans → Billing synchronization**, or use the link from Sandbox billing/user details. The page reads the database every ten seconds and shows:
+
+- Worker heartbeat, status counts and paginated jobs, filterable by status and owning user.
+- Relevant Stripe event type or reconciliation job, owning account and checkout attempt.
+- Last attempt, last successful job, last verified provider state, next retry/check, subscription status and price mismatch.
+- Sanitized failure reason, attempts, consecutive failures and manual-request information.
+- **Retry synchronization** for retryable failures/expired claims, and **Reconcile now** for a previously completed reconciliation job.
+
+Ordinary admins cannot list, count, or retry protected super-admin jobs. Normal users have no access. No queue payloads, claim tokens or credentials are returned to the UI. A healthy worker heartbeat is not a claim that all jobs succeeded; failed jobs remain prominent. The API also emits a warning with job ID and exception type for failed executions, without logging provider payloads or credentials. External failure notifications/monitor alerts are not added in this increment.
+
+API:
+
+- `GET /api/v1/admin/billing-sync?state=failed&user_id=<uuid>&offset=0&limit=25`
+- `POST /api/v1/admin/billing-sync/{job_id}/retry` — queues the job and returns 202; uses the shared per-admin sandbox-operation rate limit.
+
+Optional settings (defaults suffice for the development deployment):
+
+```env
+STRIPE_SYNC_POLL_SECONDS=5
+STRIPE_SYNC_RECONCILE_SECONDS=900
+STRIPE_SYNC_MAX_FAILURES=8
+```
+
+The background processor runs only in the API application, where Stripe credentials already reside. Research and scheduler processes do not start it. Turning off `STRIPE_SANDBOX_CHECKOUT_ENABLED` continues to stop new checkout/portal sessions but deliberately does **not** stop synchronization of existing sandbox subscriptions. This is still a sandbox integration; public/live billing is not enabled.
+
+### Acceptance checks
+
+1. After deployment, open Billing synchronization. Confirm a recent heartbeat and reconciliation jobs for existing sandbox checkouts.
+2. Complete/cancel a sandbox subscription or resend one of its actual events through Stripe Workbench. The endpoint should acknowledge promptly; the saved job should progress to processed and subscription state should update.
+3. Resend the same event: no second job or duplicate subscription should appear.
+4. Click Reconcile now on a completed reconciliation job; it should run once and schedule its next check if still nonterminal.
+5. Review admin visibility with an ordinary admin: protected super-admin jobs must be absent from lists and counts.
+
+Automated tests simulate provider outages, backoff/exhaustion/manual retry, lost webhooks, expired/stale worker leases, atomic rollback, out-of-order events, and concurrent delivery/claiming. No real payment or OpenAI calls are needed for these tests. The design follows [Stripe's webhook guidance](https://docs.stripe.com/webhooks) on durable handling, duplicates, ordering, signature validation and prompt acknowledgments.
+
+### Agreed rules for the next increment (not enforced here)
+
+- Allowances will reset monthly on the subscription anniversary, including annual subscriptions. The existing UTC calendar-month observation ledger needs an explicit transition; this release does not silently move historical reservations into different windows.
+- Failed renewals will have a short, configurable grace period. The exact configured duration will be set before enforcement; after grace, new research is blocked while completed results remain accessible.
+- Exhausted allowances block new runs with a clear explanation and reset date; completed research stays accessible. Manual, scheduled and retry paths must use the same policy.
+- Cancellation at period end preserves access through the paid period, then prevents new research. Historical results are retained and readable.
+- Complimentary development access remains explicit. Verified Stripe state will be connected to entitlements in a later increment, not by manually changing observation assignments.
