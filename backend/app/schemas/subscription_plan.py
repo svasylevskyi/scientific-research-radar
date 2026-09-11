@@ -28,10 +28,13 @@ class SubscriptionPlanConfiguration(BaseModel):
     email_delivery: bool = True
     trial_days: int = Field(default=0, ge=0, le=365, strict=True)
     stripe_sandbox: StripeSandboxMapping | None = None
+    subscriber_visible: bool = False
     display_order: int = Field(default=0, ge=0, le=10000, strict=True)
 
     @model_validator(mode="after")
     def consistent_allowances(self):
+        if self.subscriber_visible and (self.state != "reviewed" or self.tax_display != "inclusive" or not self.stripe_sandbox or self.trial_days):
+            raise ValueError("Subscriber plans must be reviewed, tax-inclusive, mapped to Stripe sandbox and have no trial")
         if self.manual_runs_per_month > self.runs_per_month:
             raise ValueError("Manual runs cannot exceed the total monthly run allowance")
         if self.max_papers_per_run > self.papers_per_month:

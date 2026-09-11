@@ -201,10 +201,13 @@ def enabled(settings):
         raise Error("Configure the sandbox webhook signing secret before enabling checkout.", 503)
 
 
-def start_checkout(db, settings, user_id, revision, interval, *, client=None):
+def start_checkout(db, settings, user_id, revision, interval, *, client=None, code="explorer", subscriber=False):
     enabled(settings)
     client = client or StripeSandboxClient(settings)
     lock_account(db, user_id)
+    if subscriber:
+        from app.services.subscriber_billing_service import require_opt_in
+        require_opt_in(db, user_id)
     row = latest(db, user_id)
     if row:
         value = sync_attempt(db, client, row)
@@ -213,7 +216,7 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None):
             raise Error("You already have a sandbox subscription. Manage it in the billing portal before starting another.", 409)
         if row.checkout_status in {"creating", "open"}:
             saved_plan = db.get(SubscriptionPlanRevision, row.plan_revision_id)
-            if saved_plan.revision != revision or row.interval != interval:
+            if saved_plan.code != code or saved_plan.revision != revision or row.interval != interval:
                 db.commit()
                 raise Error("An earlier checkout is pending. Resume its original plan revision and interval, or wait for its expiry and refresh.", 409)
             if value and row.checkout_status == "open":
@@ -228,22 +231,26 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None):
         else:
             row = None
     if row is None:
-        plan = explorer(db)
+        plan = db.scalar(select(SubscriptionPlanRevision).where(SubscriptionPlanRevision.code == code).order_by(SubscriptionPlanRevision.revision.desc()).limit(1))
         if not plan or plan.revision != revision:
-            raise Error("The Explorer plan changed. Reload and review its latest revision.", 409)
+            raise Error("The plan changed. Reload and review its latest revision.", 409)
+        if subscriber:
+            from app.services.subscriber_billing_service import available
+            if not available(plan):
+                raise Error("This plan is not available for subscriber checkout. Review the current plans.", 409)
         if plan.configuration["state"] == "archived":
             raise Error("Archived plans cannot be tested.", 422)
         # Trial/quota settings remain catalogue-only in this initial paid test.
         if plan.configuration.get("trial_days", 0):
-            raise Error("This first checkout test requires an Explorer revision with no trial.", 422)
+            raise Error("Sandbox checkout requires a plan revision with no trial.", 422)
         report = client.mapping(plan.configuration)
         if not report["matches"]:
-            raise Error("The saved Explorer revision no longer matches Stripe: " + "; ".join(report["issues"]), 422)
+            raise Error("The saved plan revision no longer matches Stripe: " + "; ".join(report["issues"]), 422)
         price = plan.configuration["stripe_sandbox"].get("monthly_price_id" if interval == "monthly" else "annual_price_id")
         if not price:
             raise Error("This interval has no mapped price.", 422)
         attempt_id = uuid4()
-        base = settings.frontend_base_url + "/admin/subscription-testing"
+        base = settings.frontend_base_url + ("/subscription" if subscriber else "/admin/subscription-testing")
         params = {"mode": "subscription", "payment_method_types[0]": "card",
             "line_items[0][price]": price, "line_items[0][quantity]": "1",
             "client_reference_id": str(attempt_id), "metadata[radar_attempt_id]": str(attempt_id),
@@ -282,7 +289,7 @@ def refresh(db, settings, user_id, *, client=None):
     return overview(db, settings, user_id)
 
 
-def portal(db, settings, user_id, *, client=None):
+def portal(db, settings, user_id, *, client=None, subscriber=False):
     enabled(settings)
     client = client or StripeSandboxClient(settings)
     config_id = settings.stripe_sandbox_portal_configuration_id
@@ -300,7 +307,7 @@ def portal(db, settings, user_id, *, client=None):
         or (features.get("subscription_cancel") or {}).get("enabled") is not True):
         raise Error("The sandbox portal must be active, allow cancellation, and disable subscription plan updates.", 422)
     value = client.request("POST", "billing_portal/sessions", data={"customer": row.customer_id,
-        "configuration": config_id, "return_url": settings.frontend_base_url + "/admin/subscription-testing?stripe_return=portal"})
+        "configuration": config_id, "return_url": settings.frontend_base_url + ("/subscription?stripe_return=portal" if subscriber else "/admin/subscription-testing?stripe_return=portal")})
     if value.get("object") != "billing_portal.session" or value.get("customer") != row.customer_id:
         raise Error("Stripe returned an unexpected portal customer.")
     url = redirect_url(value.get("url"), "billing.stripe.com")

@@ -13,7 +13,7 @@ type Configuration = {
   max_digests: number; max_papers_per_run: number; papers_per_month: number;
   runs_per_month: number; manual_runs_per_month: number; schedule_frequencies: string[];
   stripe_sandbox?: StripeMapping | null;
-  email_delivery: boolean; trial_days: number; display_order: number;
+  subscriber_visible?: boolean; email_delivery: boolean; trial_days: number; display_order: number;
 };
 type Plan = { id: number; code: string; revision: number; configuration: Configuration;
   change_note: string; created_by: string | null; created_at: string };
@@ -100,7 +100,7 @@ export function AdminSubscriptionPlansPage() {
     <Button component={Link} to="/admin/subscription-access" variant="outlined" sx={{ mb: 2, ml: 1 }}>Subscription access</Button>
     <Button component={Link} to="/admin/billing-sync" variant="outlined" sx={{ mb: 2, ml: 1 }}>Billing synchronization</Button>
     <Button component={Link} to="/admin/subscription-observation" variant="outlined" sx={{ mb: 2, ml: 1 }}>Assignments and usage</Button>
-    <Alert severity="info" sx={{ mb: 3 }}>Internal catalogue for administrators. Prices, allowances and plan states are proposals only. They do not change the public plans page, assign subscriptions, charge customers or limit radar usage.</Alert>
+    <Alert severity="info" sx={{ mb: 3 }}>Manage versioned plans here. Publishing a reviewed plan makes it visible for sandbox subscriber checkout. Existing subscriptions keep their saved revision and allowances; saving a plan does not change their billing.</Alert>
     <Stack spacing={3}>
       {error && <Alert severity="error">{error}</Alert>}
       {success && <Alert severity="success">{success}</Alert>}
@@ -145,6 +145,7 @@ export function AdminSubscriptionPlansPage() {
             <Box sx={grid}>{limits.map(([key, label, min, max]) => <TextField key={key} required type="number" label={label} value={Number.isNaN(form[key]) ? "" : form[key]} onChange={(e) => update(key, e.target.value === "" ? NaN : Number(e.target.value))} inputProps={{ min, max, step: 1 }} />)}</Box>
             <Typography sx={{ mt: 2 }}>Permitted schedule frequencies (none selected = no scheduling)</Typography>
             <Stack direction="row" flexWrap="wrap">{frequencies.map((frequency) => <FormControlLabel key={frequency} label={title(frequency)} control={<Checkbox checked={form.schedule_frequencies.includes(frequency)} onChange={(e) => update("schedule_frequencies", e.target.checked ? [...form.schedule_frequencies, frequency] : form.schedule_frequencies.filter((f) => f !== frequency))} />} />)}</Stack>
+            <FormControlLabel label="Publish for subscriber sandbox checkout (reviewed, inclusive tax, mapped prices, no trial)" control={<Checkbox checked={form.subscriber_visible ?? false} onChange={(e) => update("subscriber_visible", e.target.checked)} />} />
             <FormControlLabel label="Email delivery included" control={<Checkbox checked={form.email_delivery} onChange={(e) => update("email_delivery", e.target.checked)} />} />
             <Typography variant="h6" sx={{ mt: 3 }}>Stripe sandbox mapping</Typography>
             <Typography color="text.secondary">Optional identifiers for testing only. Save a revision, then use its catalogue card to check Stripe. Checks read product and price details; they never create payments or modify Stripe. API keys belong in server configuration, not this form.</Typography>
@@ -169,6 +170,7 @@ export function AdminSubscriptionPlansPage() {
             <Typography>Name: {row.configuration.name}</Typography>
             <Typography>Description: {row.configuration.description || "None"}</Typography>
             <Typography>Monthly price: {row.configuration.currency} {row.configuration.monthly_price}; annual price: {row.configuration.annual_price === null ? "Not proposed" : `${row.configuration.currency} ${row.configuration.annual_price}`}</Typography>
+            <Typography>Subscriber publication: {row.configuration.subscriber_visible ? "Published for sandbox checkout" : "Hidden"}</Typography>
             <Typography>Tax display: {title(row.configuration.tax_display)}</Typography>
             {limits.map(([key, label]) => <Typography key={key}>{label}: {row.configuration[key]}</Typography>)}
             <Typography>Schedule frequencies: {row.configuration.schedule_frequencies.map(title).join(", ") || "None"}</Typography>
