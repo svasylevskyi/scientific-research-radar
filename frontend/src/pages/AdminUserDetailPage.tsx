@@ -171,6 +171,7 @@ export function AdminUserDetailPage() {
                 View user's digests
               </Button>
               <Button component={RouterLink} to={`/admin/subscription-observation?user_id=${managedUser.id}`} sx={{ mt: 2 }}>Subscription observation</Button>
+              <Button component={RouterLink} to={`/admin/billing-sync?user_id=${managedUser.id}`} sx={{ mt: 2 }}>Billing synchronization</Button>
             </Paper>
 
             <Paper component="form" onSubmit={saveDetails} variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>

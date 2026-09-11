@@ -36,3 +36,6 @@ api_router.include_router(stripe_sandbox.router, prefix="/admin/subscription-tes
 
 from app.api.routes import subscription_observation
 api_router.include_router(subscription_observation.router, prefix='/admin/subscription-observation', tags=['administration', 'subscriptions'])
+
+from app.api.routes import billing_sync
+api_router.include_router(billing_sync.router, prefix='/admin/billing-sync', tags=['administration', 'sandbox billing'])

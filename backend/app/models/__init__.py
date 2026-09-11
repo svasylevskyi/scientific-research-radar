@@ -42,3 +42,4 @@ __all__ = [
     "UserRole",
 ]
 from app.models.subscription_observation import ObservationAccount, ObservationAssignment, ObservedRunUsage
+from app.models.billing_sync import BillingSyncJob, BillingSyncHeartbeat

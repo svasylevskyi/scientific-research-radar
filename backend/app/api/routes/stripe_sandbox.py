@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 from app.api.dependencies import CurrentAdmin, DbSession, AppSettings
 from app.services import stripe_sandbox_service as service
+from app.services.billing_sync_service import receive
 from app.services.rate_limit_service import enforce, POLICIES
 
 router = APIRouter()
@@ -66,4 +67,4 @@ async def webhook(request: Request, db: DbSession, settings: AppSettings):
         event = service.verify_event(b"".join(chunks), request.headers.get("stripe-signature", ""), settings)
     except service.Error as exc:
         raise HTTPException(exc.status_code, str(exc)) from None
-    return await run_in_threadpool(call, db, service.handle_event, settings, event)
+    return await run_in_threadpool(call, db, receive, settings, event)
