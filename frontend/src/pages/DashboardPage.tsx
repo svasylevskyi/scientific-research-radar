@@ -1,3 +1,5 @@
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import { AllowanceNotice } from "../components/AllowanceNotice";
 import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
 import TravelExploreRoundedIcon from "@mui/icons-material/TravelExploreRounded";
 import {
@@ -24,6 +26,7 @@ const PAGE_SIZE = 10;
 
 export function DashboardPage() {
   const { user } = useAuth();
+  const access = useSubscriptionAccess();
   const [digests, setDigests] = useState<Digest[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -67,6 +70,7 @@ export function DashboardPage() {
         <Button
           component={RouterLink}
           to="/digests/new"
+          disabled={!access.data?.create_allowed || !!access.error}
           variant="contained"
           size="large"
           startIcon={<TravelExploreRoundedIcon />}
@@ -74,6 +78,8 @@ export function DashboardPage() {
         >
           Create research digest
         </Button>
+
+        <AllowanceNotice {...access} reasons={access.data?.create_reasons} showResearchWarning />
 
         <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mt: 6, mb: 2.5 }}>
           <LibraryBooksRoundedIcon color="primary" />

@@ -334,3 +334,17 @@ Endpoints:
 - `POST /api/v1/admin/subscription-access/{user_id}/policy` — `mode`, `expected_version`, `change_note`; confirmed admin UI, existing role protections and active-run guard.
 
 Next increments: public subscriber checkout/portal and plan presentation, invoice-level payment verification, trials and plan changes, customer notifications, then a separately approved live rollout. This increment can be exercised entirely with sandbox subscriptions and fake provider transports in automated tests.
+
+## Early allowance guidance
+
+Allowance checks now appear before actions throughout the radar, while transaction-level checks remain authoritative:
+
+- Workspace **Create research digest** waits for the subscription check and is disabled with an explanation when digest slots are full or access is unavailable. The direct creation URL performs the same check before revealing the form. A draft already being edited is retained if a subsequent poll blocks creation.
+- Creation defaults Maximum papers to the lower of 20 and the current per-run limit. New and edit forms show the limit immediately, flag oversized input while typing and disable invalid saves. Existing above-plan saved values may still be retained/reduced when editing unrelated settings, as permitted by the backend. Admin edits use the owning user's access, not the admin's plan.
+- Manual runs and retries wait for allowance checks and offer a subscription/upgrade link beside the explanation. Retry assessments use the original run's paper count and original scheduled/email intent through the same helper as admission, rather than the digest's current parameters.
+- Scheduling shows included frequencies and email availability before editing. Unsupported options are disabled/labeled; new schedules default to an included frequency and email setting. Existing unsupported settings must be corrected before saving, but schedule deletion and Cancel remain available. Exhausted monthly research capacity warns about delayed execution without preventing valid future schedule configuration.
+- Total-run, paper and manual-only exhaustion is explained before filling forms. Paper shortfalls show the requested and available count, allowing the user to reduce the request where appropriate. Monthly reset guidance is attached only to monthly limits, not to permanent plan feature or digest-slot limits.
+- Access polling refreshes every ten seconds while visible and on return/focus. Dependent actions pause on a failed check with explicit feedback; API admission still handles concurrent changes between a check and submission.
+- **Upgrade options** leads to the subscription page's upgrade guidance. This development version still has no self-service upgrades: the page explicitly directs users to the administrator and labels the public plans page as a preview. No checkout or plan change is implied by following the link.
+
+No migration, new configuration or payment-provider requests are needed for this UX increment. Useful checks after deploying: fill all digest slots and try both entry paths; change an allowance from another tab; try oversized paper input; review unsupported schedule/email options; retry an older run with a larger paper snapshot; restore access or delete a digest and confirm controls recover on the next poll.

@@ -1,3 +1,7 @@
+import type { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import { AllowanceNotice } from "./AllowanceNotice";
+type AccessState = ReturnType<typeof useSubscriptionAccess>;
+import { Link } from "react-router-dom";
 import { ScheduleOutlook } from "./ScheduleOutlook";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import { Alert, Box, Button, Checkbox, FormControlLabel, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Stack, TextField, Typography } from "@mui/material";
@@ -16,14 +20,18 @@ function localInput(value: Date): string {
 }
 
 
-function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
+function ScheduleForm({ digestId, schedule, onSaved, onCancel, access }: {
+  access: AccessState;
   digestId: string;
   schedule: DigestSchedule | null;
   onSaved: (digest: Digest | null) => void;
   onCancel: () => void;
 }) {
-  const [frequency, setFrequency] = useState<DigestFrequency>(schedule?.frequency ?? "weekly");
-  const [sendEmail, setSendEmail] = useState(schedule?.send_email ?? true);
+  const allowedFrequencies = access.data?.plan?.configuration.schedule_frequencies ?? frequencies;
+  const emailAllowed = access.data?.plan?.configuration.email_delivery ?? true;
+  const unavailable = !access.data?.schedule_allowed || !!access.error;
+  const [frequency, setFrequency] = useState<DigestFrequency>(schedule?.frequency ?? (allowedFrequencies.includes("weekly") ? "weekly" : allowedFrequencies[0] ?? "weekly"));
+  const [sendEmail, setSendEmail] = useState(schedule?.send_email ?? emailAllowed);
   const { user } = useAuth();
   const [startsAt, setStartsAt] = useState(() => localInput(schedule ? new Date(schedule.starts_at) : new Date(Date.now() + 86400000)));
   const [endsAt, setEndsAt] = useState(() => schedule?.ends_at ? localInput(new Date(schedule.ends_at)) : "");
@@ -35,7 +43,7 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || unavailable || !allowedFrequencies.includes(frequency) || (sendEmail && !emailAllowed)) return;
     setError(null);
     const start = new Date(startsAt);
     const end = endsAt ? new Date(endsAt) : null;
@@ -80,16 +88,18 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
       <Stack spacing={2}>
         <Typography variant="body2" color="text.secondary">All dates and times below use {timeZone}. Scheduled runs use a rolling reporting period with the same length as your digest. Saving enables future automatic runs while the scheduler is running.</Typography>
         {error && <Alert severity="error">{error}</Alert>}
-        <TextField select label="Digest frequency" value={frequency} onChange={(event) => setFrequency(event.target.value as DigestFrequency)} required disabled={busy} fullWidth>
-          {frequencies.map((value) => <MenuItem key={value} value={value}>{label(value)}</MenuItem>)}
+        <TextField select label="Digest frequency" value={frequency} onChange={(event) => setFrequency(event.target.value as DigestFrequency)} required disabled={busy || unavailable} fullWidth>
+          {frequencies.map((value) => <MenuItem key={value} value={value} disabled={!allowedFrequencies.includes(value)}>{label(value)}{!allowedFrequencies.includes(value) ? " — upgrade required" : ""}</MenuItem>)}
         </TextField>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-          <TextField label="First digest date and time" type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} required disabled={busy} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-          <TextField label="End date and time (optional)" type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} disabled={busy} fullWidth helperText="Exclusive cutoff. Leave empty for no end date." slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField label="First digest date and time" type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} required disabled={busy || unavailable} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField label="End date and time (optional)" type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} disabled={busy || unavailable} fullWidth helperText="Exclusive cutoff. Leave empty for no end date." slotProps={{ inputLabel: { shrink: true } }} />
         </Stack>
-        <FormControlLabel control={<Checkbox checked={sendEmail} onChange={(event) => setSendEmail(event.target.checked)} disabled={busy} />} label={`Email completed briefings to ${user?.email ?? "the email in your profile"}`} />
+        <FormControlLabel control={<Checkbox checked={sendEmail} onChange={(event) => setSendEmail(event.target.checked)} disabled={busy || unavailable || (!emailAllowed && !sendEmail)} />} label={`Email completed briefings to ${user?.email ?? "the email in your profile"}`} />
+        {!emailAllowed && <Typography variant="body2">Email delivery is not included in this plan. Upgrade to include emailed briefings, or keep email disabled.</Typography>}
+        {!allowedFrequencies.includes(frequency) && <Typography color="warning.main">Choose an included frequency or review upgrade options before saving.</Typography>}
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-          <Button type="submit" variant="contained" disabled={busy}>{busy && !deleting ? "Saving…" : "Save schedule"}</Button>
+          <Button type="submit" variant="contained" disabled={busy || unavailable || !allowedFrequencies.includes(frequency) || (sendEmail && !emailAllowed)}>{busy && !deleting ? "Saving…" : "Save schedule"}</Button>
           {schedule && <Button type="button" color="error" onClick={() => setConfirmDelete(true)} disabled={busy}>Delete schedule</Button>}
           <Button type="button" onClick={onCancel} disabled={busy}>Cancel</Button>
         </Stack>
@@ -106,7 +116,8 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel }: {
   );
 }
 
-export function DigestScheduleControl({ digestId, schedule, exhausted, onSaved, runButton }: {
+export function DigestScheduleControl({ digestId, schedule, exhausted, onSaved, runButton, access }: {
+  access: AccessState;
   runButton: ReactNode;
   exhausted: boolean;
   digestId: string;
@@ -118,17 +129,22 @@ export function DigestScheduleControl({ digestId, schedule, exhausted, onSaved, 
     <Box>
       <Stack direction="row" spacing={1.5} alignItems="stretch">
         {runButton}
-        <Button variant="outlined" startIcon={<ScheduleRoundedIcon />} onClick={() => setEditing(true)} disabled={editing}
+        <Button variant="outlined" startIcon={<ScheduleRoundedIcon />} onClick={() => setEditing(true)} disabled={editing || (!schedule && (!access.data?.schedule_allowed || !!access.error))}
           aria-expanded={editing} aria-controls={editing ? `schedule-form-${digestId}` : undefined}>
           {schedule ? "Update schedule" : "Schedule runs"}
         </Button>
       </Stack>
+      <AllowanceNotice data={access.data} reasons={access.data?.schedule_reasons} showResearchWarning={editing} />
+      {access.data?.plan && <Typography variant="body2" sx={{ mt: 1 }}>Included schedules: {access.data.plan.configuration.schedule_frequencies.join(", ") || "none"}.
+        Email delivery: {access.data.plan.configuration.email_delivery ? "included" : "not included"}.
+        <Button component={Link} to="/subscription#upgrade" size="small">Upgrade options</Button>
+      </Typography>}
       {!editing && schedule && (
         <Box sx={{ mt: 2 }}>
           <ScheduleOutlook key={`${digestId}:${JSON.stringify(schedule)}`} digestId={digestId} schedule={schedule} exhausted={exhausted} />
         </Box>
       )}
-      {editing && <ScheduleForm digestId={digestId} schedule={schedule} onCancel={() => setEditing(false)} onSaved={(saved) => { onSaved(saved); setEditing(false); }} />}
+      {editing && <ScheduleForm access={access} digestId={digestId} schedule={schedule} onCancel={() => setEditing(false)} onSaved={(saved) => { onSaved(saved); setEditing(false); }} />}
     </Box>
   );
 }

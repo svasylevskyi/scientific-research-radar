@@ -20,8 +20,11 @@ class AccessPolicyRequest(BaseModel):
 
 
 @router.get('')
-def mine(actor: CurrentUser, db: DbSession, settings: AppSettings, digest_id: UUID | None = None):
+def mine(actor: CurrentUser, db: DbSession, settings: AppSettings, digest_id: UUID | None = None, run_id: UUID | None = None):
     data = service.overview(db, actor.id, settings)
+    if run_id and not digest_id:
+        from fastapi import HTTPException
+        raise HTTPException(422, 'A digest is required for a run assessment')
     if digest_id:
         from app.services.digest_service import DigestService, DigestNotFoundError
         from fastapi import HTTPException
@@ -31,6 +34,15 @@ def mine(actor: CurrentUser, db: DbSession, settings: AppSettings, digest_id: UU
             raise HTTPException(404, 'Digest not found') from None
         _, issues = service.assess(db, actor.id, digest.maximum_papers, settings=settings)
         data.update(run_allowed=not issues, run_reasons=issues)
+        if run_id:
+            from app.models.digest_run import DigestRun
+            from app.models.subscription_access import SubscriptionRunUsage
+            run = db.scalar(select(DigestRun).where(DigestRun.id == run_id, DigestRun.digest_id == digest_id, DigestRun.owner_id == actor.id))
+            if run is None:
+                raise HTTPException(404, 'Digest run not found')
+            context = service.run_context(db, run, existing=db.get(SubscriptionRunUsage, run.id), schedule=digest.schedule)
+            _, issues = service.assess(db, actor.id, run.digest_snapshot['maximum_papers'], str(run.trigger), context, settings)
+            data.update(retry_allowed=run.status == 'failed' and not issues, retry_reasons=issues)
     return data
 
 

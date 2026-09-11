@@ -58,6 +58,9 @@ interface DigestFormProps {
   initialValues: DigestFormValues;
   submitLabel: string;
   isSubmitting: boolean;
+  paperLimit?: number;
+  submitDisabled?: boolean;
+  paperHint?: string;
   onSubmit: (input: DigestInput) => Promise<void>;
   onCancel?: () => void;
 }
@@ -103,12 +106,16 @@ export function DigestForm({
   initialValues,
   submitLabel,
   isSubmitting,
+  paperLimit = MAXIMUM_PAPERS_LIMIT,
+  submitDisabled = false,
+  paperHint,
   onSubmit,
   onCancel,
 }: DigestFormProps) {
   const [values, setValues] = useState(initialValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [today] = useState(() => toDateInputValue(new Date()));
+  const overPaperLimit = Number(values.maximumPapers) > paperLimit;
 
   function setValue<TKey extends keyof DigestFormValues>(
     field: TKey,
@@ -153,15 +160,16 @@ export function DigestForm({
     if (
       !Number.isInteger(maximumPapers) ||
       maximumPapers < 1 ||
-      maximumPapers > MAXIMUM_PAPERS_LIMIT
+      maximumPapers > paperLimit
     ) {
-      nextErrors.maximumPapers = `Enter a whole number from 1 to ${MAXIMUM_PAPERS_LIMIT}.`;
+      nextErrors.maximumPapers = `Enter a whole number from 1 to ${paperLimit}.`;
     }
     return nextErrors;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitDisabled) return;
     const nextErrors = validate();
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
@@ -311,14 +319,14 @@ export function DigestForm({
               type="number"
               value={values.maximumPapers}
               onChange={(event) => setValue("maximumPapers", event.target.value)}
-              error={Boolean(errors.maximumPapers)}
-              helperText={errors.maximumPapers ?? `Maximum ${MAXIMUM_PAPERS_LIMIT} papers.`}
+              error={overPaperLimit || Boolean(errors.maximumPapers)}
+              helperText={overPaperLimit ? `Your current limit is ${paperLimit} papers per run. Reduce this value or review upgrade options.` : errors.maximumPapers ?? paperHint ?? `Maximum ${paperLimit} papers per run.`}
               required
               fullWidth
               slotProps={{
                 htmlInput: {
                   min: 1,
-                  max: MAXIMUM_PAPERS_LIMIT,
+                  max: paperLimit,
                   step: 1,
                   inputMode: "numeric",
                 },
@@ -343,7 +351,7 @@ export function DigestForm({
           variant="contained"
           size="large"
           startIcon={isSubmitting ? <CircularProgress size={18} color="inherit" /> : <SaveRoundedIcon />}
-          disabled={isSubmitting}
+          disabled={isSubmitting || submitDisabled || overPaperLimit}
         >
           {submitLabel}
         </Button>

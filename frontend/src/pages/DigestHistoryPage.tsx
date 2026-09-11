@@ -1,3 +1,4 @@
+import { RetryRunButton } from "../components/RetryRunButton";
 import { AdminDigestCostSummary } from "../components/AdminDigestCostSummary";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import {
@@ -295,15 +296,7 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
                   {!admin && selectedRun.status === "failed" && (
                     <Alert severity="error">
                       {selectedRun.error_message ?? "This radar run failed."}
-                      <Button
-                        color="inherit"
-                        size="small"
-                        disabled={isRetrying}
-                        onClick={() => void retryRun()}
-                        sx={{ ml: 1 }}
-                      >
-                        {isRetrying ? "Retrying…" : "Retry failed stage"}
-                      </Button>
+                      <RetryRunButton digestId={digestId} runId={selectedRun.id} disabled={isRetrying} onRetry={() => void retryRun()} />
                     </Alert>
                   )}
                   <Box>
