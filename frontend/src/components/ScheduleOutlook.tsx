@@ -37,10 +37,11 @@ export function ScheduleOutlook({ digestId, schedule, exhausted }: {
   const timeZone = preview?.time_zone ?? schedule.time_zone;
   const planned = preview?.next_scheduled_at;
   const executing = state === "queued" || state === "running";
-  const waiting = state === "due" || state === "waiting_for_run" || state === "waiting_for_allowance";
+  const waiting = state === "due" || state === "waiting_for_run" || state === "waiting_for_allowance" || state === "waiting_for_subscription";
   const waitingLabels = {
     due: "Due — waiting to start",
     waiting_for_run: "Waiting for an active run to finish",
+    waiting_for_subscription: "Waiting for subscription access",
     waiting_for_allowance: "Waiting for usage allowance",
   };
 
@@ -58,6 +59,7 @@ export function ScheduleOutlook({ digestId, schedule, exhausted }: {
     {waiting && <Alert severity="info">
       {waitingLabels[state as keyof typeof waitingLabels]}
       {planned && <Typography variant="body2">Planned for {dateLabel(planned, timeZone)}.</Typography>}
+      {preview?.subscription_message && <Typography variant="body2">{preview.subscription_message}</Typography>}
       {state === "waiting_for_allowance" && preview?.allowance_available_at && <Typography variant="body2">
         Allowance available from {dateLabel(preview.allowance_available_at, timeZone)}. The actual start may be later.
         {schedule.ends_at && new Date(preview.allowance_available_at) >= new Date(schedule.ends_at)

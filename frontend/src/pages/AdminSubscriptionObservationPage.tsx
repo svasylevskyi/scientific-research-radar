@@ -93,7 +93,7 @@ export function AdminSubscriptionObservationPage() {
   return <Box><AppHeader /><Container component="main" maxWidth="lg" sx={{ py: 4 }}>
     <Button component={Link} to="/admin/subscription-plans">Back to plans</Button>
     <Typography variant="h3" component="h1" gutterBottom>Subscription observation</Typography>
-    <Alert severity="info" sx={{ mb: 3 }}>All users retain complimentary development access. Assignments compare usage against a fixed plan revision;
+    <Alert severity="info" sx={{ mb: 3 }}>Observation assignments compare usage against a fixed plan revision. Effective access is managed separately under Subscription access;
       they do not change billing or block any action. Allowances use UTC calendar months, including annual plans.</Alert>
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}

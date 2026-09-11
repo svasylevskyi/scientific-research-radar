@@ -41,7 +41,7 @@ class DigestSchedule(BaseModel):
 
 
 class SchedulePreviewRead(BaseModel):
-    state: Literal["not_scheduled", "scheduled", "due", "waiting_for_run", "waiting_for_allowance", "queued", "running", "ended"]
+    state: Literal["not_scheduled", "scheduled", "due", "waiting_for_run", "waiting_for_allowance", "waiting_for_subscription", "queued", "running", "ended"]
     as_of: datetime
     next_scheduled_at: datetime | None = None
     upcoming_runs: list[datetime] = Field(default_factory=list)
@@ -50,4 +50,5 @@ class SchedulePreviewRead(BaseModel):
     active_run_id: UUID | None = None
     waiting_digest_id: UUID | None = None
     allowance_available_at: datetime | None = None
+    subscription_message: str | None = None
     exhausted: bool = False

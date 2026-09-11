@@ -35,7 +35,7 @@ Stripe is the selected provider; the first sandbox test uses the configured Expl
 
 All active admins, including ordinary admins, can use **Plans** in the header (`/admin/subscription-plans`). The catalogue starts empty; create draft plans with the editor. Catalogue editing itself does not seed plans, change the public catalogue, assign users, make billing requests or enforce radar quotas. Admin-only sandbox billing is a separate explicit flow described below.
 
-Configurable fields: stable plan code, name, description, internal state (Draft / Reviewed / Archived), currency (EUR/USD/GBP/PLN), monthly price, optional annual price, proposed tax display, maximum digests, papers per run (1–30), monthly papers, total monthly runs, manual runs within that total, scheduling frequencies, email delivery, trial days and future display order. Monthly allowances are separate from the proposed billing interval; annual billing does not imply an annual lump-sum allowance. These are planning values, not promises enforced in the product.
+Configurable fields: stable plan code, name, description, internal state (Draft / Reviewed / Archived), currency (EUR/USD/GBP/PLN), monthly price, optional annual price, proposed tax display, maximum digests, papers per run (1–30), monthly papers, total monthly runs, manual runs within that total, scheduling frequencies, email delivery, trial days and future display order. Monthly allowances are separate from the proposed billing interval; annual billing does not imply an annual lump-sum allowance. These are internal configuration values. The separate opt-in sandbox access layer below uses the immutable revision saved at checkout; editing this catalogue alone does not change existing access.
 
 Every save appends a complete revision with UTC creation time, admin ID and required change note. Codes are stable; archive a plan instead of deleting audit history. Reviewed means internally reviewed, never published for user purchase. Admin sandbox testing is separately gated. Multiple administrators may collaborate: the API requires `expected_revision`, and a unique database constraint prevents concurrent revision collisions. A stale save returns 409 and the editor preserves the unsaved input. Reload the catalogue and select Edit on the latest plan to reconcile it. Previous revisions are read-only.
 
@@ -67,7 +67,7 @@ For local backend development use `python -m app.subscriptions.seed_plans` from 
 | Researcher | 19 / 190 | 5 | 30 / 200 | 20 / 5 | Daily, weekly, monthly, quarterly |
 | Professional | 39 / 390 | 10 | 30 / 500 | 50 / 15 | Daily, weekly, monthly, quarterly |
 
-These are starting proposals, not validated commercial allowances. Monthly prices and paper/topic/manual-run limits follow the earlier discussion; total-run limits of 1/5/20/50 are provisional protections for discovery and synthesis costs. Annual prices reflect two months' discount. Professional is capped at the currently supported 30 papers per run. Quarterly schedules are included on all paid drafts. A permitted daily frequency does not promise unlimited daily runs; total allowances will still apply once enforcement is implemented.
+These are starting proposals, not validated commercial allowances. Monthly prices and paper/topic/manual-run limits follow the earlier discussion; total-run limits of 1/5/20/50 are provisional protections for discovery and synthesis costs. Annual prices reflect two months' discount. Professional is capped at the currently supported 30 papers per run. Quarterly schedules are included on all paid drafts. A permitted daily frequency does not promise unlimited daily runs; total allowances apply when an account is explicitly opted into sandbox subscription limits.
 
 Preview proposes a 14-day, one-run trial with no scheduling, rather than recurring free research. The current catalogue cannot enforce one-time trial eligibility or expiry; implement those rules before offering Preview publicly. Paid draft trial days are zero. All drafts include email and leave the tax-display policy undecided.
 
@@ -107,7 +107,7 @@ References: [Stripe tax behavior](https://docs.stripe.com/tax/products-prices-ta
 
 ## Admin-only sandbox checkout and subscription lifecycle
 
-Open **Admin → Plans → Test sandbox billing**. Any admin can test their own Explorer subscription, choose monthly or annual checkout, review saved status, refresh from Stripe, and open the customer portal. Ordinary users cannot access these endpoints. This does not publish plans, assign user entitlements, enforce quotas, enable real payments, or change radar usage. Draft and reviewed Explorer revisions may be tested; archived revisions and nonzero trials are rejected. The return page does not grant access or claim payment success.
+Open **Admin → Plans → Test sandbox billing**. Any admin can test their own Explorer subscription, choose monthly or annual checkout, review saved status, refresh from Stripe, and open the customer portal. Ordinary users cannot access these endpoints. This does not publish plans or enable real payments. Accounts explicitly opted into sandbox limits use the verified subscription state through the separate access layer described below. Draft and reviewed Explorer revisions may be tested; archived revisions and nonzero trials are rejected. The return page does not grant access or claim payment success.
 
 Each attempt pins the immutable plan revision, Stripe price, and creation parameters. New attempts re-check current prices, including explicit inclusive tax behavior. Pending attempts resume their original revision even if the catalogue has changed. Completed work is not silently re-priced. A changed subscription price/quantity in Stripe is shown as a mismatch. A pending or nonterminal subscription blocks a second checkout for that admin. Only `canceled` and `incomplete_expired` subscriptions permit another; cancellation scheduled for period end does not yet permit one.
 
@@ -189,7 +189,7 @@ References: [Stripe webhooks](https://docs.stripe.com/webhooks), [idempotent req
 
 **Admin → Plans → Assignments and usage** is the next development increment. A link on user details opens the same page with that user selected. All admins can assign a plan for comparison and inspect usage; ordinary admins cannot access the protected super-admin's records. Regular users have no observation endpoints or UI changes.
 
-This is explicitly **observation only**. Everyone retains complimentary development access. An admin assignment is not a Stripe subscription or a claim of payment. Sandbox events never assign observation plans, and observation edits never modify Stripe. There is no enforcement switch in this implementation.
+This assignment ledger is explicitly **observation only**. Effective access is managed separately; complimentary development access remains the default. An admin assignment is not a Stripe subscription or a claim of payment. Sandbox events never assign observation plans, and observation edits never modify Stripe. The separate access-policy UI controls opt-in sandbox enforcement; observation assignments do not.
 
 ### Assignments
 
@@ -222,7 +222,7 @@ API (admin-only, same protected-user rules as user management):
 - `POST /api/v1/admin/subscription-observation/{user_id}/assignments` — `{ "plan_revision_id": 1, "expected_version": 0, "change_note": "Observe Explorer limits" }`; null plan ID selects complimentary comparison.
 - `GET /api/v1/admin/subscription-observation/{user_id}/assignments?offset=0&limit=25` — append-only assignment audit.
 
-The normal deployment applies migration `20260910_0017`; no new environment variables or provider permissions are required. Before paid access enforcement, we still need an explicit mapping from verified billing state to entitlements, decisions about billing-aligned allowance windows, user-facing subscription/usage pages, payment-failure policy, durable webhook processing and reconciliation. Observation data provides evidence for those choices without changing existing access.
+The normal deployment applies migration `20260910_0017`; no new environment variables or provider permissions are required. Subsequent increments below add durable synchronization and opt-in sandbox entitlements with billing-aligned windows. Observation data stays separate and continues to provide comparison evidence.
 
 ## Durable sandbox synchronization
 
@@ -275,10 +275,62 @@ The background processor runs only in the API application, where Stripe credenti
 
 Automated tests simulate provider outages, backoff/exhaustion/manual retry, lost webhooks, expired/stale worker leases, atomic rollback, out-of-order events, and concurrent delivery/claiming. No real payment or OpenAI calls are needed for these tests. The design follows [Stripe's webhook guidance](https://docs.stripe.com/webhooks) on durable handling, duplicates, ordering, signature validation and prompt acknowledgments.
 
-### Agreed rules for the next increment (not enforced here)
+### Agreed access rules (implemented by the opt-in increment below)
 
-- Allowances will reset monthly on the subscription anniversary, including annual subscriptions. The existing UTC calendar-month observation ledger needs an explicit transition; this release does not silently move historical reservations into different windows.
-- Failed renewals will have a short, configurable grace period. The exact configured duration will be set before enforcement; after grace, new research is blocked while completed results remain accessible.
+- Allowances will reset monthly on the subscription anniversary, including annual subscriptions. The separate access ledger below provides that transition without moving historical observation reservations.
+- Failed renewals will have a short, configurable grace period. The sandbox default below is three days; after grace, new research is blocked while completed results remain accessible.
 - Exhausted allowances block new runs with a clear explanation and reset date; completed research stays accessible. Manual, scheduled and retry paths must use the same policy.
 - Cancellation at period end preserves access through the paid period, then prevents new research. Historical results are retained and readable.
-- Complimentary development access remains explicit. Verified Stripe state will be connected to entitlements in a later increment, not by manually changing observation assignments.
+- Complimentary development access remains explicit. Verified Stripe state connects to access through the separate opt-in policy, not by manually changing observation assignments.
+
+## Opt-in sandbox access and anniversary allowances
+
+Migration `20260911_0019` adds an access-policy audit trail, a **separate** subscription usage ledger, subscription anchor/period observations and a scheduler deferral field. The normal deployment runs this migration. The API, research worker and scheduler must all run the new image before opting an account in.
+
+This release deliberately requires **per-account opt-in**. Existing and newly registered accounts default to complimentary development access. It does not open checkout to ordinary users, accept live keys, or launch public billing. Observation assignments still only compare hypothetical limits; they never grant subscription access.
+
+### Testing access limits
+
+1. Let deployment finish, then use **Admin → Plans → Billing synchronization → Reconcile now** for your sandbox checkout. Older observations lack the newly required billing anchor/current-period fields; periodic reconciliation also populates them automatically.
+2. Open **Admin → Users → your account → Subscription access**. Review the existing sandbox subscription under Sandbox billing first.
+3. Select **Enforce sandbox subscription limits**, supply a reason, and confirm. This takes effect immediately for that account only. Policy changes are version checked, audited, and rejected while an account has queued/running work. Ordinary admins cannot change protected super-admin access.
+4. Use **Subscription and usage** in navigation to review current access, allowance window, remaining capacity, reservations and plan features. Digest controls poll the server's admission assessment; the server always checks again when a run or retry is requested.
+5. Try a small manual run, schedule and retry. Quotas are shared across all three entry points. Requests outside the allowance return an explanatory 403; saved history stays readable. Creating additional digests, increasing the paper limit, or saving unsupported schedule/email options is checked server-side, including admin digest edits.
+6. To revert the test, wait for active work to finish and change the account back to **Complimentary development access**, with a reason. Switching modes does not erase previously counted subscription usage. This does not cancel a Stripe subscription or change any money/payment state.
+
+An account can be opted in before it has a subscription to test the unavailable state. Since sandbox checkout remains admin-only, ordinary users cannot yet purchase access themselves; do not opt ordinary users in expecting a public purchase flow.
+
+### Access decisions and periods
+
+- Access uses the **saved, verified sandbox subscription**, its immutable checkout plan revision, matching price, current billing period and synchronization freshness. No Stripe network request occurs during run admission. Unverified/mismatched/missing period data blocks new research and directs the admin to reconciliation. Archived catalogue revisions do not retroactively remove an existing subscription's agreed limits.
+- Monthly allowances reset at the UTC anniversary timestamp, for both monthly and annual subscriptions. Dates are calculated from the original Stripe billing anchor, preserving its day and time across short months and leap years: January 31 → February 28/29 → March 31. Windows are start-inclusive/end-exclusive; unused capacity does not roll over. The annual invoice period and monthly allowance window remain distinct. See [Stripe billing-cycle documentation](https://docs.stripe.com/billing/subscriptions/billing-cycle).
+- The new ledger starts when a run is admitted under sandbox limits. Old UTC calendar-month observation rows remain untouched, and historical usage is not silently backfilled. A run completing after a reset settles against the window in which it was accepted.
+- Active subscriptions permit new research until the verified period ends. Cancellation at period end preserves that access; terminal cancellation, unpaid, incomplete and trialing states do not admit new work. Current sandbox checkout has no trial.
+- A previously active subscription entering `past_due` receives a configurable **three-day** grace period by default. The clock is anchored to the failed renewal period (capped at first observation), not refreshed on each webhook/reconciliation. Grace does not apply to a first payment that never established active access. Recovery to active clears the delinquency clock. This remains a sandbox subscription-state policy, not a full invoice/payment ledger: live billing still requires explicit invoice/payment reconciliation, refund/dispute policy and production acceptance tests. [Stripe subscription lifecycle](https://docs.stripe.com/billing/subscriptions/overview).
+- Observations more than 24 hours old block new sandbox research by default. Already accepted work continues; existing results, feedback and account/billing administration remain available. The subscription view distinguishes a synchronization issue from exhausted quotas.
+
+Optional settings, read by all application processes from the environment file:
+
+```env
+SUBSCRIPTION_GRACE_DAYS=3
+SUBSCRIPTION_SYNC_MAX_AGE_SECONDS=86400
+```
+
+The grace range is 0–14 days; synchronization freshness is 15 minutes–48 hours. No new Stripe permissions, webhook types, hosted services or required settings are added. Defaults are adequate for development; public billing and enforcement for all accounts remain disabled.
+
+### Usage and recovery rules
+
+- Admission reserves one total run, one manual run when applicable, and the requested maximum paper count. The shared account lock and transaction cover policy checks, quota checks, run enqueue, rate limits and reservation. Concurrent requests cannot spend the same remaining capacity.
+- Success settles one run and the actual number of summarized papers, releasing unused paper capacity. Failure releases that run's subscription reservation, including partially completed runs. Existing per-hour/day anti-abuse limits still apply; released subscription allowance does not refund provider cost.
+- A retry is a new admission against the **current** subscription and allowance window. It reserves the whole requested count because successful completion exposes all summaries, including reused ones. Repeated accepted enqueue/settlement does not double count. Scheduled retries preserve original scheduling/email intent even if the digest's current schedule was edited. Retries of pre-ledger runs are counted only when newly admitted.
+- Deleting a digest/run keeps its settled usage, with the run link cleared. Deleting the owning account removes its private usage/policy records.
+- Subscription-blocked scheduled work keeps its due occurrence, with a one-minute dispatch deferral so other accounts are serviced. The UI shows **Waiting for subscription access** with the reason. It resumes after access/capacity is available, coalescing missed occurrences through the existing scheduler behavior. Schedule end dates still stop future work. No backlog of every missed occurrence is generated.
+- Already accepted runs and their requested email deliveries finish even if billing changes afterward. Read access to saved results is never tied to a current paid subscription.
+
+Endpoints:
+
+- `GET /api/v1/subscription` — own access/usage; optional owner-checked `digest_id` adds the manual-run admission assessment.
+- `GET /api/v1/admin/subscription-access/{user_id}?offset=0` — effective access plus policy audit history (25 changes per page).
+- `POST /api/v1/admin/subscription-access/{user_id}/policy` — `mode`, `expected_version`, `change_note`; confirmed admin UI, existing role protections and active-run guard.
+
+Next increments: public subscriber checkout/portal and plan presentation, invoice-level payment verification, trials and plan changes, customer notifications, then a separately approved live rollout. This increment can be exercised entirely with sandbox subscriptions and fake provider transports in automated tests.

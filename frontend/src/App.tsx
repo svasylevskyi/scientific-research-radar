@@ -1,3 +1,4 @@
+import { SubscriptionAccessPage } from "./pages/SubscriptionAccessPage";
 import { AdminBillingSyncPage } from "./pages/AdminBillingSyncPage";
 import { AdminSubscriptionObservationPage } from "./pages/AdminSubscriptionObservationPage";
 import { AdminSandboxBillingPage } from "./pages/AdminSandboxBillingPage";
@@ -131,6 +132,8 @@ export default function App() {
           />
           <Route path="/admin/spending" element={<RequireAuth><RequireAdmin superAdmin><AdminSpendingPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/subscription-observation" element={<RequireAuth><RequireAdmin><AdminSubscriptionObservationPage /></RequireAdmin></RequireAuth>} />
+          <Route path="/subscription" element={<RequireAuth><SubscriptionAccessPage /></RequireAuth>} />
+          <Route path="/admin/subscription-access" element={<RequireAuth><RequireAdmin><SubscriptionAccessPage admin /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/billing-sync" element={<RequireAuth><RequireAdmin><AdminBillingSyncPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/subscription-testing" element={<RequireAuth><RequireAdmin><AdminSandboxBillingPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/subscription-plans" element={<RequireAuth><RequireAdmin><AdminSubscriptionPlansPage /></RequireAdmin></RequireAuth>} />

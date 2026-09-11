@@ -142,6 +142,20 @@ def observe_subscription(db, client, row, subscription_id):
         row.period_end = datetime.fromtimestamp(end, timezone.utc) if end is not None else None
     except (ValueError, TypeError, OverflowError, OSError):
         raise Error("Stripe returned an unexpected subscription period.") from None
+    stamp = datetime.now(timezone.utc)
+    start = items[0].get("current_period_start", value.get("current_period_start")) if items else value.get("current_period_start")
+    try:
+        row.period_start = datetime.fromtimestamp(start, timezone.utc) if start is not None else None
+        anchor = value.get("billing_cycle_anchor")
+        row.billing_anchor = datetime.fromtimestamp(anchor, timezone.utc) if anchor is not None else None
+    except (ValueError, TypeError, OverflowError, OSError):
+        raise Error("Stripe returned an unexpected subscription anchor.") from None
+    if status == "active" and row.price_matches:
+        row.active_through = row.period_end
+        row.delinquent_since = None
+    elif status == "past_due" and row.delinquent_since is None:
+        # Stable across reconciliation; delayed events cannot restart the grace clock.
+        row.delinquent_since = min(stamp, utc(row.period_start)) if row.period_start else stamp
     row.subscription_id, row.customer_id, row.subscription_status = subscription_id, customer, status
     row.cancel_at_period_end = value.get("cancel_at_period_end") is True
     row.observed_at = datetime.now(timezone.utc)

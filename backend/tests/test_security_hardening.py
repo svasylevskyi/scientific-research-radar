@@ -283,12 +283,9 @@ def test_concurrent_retry_only_enqueues_and_charges_once(file_sessions):
     def retry(_):
         with file_sessions() as db:
             runner = _runner(db, RecordingRadarClient())
-            original = runner.runs.get_owned
-            def read(**kwargs):
-                result = original(**kwargs)
-                barrier.wait()
-                return result
-            runner.runs.get_owned = read
+            # Admission now locks the subscription account before reading the run.
+            # Synchronize callers before that lock, not inside the critical section.
+            barrier.wait(timeout=10)
             try:
                 runner.retry_digest(digest_id=digest_id, run_id=run_id, owner_id=owner_id)
                 return True

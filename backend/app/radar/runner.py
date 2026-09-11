@@ -82,6 +82,9 @@ class RadarRunner:
         digest = self.digests.get_for_owner(digest_id=digest_id, owner_id=owner_id)
         if digest is None:
             raise RadarDigestNotFoundError("Digest not found")
+        from app.services.subscription_observation_service import lock as lock_subscription
+        lock_subscription(self.db, owner_id)
+        self.db.refresh(digest)
         if self.runs.has_running_for_owner(owner_id=owner_id):
             raise RadarRunAlreadyActiveError(
                 "Another digest run is already in progress for your account. "
@@ -118,6 +121,8 @@ class RadarRunner:
         if scheduled_for is not None:
             run.trigger = DigestRunTrigger.SCHEDULED
             run.scheduled_for = scheduled_for
+        from app.services.subscription_access_service import reserve as reserve_access
+        reserve_access(self.db, run, schedule=run.digest.schedule, settings=self.settings)
         from app.services.subscription_observation_service import reserve
         reserve(self.db, run, schedule=digest.schedule)
         if not commit:
@@ -137,6 +142,8 @@ class RadarRunner:
     def retry_digest(
         self, *, digest_id: UUID, run_id: UUID, owner_id: UUID
     ) -> DigestRun:
+        from app.services.subscription_observation_service import lock as lock_subscription
+        lock_subscription(self.db, owner_id)
         run = self.runs.get_owned(
             digest_id=digest_id, run_id=run_id, owner_id=owner_id
         )
@@ -157,6 +164,8 @@ class RadarRunner:
             self.db.rollback()
             raise RadarRunNotRetryableError("This run was already retried. Refresh its progress.")
         self.runs.requeue_failed(run=run)
+        from app.services.subscription_access_service import reserve as reserve_access
+        reserve_access(self.db, run, schedule=run.digest.schedule, settings=self.settings)
         from app.services.subscription_observation_service import reserve
         reserve(self.db, run, schedule=run.digest.schedule)
         try:

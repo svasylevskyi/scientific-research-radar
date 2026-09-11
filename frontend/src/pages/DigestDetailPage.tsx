@@ -24,7 +24,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { ApiError } from "../api/client";
+import { apiRequest, ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi, digestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
 import { DigestForm, digestToFormValues } from "../components/DigestForm";
@@ -57,6 +57,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const backPath = admin ? "/admin/digests" : "/radar";
   const [digest, setDigest] = useState<Digest | null>(null);
   const [latestRun, setLatestRun] = useState<DigestRunDetail | null>(null);
+  const [access, setAccess] = useState<{ run_allowed: boolean; run_reasons: string[] } | null>(null);
   const [activeRun, setActiveRun] = useState<DigestRunDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -170,6 +171,19 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   useEffect(() => {
     if (runTab === 1 && latestRun?.status !== "completed") setRunTab(0);
   }, [latestRun?.id, latestRun?.status, runTab]);
+
+  useEffect(() => {
+    if (admin) return;
+    let mounted = true;
+    setAccess(null);
+    const stop = startPagePolling(async () => {
+      try {
+        const result = await apiRequest<{ run_allowed: boolean; run_reasons: string[] }>(`/subscription?digest_id=${digestId}`);
+        if (mounted) setAccess(result);
+      } catch { /* Server admission still checks access if a read fails. */ }
+    }, 10000);
+    return () => { mounted = false; stop(); };
+  }, [admin, digestId, digest?.maximum_papers]);
 
   async function runNow() {
     if (isStartingRun || isSaving || activeRun) return;
@@ -358,7 +372,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                   <Button
                     variant="contained"
                     startIcon={isStartingRun ? <CircularProgress size={18} color="inherit" /> : <PlayArrowRoundedIcon />}
-                    disabled={isStartingRun || isSaving || runBlocked}
+                    disabled={isStartingRun || isSaving || runBlocked || access?.run_allowed === false}
                     onClick={() => setConfirmRun(true)}
                   >
                     {isStartingRun
@@ -372,6 +386,9 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                   }
                 />
 
+                {access?.run_allowed === false && <Alert severity="warning" sx={{ mt: 2 }}>
+                  {access.run_reasons.join(" ")} <Button component={RouterLink} to="/subscription" size="small">Subscription and usage</Button>
+                </Alert>}
                 {activeRun && (
                   <Alert severity="info" sx={{ mt: 2 }}>
                     {currentDigestIsRunning
@@ -445,7 +462,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button autoFocus onClick={() => setConfirmRun(false)}>Cancel</Button>
           <Button variant="contained" onClick={() => void runNow()}
-            disabled={isStartingRun || isSaving || runBlocked}>
+            disabled={isStartingRun || isSaving || runBlocked || access?.run_allowed === false}>
             Run now
           </Button>
         </DialogActions>

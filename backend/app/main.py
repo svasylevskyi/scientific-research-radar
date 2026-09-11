@@ -121,3 +121,10 @@ async def private_response_headers(request, call_next):
     if request.url.path.startswith("/api/v1/"):
         response.headers["Cache-Control"] = "no-store"
     return response
+
+
+from app.services.subscription_access_service import AccessDenied
+
+@app.exception_handler(AccessDenied)
+async def subscription_access_error(_request, exc):
+    return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
