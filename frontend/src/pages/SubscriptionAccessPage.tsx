@@ -1,3 +1,4 @@
+import { SubscriberBilling } from "../components/SubscriberBilling";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { Alert, Box, Button, Container, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
@@ -67,6 +68,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {!data && !error && (!admin || userId) && <Typography role="status">Loading subscription…</Typography>}
     {data && <Stack spacing={2}>
+      {!admin && <SubscriberBilling />}
       {data.email && <Typography>{data.email}</Typography>}
       <Alert severity={data.allowed ? (data.grace_until ? "warning" : "info") : "warning"}>{data.reason}</Alert>
       <Paper variant="outlined" sx={{ p: 3 }}>
@@ -98,7 +100,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
           Self-service upgrades are not available in this development version. Contact the Radar administrator to discuss access; viewing plans does not change your subscription.</Typography>
         <Typography variant="body2" sx={{ mt: 1 }}>Digest slots are freed by deleting a digest and do not reset each month. Research allowances reset on the date shown above.
           Payment or synchronization issues must be resolved before research can resume.</Typography>
-        <Button component={Link} to="/plans">Preview plans</Button>
+        <Button component={Link} to="/plans">Compare plans</Button>
       </Paper>}
       {admin && <Paper variant="outlined" sx={{ p: 3 }}><Stack spacing={2}>
         <Typography variant="h6">Change access mode</Typography>

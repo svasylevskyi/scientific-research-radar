@@ -1,6 +1,6 @@
 # Paid subscriptions implementation branch
 
-Work continues on `feature/paid-subscriptions`, with each reviewed increment merged separately. Sandbox checkout is disabled by default, so catalogue changes can be deployed without enabling billing.
+Work continues on `feature/paid-subscriptions`, with each reviewed increment merged separately. Sandbox checkout is disabled by default. Current subscriber rollout instructions are in the final section below; earlier sections document prior increments.
 
 ## Development deployment
 
@@ -390,3 +390,37 @@ The billing synchronization page includes a paginated invoice review for each ch
 - Confirm cancellation blocks new work when effective, while saved research stays readable.
 
 Automated tests use fake provider transports; no payment or OpenAI calls are made. Live refunds, disputes, tax readiness, notifications, trials, multi-item/prorated plan changes, and live-billing rollout remain separate increments.
+
+
+## Subscriber-facing sandbox checkout
+
+This increment adds ordinary-user checkout and billing management for **accounts already opted into sandbox subscription access by an admin**. Complimentary accounts keep their existing access and can browse plans, but cannot begin subscriber checkout. No live billing, automatic opt-in, trial, or upgrade/downgrade flow is enabled.
+
+### Setup and acceptance
+
+1. Deploy normally. **No migration, new environment variable, new Stripe permission or webhook event is required** beyond the previous invoice increment.
+2. In **Admin → Plans**, edit the intended plan. Set it to **Reviewed**, retain inclusive tax and verified sandbox mappings, set trial days to zero, and check **Publish for subscriber sandbox checkout**. Save with a change note. Existing revisions have this choice off by default and remain private.
+3. Click **Check saved revision in Stripe**. The saved mapping is checked again when checkout starts; publication alone does not prove the remote price still matches.
+4. Enroll an ordinary test account through **Subscription access → Enforce sandbox subscription limits**. Log in as that account and visit **Compare plans** from Subscription and usage, or `/plans`.
+5. Select monthly/annual billing, review the full recurring price and allowance limits, confirm, and complete Stripe Checkout with test payment details. A successful redirect is not payment verification: access updates through the existing invoice/webhook reconciliation flow. **Refresh billing status** performs an explicit owner-scoped refresh; ordinary page polling reads local data only.
+6. Test cancellation/return without payment, then **Resume checkout**. The original saved intent and idempotency key are reused; existing pending checkouts cannot silently switch plans or interval. A removed/newer catalogue revision does not rewrite an existing checkout's saved terms.
+7. After checkout, use **Manage billing** for the existing configured portal (payment-method updates, invoices and cancellation). Return goes to `/subscription`. Portal plan/quantity updates must remain disabled. Existing customers can still manage billing if an admin later restores complimentary access.
+8. Resend completion events, refresh repeatedly, and test two tabs: no duplicate subscription, entitlement grant, or allowance reset should occur. Check an account that was not opted in: checkout must explain enrollment before the user selects payment details.
+
+### Catalogue and API boundaries
+
+`subscriber_visible` is part of each versioned configuration, defaults to false for older revisions, and requires reviewed status, inclusive tax, mapped prices, and no trial. The public `/plans` page now displays the newest explicitly published revisions in display order; illustrative hardcoded tiers are removed. Hiding the latest revision hides that code, rather than falling back to a previously published revision. Existing subscribed users retain their immutable purchased revision.
+
+The public catalogue exposes names, descriptions, prices, currencies and allowances only. Provider product/price IDs, internal notes, authors and unpublished plan data remain admin-only. All prices shown are tax-inclusive sandbox amounts; automatic tax and live tax readiness remain unchanged.
+
+Endpoints:
+- `GET /api/v1/subscription/plans` — public sanitized published catalogue, no provider calls.
+- `GET /api/v1/subscription/billing` — own eligibility, pending checkout and portal availability, no provider calls.
+- `POST /api/v1/subscription/billing/checkout` — `{code, revision, interval}`; authenticated owner, opted-in policy, current published revision, provider mapping revalidation and shared account lock.
+- `POST /api/v1/subscription/billing/resume` — resolves only the current owner's saved intent.
+- `POST /api/v1/subscription/billing/refresh` — explicit synchronization of the owner's checkout/subscription/invoices.
+- `POST /api/v1/subscription/billing/portal` — creates an owner-specific short-lived portal session with a server-chosen return path.
+
+Mutation endpoints share existing per-account billing rate limits and browser-origin guards. User/customer/session IDs and redirect URLs cannot be supplied to select another account. Existing admin-only Explorer testing remains available for drafts. Tests use fake Stripe transports; no real payment or OpenAI calls are made.
+
+The next increments remain plan changes with explicit effective dates/proration policy, subscriber notifications, trials, and a separately reviewed live rollout. Stripe-hosted checkout/portal behavior follows [Checkout fulfillment guidance](https://docs.stripe.com/checkout/fulfillment) and [customer portal integration](https://docs.stripe.com/customer-management/integrate-customer-portal).
