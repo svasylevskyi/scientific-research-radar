@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.models.digest import Digest
@@ -12,6 +12,7 @@ from app.radar.runner import RadarRunner, RadarRunAlreadyActiveError
 from app.schemas.digest_schedule import DigestSchedule
 from app.scheduler.recurrence import around, utc
 from app.services.rate_limit_service import RateLimitExceeded
+from app.services.subscription_access_service import AccessDenied
 
 
 class ScheduleDispatcher:
@@ -24,7 +25,8 @@ class ScheduleDispatcher:
         now = utc(now or datetime.now(timezone.utc))
         with self.sessions() as db:
             ids = list(db.scalars(select(Digest.id).join(User, Digest.owner_id == User.id).where(
-                Digest.schedule_next_at <= now, User.is_active.is_(True)
+                Digest.schedule_next_at <= now, User.is_active.is_(True),
+                or_(Digest.subscription_retry_at.is_(None), Digest.subscription_retry_at <= now)
             ).order_by(Digest.schedule_next_at, Digest.id).limit(100)))
         queued = 0
         for digest_id in ids:
@@ -32,6 +34,14 @@ class ScheduleDispatcher:
                 digest = db.get(Digest, digest_id)
                 if not digest or not digest.schedule or not digest.schedule_next_at or utc(digest.schedule_next_at) > now:
                     continue
+                # Use the same account-before-digest lock order as schedule edits and run admission.
+                from app.services.subscription_observation_service import lock as lock_subscription
+                lock_subscription(db, digest.owner_id)
+                db.refresh(digest)
+                if not digest.schedule or not digest.schedule_next_at or utc(digest.schedule_next_at) > now:
+                    db.rollback()
+                    continue
+                original_cursor = digest.schedule_next_at
                 schedule = DigestSchedule.model_validate(digest.schedule)
                 due, following = around(schedule, now)
                 # Compare-and-swap serializes dispatch against other dispatchers and schedule edits.
@@ -60,10 +70,17 @@ class ScheduleDispatcher:
                         reasoning_efforts={}).start_digest(
                             digest_id=digest_id, owner_id=digest.owner_id,
                             scheduled_for=due, time_zone=schedule.time_zone, commit=False)
+                    digest.subscription_retry_at = None
                     if schedule.send_email:
                         db.add(DigestEmailDelivery(run_id=run.id, next_attempt_at=now))
                     db.commit()
                     queued += 1
+                except AccessDenied:
+                    # Leave the occurrence due, but let other subscribers make progress.
+                    db.rollback()
+                    db.execute(update(Digest).where(Digest.id == digest_id,
+                        Digest.schedule_next_at == original_cursor).values(subscription_retry_at=now + timedelta(seconds=60)))
+                    db.commit()
                 except (RadarRunAlreadyActiveError, RateLimitExceeded, IntegrityError):
                     # Keep the occurrence due until this user's other run finishes.
                     db.rollback()

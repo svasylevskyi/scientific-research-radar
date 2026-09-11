@@ -54,7 +54,7 @@ export function AdminSandboxBillingPage() {
     <Button component={Link} to="/admin/billing-sync" sx={{ mb: 2 }}>Synchronization status</Button>
     <Typography component="h1" variant="h3" gutterBottom>Sandbox billing</Typography>
     <Alert severity="info" sx={{ mb: 3 }}>For administrators testing their own Explorer subscription. Use Stripe test cards only.
-      No real money is collected and Radar access and allowances are unchanged. Automatic tax calculation and trials are not enabled in this test.</Alert>
+      No real money is collected. Subscription state affects research only for accounts explicitly opted into sandbox subscription limits. Automatic tax calculation and trials are not enabled in this test.</Alert>
     {params.has("stripe_return") && <Alert severity="info" sx={{ mb: 2 }}>You have returned from Stripe. The status below is updated by verified Stripe events;
       returning here does not confirm a payment. You can also refresh directly from Stripe.</Alert>}
     {loadError && <Alert severity="warning" sx={{ mb: 2 }}>{loadError}</Alert>}

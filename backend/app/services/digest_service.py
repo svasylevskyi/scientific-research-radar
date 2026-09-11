@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from app.services.subscription_access_service import check_details
 from app.models.digest import Digest
 from app.models.user import User
 from app.repositories.digest_repository import DigestRepository
@@ -32,6 +33,7 @@ class DigestService:
         self.runs = DigestRunRepository(db)
 
     def create(self, *, owner: User, values: DigestCreate) -> Digest:
+        check_details(self.db, owner.id, requested_papers=values.maximum_papers, creating=True)
         digest = self.digests.create(owner_id=owner.id, values=values.model_dump())
         return self._commit(digest)
 
@@ -61,13 +63,16 @@ class DigestService:
         self, *, owner: User, digest_id: UUID, schedule: DigestSchedule
     ) -> Digest:
         digest = self.get_owned(owner=owner, digest_id=digest_id)
+        check_details(self.db, owner.id, schedule=schedule.model_dump(mode="json"))
         digest.schedule = schedule.model_dump(mode="json")
+        digest.subscription_retry_at = None
         digest.schedule_next_at = first_dispatch(schedule, datetime.now(timezone.utc))
         return self._commit(digest)
 
     def delete_schedule(self, *, owner: User, digest_id: UUID) -> None:
         digest = self.get_owned(owner=owner, digest_id=digest_id)
         digest.schedule = None
+        digest.subscription_retry_at = None
         digest.schedule_next_at = None
         self._commit(digest)
 
@@ -135,6 +140,8 @@ class DigestService:
                 message = message.removeprefix("Value error, ")
             raise DigestValidationError(message) from exc
 
+        if validated.maximum_papers > digest.maximum_papers:
+            check_details(self.db, digest.owner_id, requested_papers=validated.maximum_papers)
         for field, value in validated.model_dump().items():
             setattr(digest, field, value)
         return self._commit(digest)

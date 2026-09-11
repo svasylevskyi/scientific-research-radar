@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     openai_admin_api_key: SecretStr | None = None
     openai_costs_project_id: str | None = Field(default=None, min_length=1, max_length=200)
     stripe_sandbox_api_key: SecretStr | None = None
+    subscription_grace_days: int = Field(default=3, ge=0, le=14)
+    subscription_sync_max_age_seconds: int = Field(default=86400, ge=900, le=172800)
     stripe_sync_poll_seconds: int = Field(default=5, ge=1, le=60)
     stripe_sync_reconcile_seconds: int = Field(default=900, ge=60, le=86400)
     stripe_sync_max_failures: int = Field(default=8, ge=1, le=20)

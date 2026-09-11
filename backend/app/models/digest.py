@@ -55,6 +55,7 @@ class Digest(Base):
     reporting_to: Mapped[date] = mapped_column(Date, nullable=False)
     frequency: Mapped[DigestFrequency | None] = mapped_column(String(16), nullable=True)
     schedule: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    subscription_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     schedule_next_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     maximum_papers: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
     created_at: Mapped[datetime] = mapped_column(

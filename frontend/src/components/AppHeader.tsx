@@ -22,6 +22,7 @@ export function AppHeader() {
   const initials = user?.full_name.split(" ").slice(0, 2).map((part) => part[0]).join("").toUpperCase();
   const links = [
     { label: "Workspace", short: "Workspace", to: "/radar", icon: <HomeRoundedIcon /> },
+    { label: "Subscription and usage", short: "Subscription", to: "/subscription", icon: <SubscriptionsRoundedIcon /> },
     ...(user?.role === "admin" ? [
       { label: "Digest administration", short: "Digests", to: "/admin/digests", icon: <LibraryBooksRoundedIcon /> },
       { label: "User administration", short: "Users", to: "/admin/users", icon: <AdminPanelSettingsRoundedIcon /> },

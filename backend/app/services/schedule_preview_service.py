@@ -43,4 +43,10 @@ def schedule_preview(db, settings, digest, *, now=None):
         else:
             # An overdue cursor is not proof that a job has been queued or a worker is healthy.
             result.state = "due"
+    if dates and active is None:
+        from app.services.subscription_access_service import assess
+        access, issues = assess(db, digest.owner_id, digest.maximum_papers, 'scheduled', digest.schedule, settings)
+        if issues:
+            result.state = "waiting_for_subscription"
+            result.subscription_message = ' '.join(issues)
     return result

@@ -39,3 +39,7 @@ api_router.include_router(subscription_observation.router, prefix='/admin/subscr
 
 from app.api.routes import billing_sync
 api_router.include_router(billing_sync.router, prefix='/admin/billing-sync', tags=['administration', 'sandbox billing'])
+
+from app.api.routes import subscription_access
+api_router.include_router(subscription_access.router, prefix='/subscription', tags=['subscriptions'])
+api_router.include_router(subscription_access.admin_router, prefix='/admin/subscription-access', tags=['administration', 'subscriptions'])

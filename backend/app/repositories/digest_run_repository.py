@@ -259,7 +259,9 @@ class DigestRunRepository:
         )
 
     def mark_completed(self, *, run: DigestRun) -> None:
+        from app.services.subscription_access_service import settle as settle_access
         from app.services.subscription_observation_service import settle
+        settle_access(self.db, run, success=True)
         settle(self.db, run, success=True)
         run.status = DigestRunStatus.COMPLETED
         run.error_message = None
@@ -278,7 +280,9 @@ class DigestRunRepository:
         stage.status = DigestRunStageStatus.FAILED
         stage.error_message = message[:2000]
         stage.completed_at = now
+        from app.services.subscription_access_service import settle as settle_access
         from app.services.subscription_observation_service import settle
+        settle_access(self.db, run, success=False)
         settle(self.db, run, success=False)
         run.status = DigestRunStatus.FAILED
         run.error_message = message[:2000]

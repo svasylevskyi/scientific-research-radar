@@ -16,7 +16,7 @@ export interface DigestSchedule {
 }
 
 export interface SchedulePreview {
-  state: "not_scheduled" | "scheduled" | "due" | "waiting_for_run" | "waiting_for_allowance" | "queued" | "running" | "ended";
+  state: "not_scheduled" | "scheduled" | "due" | "waiting_for_run" | "waiting_for_subscription" | "waiting_for_allowance" | "queued" | "running" | "ended";
   as_of: string;
   next_scheduled_at: string | null;
   upcoming_runs: string[];
@@ -25,6 +25,7 @@ export interface SchedulePreview {
   active_run_id: string | null;
   waiting_digest_id: string | null;
   allowance_available_at: string | null;
+  subscription_message?: string | null;
   exhausted: boolean;
 }
 

@@ -160,7 +160,7 @@ def overview(db, user_id, period=None, offset=0, limit=25):
         return max(0, config[key] - used) if config else None
     entries = select(ObservedRunUsage).where(ObservedRunUsage.user_id == user_id, ObservedRunUsage.period_start == period)
     rows = list(db.scalars(entries.order_by(ObservedRunUsage.created_at.desc(), ObservedRunUsage.run_key).offset(offset).limit(limit)))
-    return {'mode': 'observation_only', 'access': 'complimentary_development',
+    return {'mode': 'observation_only', 'access': 'managed_separately',
         'tracking_since': utc(account.tracking_since) if account else None,
         'period_start': period, 'period_end': next_month(period),
         'assignment': assignment_read(db, assignment), 'usage': usage, 'digest_count': count,
