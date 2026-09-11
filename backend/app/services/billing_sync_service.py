@@ -40,14 +40,26 @@ def receive(db, settings, event):
         return {'received': True, 'ignored': True}
     try:
         obj = event['data']['object']
-        metadata = obj.get('metadata') or {}
-        if metadata.get('radar_sandbox') != '1':
-            return {'received': True, 'ignored': True}
-        attempt_id = UUID(metadata.get('radar_attempt_id', ''))
-        object_id = billing.identifier(obj.get('id'), 'sub_' if event['type'].startswith('customer.subscription.') else 'cs_test_')
+        if event['type'] in billing.INVOICE_EVENTS:
+            from app.services.billing_invoice_service import metadata, subscription_id
+            details = metadata(obj)
+            linked = subscription_id(obj)
+            checkout = db.scalar(select(SandboxCheckout).where(SandboxCheckout.subscription_id == linked)) if linked else None
+            if checkout is None and details.get('radar_sandbox') == '1':
+                checkout = db.get(SandboxCheckout, UUID(details.get('radar_attempt_id', '')))
+            if checkout is None:
+                return {'received': True, 'ignored': True}
+            attempt_id = checkout.id
+            object_id = billing.identifier(obj.get('id'), 'in_')
+        else:
+            metadata = obj.get('metadata') or {}
+            if metadata.get('radar_sandbox') != '1':
+                return {'received': True, 'ignored': True}
+            attempt_id = UUID(metadata.get('radar_attempt_id', ''))
+            object_id = billing.identifier(obj.get('id'), 'sub_' if event['type'].startswith('customer.subscription.') else 'cs_test_')
+            checkout = db.get(SandboxCheckout, attempt_id)
     except (KeyError, TypeError, AttributeError, ValueError, billing.Error):
         raise billing.Error('Invalid sandbox event object.', 400) from None
-    checkout = db.get(SandboxCheckout, attempt_id)
     if not checkout:
         return {'received': True, 'ignored': True}
     # No card/customer details or arbitrary provider fields are stored.
@@ -115,7 +127,7 @@ def process(factory, settings, job_id, token, *, client=None):
                     raise billing.Error('No Stripe identifier is saved. Resume the original checkout from Sandbox billing; do not create another attempt.', 409)
                 billing.sync_attempt(db, client or billing.StripeSandboxClient(settings), checkout)
                 terminal = checkout.subscription_status in billing.TERMINAL or (checkout.checkout_status == 'expired' and not checkout.subscription_id)
-                following = None if terminal else now() + timedelta(seconds=settings.stripe_sync_reconcile_seconds)
+                following = None if terminal and (not checkout.subscription_id or checkout.invoice_history_complete) else now() + timedelta(seconds=settings.stripe_sync_reconcile_seconds)
             db.flush()
             changed = db.execute(update(Job).execution_options(synchronize_session=False).where(owned(job_id, token)).values(state='processed', failures=0,
                 last_error=None, last_success_at=now(), next_attempt_at=following, lease_token=None, lease_expires_at=None))

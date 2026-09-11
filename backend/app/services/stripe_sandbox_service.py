@@ -20,13 +20,14 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from app.models.stripe_sandbox import SandboxBillingAccount, SandboxCheckout, SandboxStripeEvent
 from app.models.subscription_plan import SubscriptionPlanRevision
+from app.services.billing_invoice_service import INVOICE_EVENTS
 from app.services.stripe_catalogue_service import StripeCatalogueError, check_mapping
 
 Error = StripeCatalogueError
 TERMINAL = {"canceled", "incomplete_expired"}
 STATUSES = {"incomplete", "incomplete_expired", "trialing", "active", "past_due", "canceled", "unpaid", "paused"}
 EVENTS = {"checkout.session.completed", "checkout.session.expired", "customer.subscription.created",
-          "customer.subscription.updated", "customer.subscription.deleted"}
+          "customer.subscription.updated", "customer.subscription.deleted"} | INVOICE_EVENTS
 
 
 def utc(value):
@@ -70,7 +71,7 @@ class StripeSandboxClient:
                     raise ValueError()
                 # Portal sessions do not expose livemode; their configuration is
                 # checked independently and only test-key requests are permitted.
-                if result.get("livemode") is True or (path != "billing_portal/sessions" and result.get("livemode") is not False):
+                if result.get("livemode") is True or (path != "billing_portal/sessions" and not (path.split("?")[0] == "invoices" and result.get("object") == "list") and result.get("livemode") is not False):
                     raise Error("Stripe did not return a sandbox object.")
                 return result
         except Error:
@@ -158,6 +159,8 @@ def observe_subscription(db, client, row, subscription_id):
         row.delinquent_since = min(stamp, utc(row.period_start)) if row.period_start else stamp
     row.subscription_id, row.customer_id, row.subscription_status = subscription_id, customer, status
     row.cancel_at_period_end = value.get("cancel_at_period_end") is True
+    from app.services.billing_invoice_service import reconcile
+    reconcile(db, client, row, value.get('latest_invoice'))
     row.observed_at = datetime.now(timezone.utc)
 
 
@@ -352,7 +355,12 @@ def handle_event(db, settings, event, *, client=None, commit=True):
     client = client or StripeSandboxClient(settings)
     # Fetch canonical state while holding the account lock. Out-of-order event
     # snapshots can never regress status or the current billing period.
-    if event["type"].startswith("customer.subscription."):
+    if event['type'] in INVOICE_EVENTS:
+        from app.services.billing_invoice_service import subscription_id, observe, retrieve
+        invoice = retrieve(client, obj.get('id'))
+        observe_subscription(db, client, row, subscription_id(invoice))
+        observe(db, row, retrieve(client, invoice["id"]))
+    elif event["type"].startswith("customer.subscription."):
         observe_subscription(db, client, row, obj.get("id"))
     else:
         session_id = identifier(obj.get("id"), "cs_test_")

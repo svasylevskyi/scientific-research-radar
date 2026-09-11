@@ -5,6 +5,7 @@ import { AppHeader } from "../components/AppHeader";
 import { apiRequest, ApiError } from "../api/client";
 
 type Access = { email?: string; mode: "complimentary" | "sandbox"; version: number; allowed: boolean; reason: string;
+  payment_status?: string; paid_through?: string | null; payment_issue?: string | null;
   status: string; observed_at: string | null; period_start: string | null; period_end: string | null;
   access_until: string | null; grace_until: string | null; cancel_at_period_end: boolean;
   plan: { name: string; configuration: { max_papers_per_run: number; schedule_frequencies: string[]; email_delivery: boolean } } | null;
@@ -73,6 +74,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
         <Typography>Access mode: {data.mode === "sandbox" ? "Sandbox subscription limits" : "Complimentary"}</Typography>
         {data.mode === "sandbox" && <>
           <Typography>Status: {data.status}</Typography>
+          <Typography>Invoice status: {data.payment_status ?? "Not verified"} · Settled coverage through: {date(data.paid_through ?? null)}</Typography>
           <Typography>Last verified: {date(data.observed_at)}</Typography>
           <Typography>Allowance window: {date(data.period_start)} – {date(data.period_end)}</Typography>
           <Typography>Verified access until: {date(data.access_until)}</Typography>

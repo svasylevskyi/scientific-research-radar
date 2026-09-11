@@ -37,6 +37,7 @@ class Provider:
     """Fake HTTP provider, including idempotency and mutable canonical objects."""
     def __init__(self):
         self.calls, self.sessions, self.subscriptions, self.idempotency = [], {}, {}, {}
+        self.invoices = {}
         self.timeout_once, self.fail_get, self.live, self.portal_updates = False, False, False, False
         catalogue, _ = catalogue_transport()
         self.catalogue = catalogue
@@ -69,6 +70,12 @@ class Provider:
                 raise httpx.ReadTimeout('ambiguous result', request=request)
         elif path.startswith('checkout/sessions/'):
             result = self.sessions[path.split('/')[-1]]
+        elif path == 'invoices':
+            from app.services.billing_invoice_service import subscription_id
+            values = [v for v in self.invoices.values() if subscription_id(v) == request.url.params.get('subscription')]
+            result = {'object': 'list', 'data': values, 'has_more': False}
+        elif path.startswith('invoices/'):
+            result = self.invoices[path.split('/')[-1]]
         elif path.startswith('subscriptions/'):
             result = self.subscriptions[path.split('/')[-1]]
         elif path.startswith('billing_portal/configurations/'):

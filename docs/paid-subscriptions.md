@@ -234,9 +234,9 @@ A background worker in each running API process claims database jobs with an exc
 
 Provider/network failures use exponential retry delays: 30, 60, 120 seconds, continuing up to a one-hour cap. After eight consecutive failed executions by default, the job stays **failed** until reviewed and manually retried. Worker interruption/lease expiry is reclaimed separately. A manual retry records the requesting admin, timestamp and cumulative manual request count; it cannot duplicate already pending/actively processing work. Completed webhook jobs cannot be replayed through this API; a current-state reconciliation can be requested instead.
 
-Every known local checkout gets one reusable reconciliation job, including checkouts created before this migration. The worker discovers up to 25 missing jobs per tick, then processes one due job. Successful reconciliation repeats every 15 minutes by default for open/nonterminal attempts. Canceled/incomplete-expired subscriptions and expired checkouts without a subscription stop periodic polling after being observed; signed events and explicit admin reconciliation remain available. Terminal historical attempts therefore receive an initial check, not endless polling.
+Every known local checkout gets one reusable reconciliation job, including checkouts created before this migration. The worker discovers up to 25 missing jobs per tick, then processes one due job. Successful reconciliation repeats every 15 minutes by default for open/nonterminal attempts. Canceled/incomplete-expired subscriptions stop periodic polling after invoice history import is complete; expired checkouts without a subscription stop after being observed; signed events and explicit admin reconciliation remain available. Terminal historical attempts therefore receive an initial check, not endless polling.
 
-Reconciliation retrieves existing checkout/subscription objects. It never issues a Stripe write or grants access. It repairs locally missed state changes such as checkout completion, renewal-period advancement, payment failure and cancellation. It covers locally known attempts rather than scanning the whole Stripe account. If an ambiguous checkout creation left no provider identifier, the job shows an actionable error asking the owner to resume the original idempotent checkout. It does not create a replacement checkout or guess an association from billing email. If that original checkout cannot be resumed safely, the previously documented operator reconciliation procedure still applies.
+Reconciliation retrieves existing checkout/subscription objects. It never issues a Stripe write or changes usage allowances. Its verified observations feed the opt-in access policy described below. It repairs locally missed state changes such as checkout completion, renewal-period advancement, payment failure and cancellation. It covers locally known attempts rather than scanning the whole Stripe account. If an ambiguous checkout creation left no provider identifier, the job shows an actionable error asking the owner to resume the original idempotent checkout. It does not create a replacement checkout or guess an association from billing email. If that original checkout cannot be resumed safely, the previously documented operator reconciliation procedure still applies.
 
 ### Admin synchronization view
 
@@ -305,8 +305,8 @@ An account can be opted in before it has a subscription to test the unavailable 
 - Access uses the **saved, verified sandbox subscription**, its immutable checkout plan revision, matching price, current billing period and synchronization freshness. No Stripe network request occurs during run admission. Unverified/mismatched/missing period data blocks new research and directs the admin to reconciliation. Archived catalogue revisions do not retroactively remove an existing subscription's agreed limits.
 - Monthly allowances reset at the UTC anniversary timestamp, for both monthly and annual subscriptions. Dates are calculated from the original Stripe billing anchor, preserving its day and time across short months and leap years: January 31 → February 28/29 → March 31. Windows are start-inclusive/end-exclusive; unused capacity does not roll over. The annual invoice period and monthly allowance window remain distinct. See [Stripe billing-cycle documentation](https://docs.stripe.com/billing/subscriptions/billing-cycle).
 - The new ledger starts when a run is admitted under sandbox limits. Old UTC calendar-month observation rows remain untouched, and historical usage is not silently backfilled. A run completing after a reset settles against the window in which it was accepted.
-- Active subscriptions permit new research until the verified period ends. Cancellation at period end preserves that access; terminal cancellation, unpaid, incomplete and trialing states do not admit new work. Current sandbox checkout has no trial.
-- A previously active subscription entering `past_due` receives a configurable **three-day** grace period by default. The clock is anchored to the failed renewal period (capped at first observation), not refreshed on each webhook/reconciliation. Grace does not apply to a first payment that never established active access. Recovery to active clears the delinquency clock. This remains a sandbox subscription-state policy, not a full invoice/payment ledger: live billing still requires explicit invoice/payment reconciliation, refund/dispute policy and production acceptance tests. [Stripe subscription lifecycle](https://docs.stripe.com/billing/subscriptions/overview).
+- Active subscriptions with a verified settled invoice covering the current period permit new research until that period ends. Cancellation at period end preserves that access; terminal cancellation, unpaid, incomplete and trialing states do not admit new work. Current sandbox checkout has no trial.
+- Failed renewals receive a configurable **three-day** grace period only when a verified settled invoice covers the immediately preceding period. The clock starts at the renewal period boundary and never restarts on retries or webhook arrival. Initial unpaid invoices receive no grace. The invoice verification increment below replaces the earlier subscription-status-only evidence. Refund/dispute policy remains future work.
 - Observations more than 24 hours old block new sandbox research by default. Already accepted work continues; existing results, feedback and account/billing administration remain available. The subscription view distinguishes a synchronization issue from exhausted quotas.
 
 Optional settings, read by all application processes from the environment file:
@@ -333,7 +333,7 @@ Endpoints:
 - `GET /api/v1/admin/subscription-access/{user_id}?offset=0` — effective access plus policy audit history (25 changes per page).
 - `POST /api/v1/admin/subscription-access/{user_id}/policy` — `mode`, `expected_version`, `change_note`; confirmed admin UI, existing role protections and active-run guard.
 
-Next increments: public subscriber checkout/portal and plan presentation, invoice-level payment verification, trials and plan changes, customer notifications, then a separately approved live rollout. This increment can be exercised entirely with sandbox subscriptions and fake provider transports in automated tests.
+Next increments: public subscriber checkout/portal and plan presentation, trials and plan changes, customer notifications, then a separately approved live rollout. This increment can be exercised entirely with sandbox subscriptions and fake provider transports in automated tests.
 
 ## Early allowance guidance
 
@@ -348,3 +348,45 @@ Allowance checks now appear before actions throughout the radar, while transacti
 - **Upgrade options** leads to the subscription page's upgrade guidance. This development version still has no self-service upgrades: the page explicitly directs users to the administrator and labels the public plans page as a preview. No checkout or plan change is implied by following the link.
 
 No migration, new configuration or payment-provider requests are needed for this UX increment. Useful checks after deploying: fill all digest slots and try both entry paths; change an allowance from another tab; try oversized paper input; review unsupported schedule/email options; retry an older run with a larger paper snapshot; restore access or delete a digest and confirm controls recover on the next poll.
+
+
+## Invoice-level verification (sandbox)
+
+Migration `20260911_0020` adds minimized invoice observations and reconciliation progress. This increment keeps **per-account opt-in**, complimentary development access, and sandbox-only checkout unchanged. No live billing or ordinary-user checkout is enabled.
+
+### Deployment setup
+
+1. **Before deploying**, grant the existing restricted sandbox API key **Invoices: Read** permission. An unrestricted sandbox secret key already has this permission. No new key/environment variable is required.
+2. Add these events to the **existing** sandbox webhook destination, keeping its previous events selected: `invoice.paid`, `invoice.payment_failed`, `invoice.payment_action_required`, `invoice.finalized`, `invoice.finalization_failed`, `invoice.voided`, `invoice.marked_uncollectible`, `invoice.updated`. The endpoint and signing secret remain unchanged.
+3. Deploy the branch normally. The deployment runs `alembic upgrade head`; all application processes should use the new image.
+4. Open **Admin → Plans → Billing synchronization** and select **Reconcile now** on existing checkout reconciliation jobs. Automatic reconciliation also imports invoices. Opted-in accounts pause new research until verified invoice evidence is present; existing results and already accepted work remain available. Complimentary accounts are unaffected.
+5. Expand **Review invoices and access** to confirm the current invoice, settled period, import progress, and account access. If synchronization fails, check the displayed error and key permission, then retry the job.
+
+No new container, queue service, scheduled task, required environment variable, or secret is introduced. The existing durable billing worker processes invoice events and reconciliation.
+
+### Verification and access rules
+
+- Webhook receipt stores only minimal routing data, commits before acknowledging, and makes no provider requests. Processing retrieves canonical invoice/subscription state, rather than trusting the event's payment snapshot. Duplicate events and out-of-order deliveries cannot reset allowances. Observations, event deduplication marker, and job completion share the existing fenced transaction.
+- Reconciliation reads the subscription's latest invoice explicitly, the newest 100 invoices, and at most one additional 100-invoice historical page per execution. A saved cursor resumes history import. The preceding paid invoice used for grace is also refreshed if outside the recent page. Terminal subscriptions finish importing history before periodic reconciliation stops; new signed events and manual reconciliation still work afterward.
+- Invoices must belong to the exact sandbox customer/subscription. Access evidence requires the expected currency, automatic collection, and one complete, non-prorated recurring line for the saved price and quantity one. Coverage comes from that subscription line's period, not invoice aggregation dates. Both legacy and current Stripe subscription/line references are supported.
+- An active subscription permits new research only with a settled current invoice covering its current period. A paid zero-due invoice is valid settlement, for example after applicable credit/discount; the UI does not claim a card was charged. Manual/out-of-band settlement, credit notes, proration, multi-line or unsupported invoices are marked for review and do not grant access automatically.
+- An open renewal invoice with a payment attempt can permit grace only when the immediately preceding period has verified settlement. Grace begins at the renewal boundary, not first observation, and repeated failures never extend it. Initial unpaid subscriptions receive no grace. A recovered paid invoice plus active subscription restores access; terminal cancellation/unpaid states block new research. Cancellation at period end retains verified paid-period access while the subscription remains active.
+- Subscription and invoice checks must both meet the existing freshness limit. Missing evidence or failed synchronization pauses new research when existing observations become stale. Payment/access discrepancies remain visible to admins. This conservative local snapshot policy does not make an external provider call on every run request.
+- Invoices never create, delete, reset, or settle usage entries. Monthly anniversary windows remain independent of annual invoice periods. Existing atomic reservation/settlement logic and concurrent admission controls are unchanged.
+
+### Admin review
+
+The billing synchronization page includes a paginated invoice review for each checkout: invoice ID/status, currency and amounts in minor units, payment attempts, billing reason, coverage, settlement/next-attempt timestamps, last observation and validation issues. It also shows import progress, effective account access, and discrepancies such as an active subscription without a verified settled current invoice. Invoice details refresh only while expanded and the page is visible.
+
+`GET /api/v1/admin/billing-sync/checkouts/{checkout_id}/invoices?offset=0&limit=25` reads stored observations only. Ordinary admins retain protected-super-admin restrictions; ordinary users have no access. No raw webhook payload, card data, customer address, hosted invoice link or provider credential is retained in the invoice table or returned here.
+
+### Acceptance checks
+
+- Reconcile an existing settled sandbox subscription: verify invoice coverage and opt-in access.
+- Simulate an unpaid initial invoice: no new research access, no renewal grace.
+- Exercise a failed renewal after a paid period, repeated failures, and recovery: grace stays anchored to the renewal boundary and recovery preserves usage already spent in that allowance window.
+- Resend an invoice event, including an older failure after recovery: one stored invoice per ID, canonical state retained, usage unchanged.
+- Skip an invoice webhook and request reconciliation: payment state recovers from the provider.
+- Confirm cancellation blocks new work when effective, while saved research stays readable.
+
+Automated tests use fake provider transports; no payment or OpenAI calls are made. Live refunds, disputes, tax readiness, notifications, trials, multi-item/prorated plan changes, and live-billing rollout remain separate increments.
