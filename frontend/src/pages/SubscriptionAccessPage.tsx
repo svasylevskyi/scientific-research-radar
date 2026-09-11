@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { Alert, Box, Button, Container, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
 import { AppHeader } from "../components/AppHeader";
 import { apiRequest, ApiError } from "../api/client";
@@ -15,6 +15,7 @@ const date = (s: string | null) => s ? new Date(s).toLocaleString() : "Not avail
 
 export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
   const [params] = useSearchParams();
+  const location = useLocation();
   const userId = params.get("user_id");
   const [data, setData] = useState<Access | null>(null);
   const [error, setError] = useState("");
@@ -39,6 +40,13 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
     }
     void poll(); return () => { active = false; clearTimeout(timer); };
   }, [admin, userId, refresh, offset]);
+  const loaded = data !== null;
+  useEffect(() => {
+    if (loaded && location.hash === "#upgrade") {
+      document.getElementById("upgrade")?.scrollIntoView({ block: "start" });
+      document.getElementById("upgrade")?.focus({ preventScroll: true });
+    }
+  }, [loaded, location.hash]);
   async function save() {
     if (!data || !userId) return;
     setBusy(true);
@@ -82,6 +90,14 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
           Queued work reserves capacity. Successful runs count actual summarized papers; failed runs release their reservation.
           Retrying checks the current window again. Usage shown here starts when sandbox limits are enabled; earlier observation usage remains separate.</Typography>
       </Paper>
+      {!admin && <Paper id="upgrade" tabIndex={-1} variant="outlined" sx={{ p: 3, scrollMarginTop: 100 }}>
+        <Typography variant="h6">Need higher allowances?</Typography>
+        <Typography>Upgrade to a plan with more digest slots, runs or papers, or additional scheduling options.
+          Self-service upgrades are not available in this development version. Contact the Radar administrator to discuss access; viewing plans does not change your subscription.</Typography>
+        <Typography variant="body2" sx={{ mt: 1 }}>Digest slots are freed by deleting a digest and do not reset each month. Research allowances reset on the date shown above.
+          Payment or synchronization issues must be resolved before research can resume.</Typography>
+        <Button component={Link} to="/plans">Preview plans</Button>
+      </Paper>}
       {admin && <Paper variant="outlined" sx={{ p: 3 }}><Stack spacing={2}>
         <Typography variant="h6">Change access mode</Typography>
         <TextField select label="New access mode" value={mode} onChange={e => setMode(e.target.value)}>

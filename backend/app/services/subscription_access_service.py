@@ -106,6 +106,23 @@ def overview(db, user_id, settings=None):
         'manual_runs': max(0, config['manual_runs_per_month'] - usage['manual_runs']) if config else None,
         'papers': max(0, config['papers_per_month'] - usage['completed_papers'] - usage['reserved_papers']) if config else None,
         'digests': max(0, config['max_digests'] - count) if config else None})
+    create_reasons = []
+    if access['mode'] != 'complimentary':
+        if not access['allowed']:
+            create_reasons.append(access['reason'])
+        elif config and count >= config['max_digests']:
+            create_reasons.append('Your digest limit is reached. Upgrade to a plan with more digests, or delete an unused digest to free a slot.')
+    access['create_allowed'] = not create_reasons
+    access['create_reasons'] = create_reasons
+    access['schedule_allowed'] = access['allowed'] and (config is None or bool(config['schedule_frequencies']))
+    access['schedule_reasons'] = ([] if access['schedule_allowed'] else [access['reason'] if not access['allowed'] else
+        'Scheduling is not included in your plan. Upgrade to a plan with scheduled runs.'])
+    access['paper_limit'] = config['max_papers_per_run'] if config and access['allowed'] else (30 if access['mode'] == 'complimentary' else 0)
+    access['research_warning'] = None
+    if config and access['allowed'] and (access['remaining']['runs'] == 0 or access['remaining']['papers'] == 0):
+        access['research_warning'] = 'Your research allowance is exhausted. You can save digest settings, but new research must wait until ' + str(access['period_end']) + ', or until your subscription allowance is increased.'
+    elif config and access['allowed'] and access['remaining']['manual_runs'] == 0:
+        access['research_warning'] = 'Your manual-run allowance is exhausted. You can still save digest settings and included schedules. Manual runs become available at ' + str(access['period_end']) + ', or after a subscription upgrade.'
     # Never expose internal Stripe mapping through the user-facing response.
     if access['plan']:
         access['plan']['configuration'] = {k: config[k] for k in ('max_digests', 'max_papers_per_run', 'papers_per_month',
@@ -120,20 +137,25 @@ def assess(db, user_id, requested_papers, trigger='manual', schedule=None, setti
     if not access['allowed']:
         return access, [access['reason']]
     count = db.scalar(select(func.count()).select_from(Digest).where(Digest.owner_id == user_id))
-    issues = reasons(access['plan']['configuration'], totals(db, user_id, access), requested_papers=requested_papers,
+    usage = totals(db, user_id, access)
+    config = access['plan']['configuration']
+    issues = reasons(config, usage, requested_papers=requested_papers,
         trigger=trigger, digest_count=count, frequency=(schedule or {}).get('frequency'),
         email=trigger == 'scheduled' and (schedule or {}).get('send_email', False))
     issues = [s.replace('would be exceeded', 'is exhausted').replace('would', 'will') for s in issues]
-    if issues and access['period_end']:
+    remaining_papers = max(0, config['papers_per_month'] - usage['completed_papers'] - usage['reserved_papers'])
+    issues = [f'Monthly paper allowance: {remaining_papers} papers available, but this run requests {requested_papers}. Reduce Maximum papers or upgrade your subscription.'
+        if i.startswith('Monthly paper allowance') else i for i in issues]
+    if any(i.startswith('Requested papers') for i in issues):
+        issues.append('Reduce Maximum papers to the per-run plan limit or upgrade your subscription.')
+    if any(i.startswith('Existing digest count') for i in issues):
+        issues.append('Delete an unused digest or upgrade to a plan with more digest slots.')
+    if any(i.startswith('Monthly') for i in issues) and access['period_end']:
         issues.append('Monthly allowances reset at ' + access['period_end'].isoformat() + '. Saved results remain available.')
     return access, issues
 
 
-def reserve(db, run, *, schedule=None, settings=None):
-    lock(db, run.owner_id)
-    existing = db.get(Usage, run.id, populate_existing=True)
-    if existing and existing.state in ('reserved', 'settled'):
-        return
+def run_context(db, run, *, existing=None, schedule=None):
     # Retried scheduled work retains its original distribution/frequency intent.
     context = existing.request_context if existing else dict(schedule or {})
     if existing is None and str(run.trigger) == 'scheduled':
@@ -145,6 +167,15 @@ def reserve(db, run, *, schedule=None, settings=None):
             context = {'frequency': original.get('frequency'), 'send_email': original.get('email', False)}
         if db.scalar(select(DigestEmailDelivery.run_id).where(DigestEmailDelivery.run_id == run.id)):
             context['send_email'] = True
+    return context
+
+
+def reserve(db, run, *, schedule=None, settings=None):
+    lock(db, run.owner_id)
+    existing = db.get(Usage, run.id, populate_existing=True)
+    if existing and existing.state in ('reserved', 'settled'):
+        return
+    context = run_context(db, run, existing=existing, schedule=schedule)
     access, issues = assess(db, run.owner_id, run.digest_snapshot['maximum_papers'], str(run.trigger), context, settings)
     if issues:
         raise AccessDenied(' '.join(issues))

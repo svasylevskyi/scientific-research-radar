@@ -1,3 +1,4 @@
+import { RetryRunButton } from "./RetryRunButton";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, FormControlLabel, Paper, Stack, Tab, Tabs, TextField, Tooltip, Typography } from "@mui/material";
@@ -154,9 +155,9 @@ export function DigestWorkspace({ digestId, runs, latestRun, details, runBlocked
           {activeTab === "papers" && <PaperSummariesResult run={run} />}
           {activeTab === "steps" && <Stack spacing={2}>
             <DigestRunProgress run={run} />
-            {run.status === "failed" && <Button disabled={runBlocked || saving} onClick={async () => {
+            {run.status === "failed" && <RetryRunButton digestId={digestId} runId={run.id} disabled={runBlocked || saving} onRetry={async () => {
               setSaving(true); try { await onRetry(run); } finally { setSaving(false); }
-            }}>Retry failed stage</Button>}
+            }} />}
           </Stack>}
           {activeTab === "feedback" && <DigestRunFeedback run={run} editable={run.id === runs[0]?.id && run.status === "completed"}
             isSaving={saving} onSave={async (feedback) => {

@@ -1,3 +1,6 @@
+import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
+import { AllowanceNotice } from "../components/AllowanceNotice";
+import { RetryRunButton } from "../components/RetryRunButton";
 import { AdminDigestCostSummary } from "../components/AdminDigestCostSummary";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
@@ -24,7 +27,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { apiRequest, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi, digestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
 import { DigestForm, digestToFormValues } from "../components/DigestForm";
@@ -57,7 +60,8 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const backPath = admin ? "/admin/digests" : "/radar";
   const [digest, setDigest] = useState<Digest | null>(null);
   const [latestRun, setLatestRun] = useState<DigestRunDetail | null>(null);
-  const [access, setAccess] = useState<{ run_allowed: boolean; run_reasons: string[] } | null>(null);
+  const subscription = useSubscriptionAccess(admin ? undefined : digestId, undefined, admin ? digest?.owner_id : undefined, !admin || !!digest, `${digest?.maximum_papers}:${latestRun?.id}:${latestRun?.status}`);
+  const access = subscription.data;
   const [activeRun, setActiveRun] = useState<DigestRunDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -172,21 +176,8 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
     if (runTab === 1 && latestRun?.status !== "completed") setRunTab(0);
   }, [latestRun?.id, latestRun?.status, runTab]);
 
-  useEffect(() => {
-    if (admin) return;
-    let mounted = true;
-    setAccess(null);
-    const stop = startPagePolling(async () => {
-      try {
-        const result = await apiRequest<{ run_allowed: boolean; run_reasons: string[] }>(`/subscription?digest_id=${digestId}`);
-        if (mounted) setAccess(result);
-      } catch { /* Server admission still checks access if a read fails. */ }
-    }, 10000);
-    return () => { mounted = false; stop(); };
-  }, [admin, digestId, digest?.maximum_papers]);
-
   async function runNow() {
-    if (isStartingRun || isSaving || activeRun) return;
+    if (isStartingRun || isSaving || activeRun || !access?.run_allowed || subscription.error) return;
     setConfirmRun(false);
     setIsStartingRun(true);
     setError(null);
@@ -283,9 +274,14 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
 
   const digestDetails = digest ? (
     <>
+      <AllowanceNotice {...subscription} reasons={access && !access.allowed ? [access.reason + ' You can still edit existing details and reduce the paper count.'] : []} showResearchWarning admin={admin} />
+      {!admin && access?.plan && <Button component={RouterLink} to="/subscription#upgrade">Review limits and upgrade options</Button>}
       <DigestForm
         key={digest.updated_at}
         initialValues={digestToFormValues(digest)}
+        paperLimit={Math.max(digest.maximum_papers, access?.paper_limit ?? digest.maximum_papers)}
+        paperHint={access?.plan ? `Plan limit: ${access.plan.configuration.max_papers_per_run} papers per run. Reduce an oversized saved setting before running, or review upgrade options.` : undefined}
+        submitDisabled={!access || !!subscription.error}
         submitLabel="Save changes"
         isSubmitting={isSaving}
         onSubmit={updateDigest}
@@ -361,7 +357,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                 <Typography color="text.secondary" sx={{ mb: 2 }}>
                   Run research now, schedule recurring runs with optional email delivery, and review past results.
                 </Typography>
-                <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule} exhausted={digest.schedule_exhausted}
+                <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule} exhausted={digest.schedule_exhausted} access={subscription}
                   onSaved={(saved) => {
                     scheduleRevision.current += 1;
                     setDigest((current) => current?.id === digest.id ? { ...current,
@@ -372,7 +368,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                   <Button
                     variant="contained"
                     startIcon={isStartingRun ? <CircularProgress size={18} color="inherit" /> : <PlayArrowRoundedIcon />}
-                    disabled={isStartingRun || isSaving || runBlocked || access?.run_allowed === false}
+                    disabled={isStartingRun || isSaving || runBlocked || !access?.run_allowed || !!subscription.error}
                     onClick={() => setConfirmRun(true)}
                   >
                     {isStartingRun
@@ -386,9 +382,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                   }
                 />
 
-                {access?.run_allowed === false && <Alert severity="warning" sx={{ mt: 2 }}>
-                  {access.run_reasons.join(" ")} <Button component={RouterLink} to="/subscription" size="small">Subscription and usage</Button>
-                </Alert>}
+                <AllowanceNotice {...subscription} reasons={access?.run_reasons} />
                 {activeRun && (
                   <Alert severity="info" sx={{ mt: 2 }}>
                     {currentDigestIsRunning
@@ -432,7 +426,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                 </Paper>
                 {runTab === 0 && <Stack spacing={2}>
                   <DigestRunProgress run={displayedRun} />
-                  {displayedRun.status === "failed" && <Button disabled={runBlocked || isStartingRun} onClick={() => void retryRun(displayedRun)}>Retry failed stage</Button>}
+                  {displayedRun.status === "failed" && <RetryRunButton digestId={digestId} runId={displayedRun.id} disabled={runBlocked || isStartingRun} onRetry={() => void retryRun(displayedRun)} />}
                 </Stack>}
                 {runTab === 1 && displayedRun.status === "completed" && (
                   <DigestRunFeedback
@@ -462,7 +456,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button autoFocus onClick={() => setConfirmRun(false)}>Cancel</Button>
           <Button variant="contained" onClick={() => void runNow()}
-            disabled={isStartingRun || isSaving || runBlocked || access?.run_allowed === false}>
+            disabled={isStartingRun || isSaving || runBlocked || !access?.run_allowed || !!subscription.error}>
             Run now
           </Button>
         </DialogActions>

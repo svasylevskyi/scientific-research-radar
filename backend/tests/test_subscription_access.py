@@ -347,3 +347,72 @@ def test_accepted_run_settles_after_cancellation(client, enrolled, db_session_fa
         assert db.get(DigestRun, rid).status == 'completed'
         assert db.get(Usage, rid).state == 'settled'
         assert not access.resolve(db, setup[0])['allowed']
+
+
+def test_early_creation_capabilities_and_freed_slot(client, enrolled, db_session_factory):
+    setup, _ = enrolled
+    uid, auth, admin, _, digest = setup
+    data = client.get('/api/v1/subscription', headers=auth).json()
+    assert not data['create_allowed'] and 'Upgrade' in data['create_reasons'][0]
+    assert data['paper_limit'] == 3 and not data['schedule_allowed']
+    assert client.get(f'{URL}/{uid}', headers=admin).json()['create_allowed'] is False
+    assert client.delete(f"/api/v1/digests/{digest['id']}", headers=auth).status_code == 204
+    assert client.get('/api/v1/subscription', headers=auth).json()['create_allowed'] is True
+
+
+def test_retry_preview_uses_original_papers_and_checks_ownership(client, enrolled, db_session_factory):
+    from app.repositories.digest_run_repository import DigestRunRepository
+    from test_digests import _authorization, _register
+    setup, checkout = enrolled
+    uid, auth, _, _, digest = setup
+    fake = RecordingRadarClient(); _override_runner(fake)
+    rid = start(client, setup)
+    with db_session_factory() as db:
+        run = db.get(DigestRun, rid)
+        run.digest_snapshot = {**run.digest_snapshot, 'maximum_papers': 8}
+        DigestRunRepository(db).mark_failed(run=run, stage=run.stages[0], message='Test')
+        db.commit()
+    path = f"/api/v1/subscription?digest_id={digest['id']}&run_id={rid}"
+    data = client.get(path, headers=auth).json()
+    assert data['run_allowed'] and not data['retry_allowed']
+    assert any('requests 8' in reason for reason in data['retry_reasons'])
+    other = _authorization(_register(client, 'access-preview@example.com', 'Other'))
+    assert client.get(path, headers=other).status_code == 404
+    assert client.get(f'/api/v1/subscription?run_id={rid}', headers=auth).status_code == 422
+
+
+def test_exhausted_runs_warn_before_creation_but_allow_saving_settings(client, enrolled, db_session_factory):
+    setup, _ = enrolled
+    fake = RecordingRadarClient(); _override_runner(fake)
+    rid = start(client, setup)
+    _execute_next(db_session_factory, fake)
+    assert client.delete(f"/api/v1/digests/{setup[4]['id']}", headers=setup[1]).status_code == 204
+    data = client.get('/api/v1/subscription', headers=setup[1]).json()
+    assert data['create_allowed'] and 'exhausted' in data['research_warning']
+
+
+def test_inactive_access_preview_keeps_existing_paper_edit_boundary(client, enrolled, db_session_factory):
+    setup, checkout = enrolled
+    with db_session_factory() as db:
+        db.get(SandboxCheckout, checkout).subscription_status = 'canceled'; db.commit()
+    data = client.get('/api/v1/subscription', headers=setup[1]).json()
+    assert not data['create_allowed'] and not data['schedule_allowed'] and data['paper_limit'] == 0
+
+
+def test_manual_only_exhaustion_warns_before_form(client, enrolled, db_session_factory):
+    from app.models.subscription_plan import SubscriptionPlanRevision
+    setup, _ = enrolled
+    with db_session_factory() as db:
+        plan = db.get(SubscriptionPlanRevision, setup[3]['id'])
+        plan.configuration = {**plan.configuration, 'manual_runs_per_month': 0}
+        db.commit()
+    data = client.get('/api/v1/subscription', headers=setup[1]).json()
+    assert data['remaining']['runs'] == 1 and 'manual-run allowance' in data['research_warning']
+
+
+def test_feature_limits_do_not_promise_monthly_reset(client, enrolled, db_session_factory):
+    setup, _ = enrolled
+    with db_session_factory() as db:
+        _, issues = access.assess(db, setup[0], 1, 'scheduled', {'frequency': 'daily', 'send_email': False})
+        assert any('frequency' in i for i in issues)
+        assert not any('reset' in i for i in issues)
