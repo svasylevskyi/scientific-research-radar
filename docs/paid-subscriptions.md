@@ -184,3 +184,42 @@ API surface:
 Admin write/refresh operations share a limit of 20 attempts per minute per admin, in addition to existing API guards. Checkout URLs and customer IDs cannot be supplied by the browser. API errors exclude provider error bodies and secrets.
 
 References: [Stripe webhooks](https://docs.stripe.com/webhooks), [idempotent requests](https://docs.stripe.com/api/idempotent_requests), [portal configurations](https://docs.stripe.com/api/customer_portal/configurations/retrieve), [Billing tests](https://docs.stripe.com/billing/testing), [test cards](https://docs.stripe.com/testing).
+
+## Observation assignments and monthly usage accounting
+
+**Admin → Plans → Assignments and usage** is the next development increment. A link on user details opens the same page with that user selected. All admins can assign a plan for comparison and inspect usage; ordinary admins cannot access the protected super-admin's records. Regular users have no observation endpoints or UI changes.
+
+This is explicitly **observation only**. Everyone retains complimentary development access. An admin assignment is not a Stripe subscription or a claim of payment. Sandbox events never assign observation plans, and observation edits never modify Stripe. There is no enforcement switch in this implementation.
+
+### Assignments
+
+Choose a user, then a non-archived plan revision (draft or reviewed), and supply a reason. Each save appends an audited assignment with actor, timestamp and version. Concurrent edits using a stale version return 409. Existing assignments keep their exact plan revision when the catalogue changes. Select Complimentary to stop plan comparison for subsequent new runs. Existing run reservations and retries keep their original assignment.
+
+Existing users start with an explicit complimentary development default (assignment version 0). Migration `20260910_0017` records their tracking start. New users also default to complimentary access; their observation account is created with the first tracked run or admin assignment. Assignment changes do not reset usage or delete history.
+
+### Accounting rules for this phase
+
+- Allowance windows are **UTC calendar months**, from the first day inclusive until the next first day exclusive. This applies equally to monthly and annual billing proposals. These are observation windows, not Stripe billing-cycle dates. No rollover.
+- Each accepted enqueue reserves **one run**, one manual run if manually triggered, and the digest's requested maximum paper count. Scheduled runs consume total runs and papers, but not the manual-run allowance.
+- A successful briefing settles one run and the number of actual persisted paper summaries. Unused reserved papers are released. A successful zero-paper briefing still counts as a completed run.
+- A failed run releases all subscription allowances. Its actual partial-summary count remains visible for investigation, but does not consume monthly papers. Existing hourly/daily abuse limits and provider-cost recording are unchanged; failed work is not free of provider cost.
+- A retry re-reserves the **same ledger entry and original allowance month**, using its original assignment, requested paper limit, trigger, and scheduling/email preferences. It adds an assessment/attempt count, not another charged run. Even a next-month retry adjusts the original month. A scheduled run retried manually remains scheduled for subscription accounting, while existing retry rate limits still apply.
+- Per-user database locks serialize assignments and ledger transitions; the ledger has a unique run key. Enqueue and reservation commit together, including scheduler dispatch. Success/failure and settlement commit together. Rolled-back enqueue leaves no reservation.
+- A deleted digest/run loses its navigation link but retains its usage, so deletion cannot reset monthly consumption. Deleting the whole user removes their observation records.
+- **No historical backfill** is performed. Runs enqueued before deployment are excluded, even if they complete afterward. An explicit retry of an untracked old run starts observation in the retry's current month; its earlier attempts are not guessed. The admin page shows tracking coverage.
+
+### Reading the admin page
+
+The current assignment, completed/reserved runs and papers, manual allowance, failed/released runs, current digest inventory and remaining comparison allowances are shown together. Select a UTC month to review older usage. Remaining allowances always compare the selected month's total recorded usage against the **current** assignment, even if some runs used older assignments. Previously recorded per-attempt decisions retain their original plan context.
+
+Every accepted run/retry records reasons it **would** be blocked by its assigned plan: monthly run/manual/paper allowances, per-run paper count, existing digest count above the plan maximum, disallowed schedule frequency, or email delivery not included. Those reasons never stop execution or sending email. Complimentary entries have no comparison limits. The inventory count/remaining digest allowance is current, not a reconstructed historical inventory. Digest creation/editing is not intercepted; this phase assesses the inventory when a run is enqueued.
+
+The run ledger and assignment history are paginated. Over-limit run assessments can be inspected alongside the existing admin run details. Partial failures, retries and revisions remain distinguishable.
+
+API (admin-only, same protected-user rules as user management):
+
+- `GET /api/v1/admin/subscription-observation/{user_id}?period=2026-09-01&offset=0&limit=25` — monthly usage and run ledger; defaults to the current UTC month.
+- `POST /api/v1/admin/subscription-observation/{user_id}/assignments` — `{ "plan_revision_id": 1, "expected_version": 0, "change_note": "Observe Explorer limits" }`; null plan ID selects complimentary comparison.
+- `GET /api/v1/admin/subscription-observation/{user_id}/assignments?offset=0&limit=25` — append-only assignment audit.
+
+The normal deployment applies migration `20260910_0017`; no new environment variables or provider permissions are required. Before paid access enforcement, we still need an explicit mapping from verified billing state to entitlements, decisions about billing-aligned allowance windows, user-facing subscription/usage pages, payment-failure policy, durable webhook processing and reconciliation. Observation data provides evidence for those choices without changing existing access.

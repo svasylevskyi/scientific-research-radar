@@ -41,3 +41,4 @@ __all__ = [
     "User",
     "UserRole",
 ]
+from app.models.subscription_observation import ObservationAccount, ObservationAssignment, ObservedRunUsage

@@ -118,6 +118,8 @@ class RadarRunner:
         if scheduled_for is not None:
             run.trigger = DigestRunTrigger.SCHEDULED
             run.scheduled_for = scheduled_for
+        from app.services.subscription_observation_service import reserve
+        reserve(self.db, run, schedule=digest.schedule)
         if not commit:
             return run
         try:
@@ -155,6 +157,8 @@ class RadarRunner:
             self.db.rollback()
             raise RadarRunNotRetryableError("This run was already retried. Refresh its progress.")
         self.runs.requeue_failed(run=run)
+        from app.services.subscription_observation_service import reserve
+        reserve(self.db, run, schedule=run.digest.schedule)
         try:
             self.db.commit()
         except IntegrityError as exc:
