@@ -64,20 +64,25 @@ def resolve(db, user_id, settings=None):
         cancel_at_period_end=row.cancel_at_period_end)
     if row.billing_anchor:
         result['period_start'], result['period_end'] = window(row.billing_anchor, stamp)
+    from app.services.billing_invoice_service import assessment
+    payment = assessment(db, row, stamp, settings.subscription_grace_days)
+    result.update(payment_status=payment['status'], paid_through=payment['paid_through'], payment_issue=payment['issue'])
     if not row.price_matches:
         result['reason'] = 'The subscription price differs from the saved plan. Ask an admin to review billing synchronization.'
     elif not row.observed_at or stamp - utc(row.observed_at) > timedelta(seconds=settings.subscription_sync_max_age_seconds):
         result['reason'] = 'Subscription synchronization is overdue. New research is paused until billing is verified.'
     elif not row.billing_anchor or not row.period_start or not row.period_end or utc(row.period_start) > stamp:
         result['reason'] = 'The subscription period is not verified yet. Ask an admin to reconcile billing.'
-    elif row.subscription_status == 'active' and stamp < utc(row.period_end):
-        result.update(allowed=True, reason='Sandbox subscription limits apply.', access_until=utc(row.period_end))
-    elif row.subscription_status == 'past_due' and row.active_through and row.delinquent_since:
-        end = utc(row.delinquent_since) + timedelta(days=settings.subscription_grace_days)
-        if row.cancel_at_period_end:
-            end = min(end, utc(row.period_end))
+    elif not row.invoices_checked_at or stamp - utc(row.invoices_checked_at) > timedelta(seconds=settings.subscription_sync_max_age_seconds):
+        result['reason'] = 'Payment verification is pending or overdue. Ask an admin to reconcile billing.'
+    elif payment['issue']:
+        result['reason'] = payment['issue'] + ' New research is paused; saved results remain available.'
+    elif row.subscription_status == 'active' and payment['covered']:
+        result.update(allowed=True, reason='Sandbox subscription limits apply.', access_until=payment['paid_through'])
+    elif row.subscription_status in {'active', 'past_due'} and payment['grace_until']:
+        end = payment['grace_until']
         result.update(grace_until=end, access_until=end)
-        result.update(allowed=stamp < end, reason=(f'Renewal payment failed. Grace period ends {end.isoformat()}.' if stamp < end
+        result.update(allowed=stamp < end, reason=(f'Renewal payment failed or is pending. Grace period ends {end.isoformat()}.' if stamp < end
             else 'Renewal grace period has ended. Resolve payment to start new research.'))
     else:
         result['reason'] = 'The subscription does not currently allow new research. Saved results remain available.'

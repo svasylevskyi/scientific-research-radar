@@ -1,3 +1,4 @@
+import { AdminInvoiceReview } from "../components/AdminInvoiceReview";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Alert, Box, Button, Chip, Container, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
@@ -52,7 +53,7 @@ export function AdminBillingSyncPage() {
     <Button component={Link} to="/admin/subscription-plans">Back to plans</Button>
     <Typography component="h1" variant="h3" gutterBottom>Billing synchronization</Typography>
     <Alert severity="info" sx={{ mb: 3 }}>Sandbox only. Webhooks are saved before acknowledgment and processed in the background.
-      Known subscriptions are checked periodically against Stripe. Synchronization does not change user access or usage allowances.</Alert>
+      Known subscriptions are checked periodically against Stripe. Verified invoice settlement controls research access for accounts opted into sandbox limits. Synchronization never resets usage allowances.</Alert>
     {(error || pollError) && <Alert severity="error" sx={{ mb: 2 }}>{error || pollError}</Alert>}
     <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2 }}>
       <TextField select label="Job status" value={state} onChange={e => { setState(e.target.value); setOffset(0); }} sx={{ minWidth: 220 }}>
@@ -86,6 +87,7 @@ export function AdminBillingSyncPage() {
           {job.last_error && <Alert severity={job.state === "failed" ? "error" : "warning"} sx={{ my: 1 }}>{job.last_error}</Alert>}
           <Typography>Attempts: {job.attempts} · Consecutive failures: {job.failures} · Manual requests: {job.manual_retries}</Typography>
           <Typography>Last attempt: {date(job.last_attempt_at)} · Last successful job: {date(job.last_success_at)}</Typography>
+          <AdminInvoiceReview checkoutId={job.checkout_id} />
           <Typography>Subscription status: {job.subscription_status ?? "Not established"}</Typography>
           {!job.price_matches && <Alert severity="warning" sx={{ my: 1 }}>The Stripe price no longer matches the saved plan revision.</Alert>}
           <Typography>Last verified Stripe state: {date(job.provider_observed_at)}</Typography>

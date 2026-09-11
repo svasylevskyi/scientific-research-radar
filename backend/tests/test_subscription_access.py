@@ -15,6 +15,18 @@ STAMP = datetime(2030, 1, 31, 12, tzinfo=timezone.utc)
 URL = '/api/v1/admin/subscription-access'
 
 
+def seed_invoice(db, checkout, *, status='paid'):
+    from app.models.billing_invoice import BillingInvoice
+    checkout.latest_invoice_id = 'in_' + str(checkout.id)
+    checkout.invoices_checked_at = STAMP
+    invoice = BillingInvoice(id=checkout.latest_invoice_id, checkout_id=checkout.id, status=status, currency='eur',
+        amount_due=900, amount_paid=900, amount_remaining=0, attempt_count=1, billing_reason='subscription_create',
+        period_start=checkout.period_start, period_end=checkout.period_end, paid_at=STAMP, created_at=STAMP, observed_at=STAMP)
+    db.add(invoice)
+    db.flush()
+    return invoice
+
+
 @pytest.fixture
 def enrolled(client, setup, db_session_factory, monkeypatch):
     monkeypatch.setattr(access, 'now', lambda: STAMP)
@@ -24,7 +36,9 @@ def enrolled(client, setup, db_session_factory, monkeypatch):
             parameters={}, subscription_id='sub_access', subscription_status='active', price_matches=True,
             period_start=STAMP, billing_anchor=STAMP, period_end=datetime(2031, 1, 31, 12, tzinfo=timezone.utc),
             active_through=datetime(2031, 1, 31, 12, tzinfo=timezone.utc), observed_at=STAMP)
-        db.add(row); db.commit(); checkout = row.id
+        db.add(row); db.flush()
+        seed_invoice(db, row)
+        db.commit(); checkout = row.id
     result = client.post(f'{URL}/{uid}/policy', headers=admin, json={
         'mode': 'sandbox', 'expected_version': 0, 'change_note': 'Enable test limits'})
     assert result.status_code == 201, result.text
@@ -78,7 +92,9 @@ def test_failure_releases_retry_uses_current_window(client, enrolled, db_session
     later = datetime(2030, 2, 28, 12, tzinfo=timezone.utc)
     monkeypatch.setattr(access, 'now', lambda: later)
     with db_session_factory() as db:
-        db.get(SandboxCheckout, checkout).observed_at = later; db.commit()
+        db.get(SandboxCheckout, checkout).observed_at = later
+        db.get(SandboxCheckout, checkout).invoices_checked_at = later
+        db.commit()
     response = client.post(f"/api/v1/digests/{digest['id']}/runs/{run_id}/retry", headers=auth)
     assert response.status_code == 202, response.text
     with db_session_factory() as db:
@@ -86,7 +102,7 @@ def test_failure_releases_retry_uses_current_window(client, enrolled, db_session
         assert access.utc(row.period_start) == later and row.state == 'reserved'
 
 
-@pytest.mark.parametrize('status,allowed', [('active', True), ('past_due', True), ('unpaid', False), ('canceled', False), ('trialing', False), ('incomplete', False)])
+@pytest.mark.parametrize('status,allowed', [('active', True), ('past_due', False), ('unpaid', False), ('canceled', False), ('trialing', False), ('incomplete', False)])
 def test_subscription_status_rules(client, enrolled, db_session_factory, status, allowed):
     setup, checkout = enrolled
     uid = setup[0]
@@ -282,6 +298,8 @@ def test_concurrent_reservations_cannot_overspend(tmp_path, monkeypatch):
         db.add(SandboxCheckout(user_id=uid, plan_revision_id=plan.id, interval='monthly', price_id='price_test', parameters={},
             subscription_id='sub_race', subscription_status='active', price_matches=True, period_start=STAMP,
             billing_anchor=STAMP, period_end=STAMP + timedelta(days=28), active_through=STAMP + timedelta(days=28), observed_at=STAMP))
+        db.flush()
+        seed_invoice(db, db.scalar(select(SandboxCheckout).where(SandboxCheckout.user_id == uid)))
         db.add(SubscriptionAccessPolicy(user_id=uid, version=1, mode='sandbox', created_by=uid, change_note='Race'))
         values = _digest_payload(maximum_papers=3)
         values.update(reporting_from=date.fromisoformat(values['reporting_from']), reporting_to=date.fromisoformat(values['reporting_to']))
