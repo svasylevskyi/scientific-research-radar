@@ -110,6 +110,7 @@ export function AdminUsersPage() {
                     <TableCell>Email</TableCell>
                     <TableCell>Access</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell>Subscription plan</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -120,6 +121,7 @@ export function AdminUsersPage() {
                       <TableCell>{listedUser.email}</TableCell>
                       <TableCell><UserRoleChip user={listedUser} /></TableCell>
                       <TableCell>{listedUser.is_active ? "Active" : "Inactive"}</TableCell>
+                      <TableCell>{listedUser.subscription_plan_name ?? "No subscription"}</TableCell>
                       <TableCell align="right">
                         <Button component={RouterLink} to={`/admin/users/${listedUser.id}`} endIcon={<ChevronRightRoundedIcon />}>View</Button>
                       </TableCell>
@@ -138,6 +140,7 @@ export function AdminUsersPage() {
                       <Typography color="text.secondary" sx={{ overflowWrap: "anywhere", mb: 1.5 }}>{listedUser.email}</Typography>
                       <Stack direction="row" spacing={1} alignItems="center">
                         <UserRoleChip user={listedUser} />
+                        <Typography variant="body2">Plan: {listedUser.subscription_plan_name ?? "No subscription"}</Typography>
                         <Typography variant="body2" color={listedUser.is_active ? "success.main" : "text.secondary"}>
                           {listedUser.is_active ? "Active" : "Inactive"}
                         </Typography>

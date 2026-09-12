@@ -19,8 +19,12 @@ class UserRead(BaseModel):
     created_at: datetime
 
 
+class AdminUserRead(UserRead):
+    subscription_plan_name: str | None = None
+
+
 class UserListResponse(BaseModel):
-    items: list[UserRead]
+    items: list[AdminUserRead]
     total: int
     offset: int
     limit: int

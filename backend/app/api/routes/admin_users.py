@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.api.dependencies import CurrentAdmin, DbSession
 from app.models.user import UserRole
-from app.schemas.user import AdminUserUpdate, UserListResponse, UserRead, UserRoleUpdate
+from app.schemas.user import AdminUserUpdate, UserListResponse, AdminUserRead, UserRoleUpdate
 from app.services.admin_user_service import (
     AdminActionForbiddenError,
     AdminUserService,
@@ -37,40 +37,40 @@ def list_users(
         limit=limit,
         query=q,
     )
-    return UserListResponse(items=users, total=total, offset=offset, limit=limit)
+    return UserListResponse(items=service.serialize_users(users), total=total, offset=offset, limit=limit)
 
 
-@router.get("/{user_id}", response_model=UserRead)
+@router.get("/{user_id}", response_model=AdminUserRead)
 def get_user(
     user_id: UUID,
     current_admin: CurrentAdmin,
     service: AdminUserServiceDep,
-) -> UserRead:
-    return _run(lambda: service.get_user(actor=current_admin, user_id=user_id))
+) -> AdminUserRead:
+    return service.serialize_users([_run(lambda: service.get_user(actor=current_admin, user_id=user_id))])[0]
 
 
-@router.patch("/{user_id}", response_model=UserRead)
+@router.patch("/{user_id}", response_model=AdminUserRead)
 def update_user(
     user_id: UUID,
     payload: AdminUserUpdate,
     current_admin: CurrentAdmin,
     service: AdminUserServiceDep,
-) -> UserRead:
-    return _run(
+) -> AdminUserRead:
+    return service.serialize_users([_run(
         lambda: service.update_user(actor=current_admin, user_id=user_id, changes=payload)
-    )
+    )])[0]
 
 
-@router.put("/{user_id}/role", response_model=UserRead)
+@router.put("/{user_id}/role", response_model=AdminUserRead)
 def update_user_role(
     user_id: UUID,
     payload: UserRoleUpdate,
     current_admin: CurrentAdmin,
     service: AdminUserServiceDep,
-) -> UserRead:
-    return _run(
+) -> AdminUserRead:
+    return service.serialize_users([_run(
         lambda: service.set_role(actor=current_admin, user_id=user_id, role=payload.role)
-    )
+    )])[0]
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -217,3 +217,36 @@ def test_admin_cannot_remove_their_own_access(
     assert client.delete(
         f"/api/v1/admin/users/{super_admin_id}", headers=admin_access
     ).status_code == 403
+
+
+def test_admin_plan_names_use_latest_subscription_and_survive_user_updates(client, db_session_factory):
+    from uuid import UUID
+    from datetime import datetime, timedelta, timezone
+    from app.models.stripe_sandbox import SandboxCheckout
+    from app.models.subscription_plan import SubscriptionPlanRevision
+    from test_stripe_catalogue import configuration
+    admin = _authorization(_super_admin_login(client, db_session_factory))
+    registered = _register(client)
+    uid = UUID(registered.json()['user']['id'])
+    path = f'/api/v1/admin/users/{uid}'
+    assert client.get(path, headers=admin).json()['subscription_plan_name'] is None
+    with db_session_factory() as db:
+        plan = SubscriptionPlanRevision(code='explorer', revision=1, configuration={**configuration(), 'name': 'Original Explorer'}, change_note='Test')
+        db.add(plan); db.flush()
+        stamp = datetime.now(timezone.utc)
+        row = SandboxCheckout(user_id=uid, plan_revision_id=plan.id, interval='monthly', price_id='price_test', parameters={}, subscription_id='sub_test', subscription_status='past_due', created_at=stamp)
+        db.add(row); db.commit()
+        sid, pid = row.id, plan.id
+    assert client.get(path, headers=admin).json()['subscription_plan_name'] == 'Original Explorer'
+    listed = client.get('/api/v1/admin/users?q=member@example.com', headers=admin).json()['items']
+    assert listed[0]['subscription_plan_name'] == 'Original Explorer'
+    assert client.patch(path, headers=admin, json={'full_name': 'Updated'}).json()['subscription_plan_name'] == 'Original Explorer'
+    with db_session_factory() as db:
+        db.add(SubscriptionPlanRevision(code='explorer', revision=2, configuration={**configuration(), 'name': 'New name'}, change_note='Rename'))
+        db.add(SandboxCheckout(user_id=uid, plan_revision_id=pid, interval='monthly', price_id='price_test', parameters={}, created_at=stamp + timedelta(seconds=1)))
+        db.commit()
+    # A pending attempt and a catalogue rename do not replace subscribed terms.
+    assert client.get(path, headers=admin).json()['subscription_plan_name'] == 'Original Explorer'
+    with db_session_factory() as db:
+        db.get(SandboxCheckout, sid).subscription_status = 'canceled'; db.commit()
+    assert client.get(path, headers=admin).json()['subscription_plan_name'] is None
