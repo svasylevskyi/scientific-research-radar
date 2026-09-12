@@ -8,6 +8,7 @@ export interface User {
   role: UserRole;
   is_super_admin: boolean;
   created_at: string;
+  subscription_plan_name?: string | null;
 }
 
 export interface AuthResponse {

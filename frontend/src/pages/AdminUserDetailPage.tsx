@@ -138,6 +138,7 @@ export function AdminUserDetailPage() {
               <Box>
                 <Typography component="h1" variant="h3" sx={{ mb: 0.75 }}>{managedUser.full_name}</Typography>
                 <Typography color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{managedUser.email}</Typography>
+                <Typography sx={{ mt: 1 }}>Subscription plan: {managedUser.subscription_plan_name ?? "No subscription"}</Typography>
               </Box>
               <UserRoleChip user={managedUser} />
             </Stack>

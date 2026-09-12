@@ -45,6 +45,25 @@ class AdminUserService:
             ),
         )
 
+    def serialize_users(self, users):
+        """One batch lookup for the visible page; no Stripe requests or per-user queries."""
+        from sqlalchemy import func, select
+        from app.models.stripe_sandbox import SandboxCheckout as Checkout
+        from app.models.subscription_plan import SubscriptionPlanRevision as Plan
+        from app.schemas.user import AdminUserRead
+        from app.services.stripe_sandbox_service import TERMINAL
+        if not users:
+            return []
+        ranked = select(Checkout.user_id, Checkout.plan_revision_id, Checkout.subscription_status,
+            func.row_number().over(partition_by=Checkout.user_id,
+                order_by=(Checkout.created_at.desc(), Checkout.id)).label('position')).where(
+                    Checkout.user_id.in_([u.id for u in users]), Checkout.subscription_id.is_not(None)).subquery()
+        rows = self.db.execute(select(ranked.c.user_id, Plan.configuration).join(
+            Plan, Plan.id == ranked.c.plan_revision_id).where(ranked.c.position == 1,
+                ranked.c.subscription_status.not_in(TERMINAL)))
+        names = {uid: config['name'] for uid, config in rows}
+        return [AdminUserRead.model_validate(u).model_copy(update={'subscription_plan_name': names.get(u.id)}) for u in users]
+
     def get_user(self, *, actor: User, user_id: UUID) -> User:
         user = self._get_user(user_id)
         self._require_management_access(actor=actor, target=user)
