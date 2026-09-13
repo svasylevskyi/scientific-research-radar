@@ -12,14 +12,14 @@ PUBLIC_FIELDS = ('name', 'description', 'currency', 'monthly_price', 'annual_pri
 def available(plan):
     c = plan.configuration
     return (c.get('subscriber_visible') is True and c['state'] == 'reviewed' and c['tax_display'] == 'inclusive'
-        and bool(c.get('stripe_sandbox')) and not c.get('trial_days', 0))
+        and (c.get('billing_type') == 'free' or bool(c.get('stripe_sandbox'))) and not c.get('trial_days', 0))
 
 
 def catalogue(db):
     latest = select(Plan.code, func.max(Plan.revision).label('revision')).group_by(Plan.code).subquery()
     rows = db.scalars(select(Plan).join(latest, (Plan.code == latest.c.code) & (Plan.revision == latest.c.revision))
         .order_by(func.coalesce(Plan.configuration['display_order'].as_integer(), 0), Plan.code))
-    return {'items': [{'code': p.code, 'revision': p.revision, **{k: p.configuration[k] for k in PUBLIC_FIELDS}}
+    return {'items': [{'code': p.code, 'revision': p.revision, 'billing_type': p.configuration.get('billing_type', 'stripe'), **{k: p.configuration[k] for k in PUBLIC_FIELDS}}
         for p in rows if available(p)], 'sandbox': True}
 
 

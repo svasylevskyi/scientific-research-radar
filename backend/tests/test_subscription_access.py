@@ -165,7 +165,8 @@ def test_observation_assignment_does_not_grant_access(client, setup):
     assert client.post(f'{URL}/{uid}/policy', headers=admin, json={
         'mode': 'sandbox', 'expected_version': 0, 'change_note': 'No subscription'}).status_code == 201
     data = client.get('/api/v1/subscription', headers=auth).json()
-    assert not data['allowed'] and data['plan'] is None
+    assert data['allowed'] and data['billing_type'] == 'free'
+    assert data['plan']['name'] == 'Free'  # The observation plan never becomes the enforced plan.
 
 
 def test_provider_anchor_and_grace_clock_survive_reconciliation(client, account, db_session_factory):
@@ -266,7 +267,8 @@ def test_concurrent_access_policy_versions(tmp_path):
     engine.dispose()
 
 
-def test_concurrent_reservations_cannot_overspend(tmp_path, monkeypatch):
+@pytest.mark.parametrize("billing_type", ["stripe", "free"])
+def test_concurrent_reservations_cannot_overspend(tmp_path, monkeypatch, billing_type):
     from concurrent.futures import ThreadPoolExecutor
     from datetime import date
     from uuid import uuid4
@@ -295,11 +297,15 @@ def test_concurrent_reservations_cannot_overspend(tmp_path, monkeypatch):
         plan = SubscriptionPlanRevision(code='explorer', revision=1,
             configuration=config, created_by=uid, change_note='Race')
         db.add(plan); db.flush()
-        db.add(SandboxCheckout(user_id=uid, plan_revision_id=plan.id, interval='monthly', price_id='price_test', parameters={},
-            subscription_id='sub_race', subscription_status='active', price_matches=True, period_start=STAMP,
-            billing_anchor=STAMP, period_end=STAMP + timedelta(days=28), active_through=STAMP + timedelta(days=28), observed_at=STAMP))
-        db.flush()
-        seed_invoice(db, db.scalar(select(SandboxCheckout).where(SandboxCheckout.user_id == uid)))
+        if billing_type == 'free':
+            from app.services.free_subscription_service import assign
+            assign(db, uid, STAMP)
+        else:
+            db.add(SandboxCheckout(user_id=uid, plan_revision_id=plan.id, interval='monthly', price_id='price_test', parameters={},
+                subscription_id='sub_race', subscription_status='active', price_matches=True, period_start=STAMP,
+                billing_anchor=STAMP, period_end=STAMP + timedelta(days=28), active_through=STAMP + timedelta(days=28), observed_at=STAMP))
+            db.flush()
+            seed_invoice(db, db.scalar(select(SandboxCheckout).where(SandboxCheckout.user_id == uid)))
         db.add(SubscriptionAccessPolicy(user_id=uid, version=1, mode='sandbox', created_by=uid, change_note='Race'))
         values = _digest_payload(maximum_papers=3)
         values.update(reporting_from=date.fromisoformat(values['reporting_from']), reporting_to=date.fromisoformat(values['reporting_to']))

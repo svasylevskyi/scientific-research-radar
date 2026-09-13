@@ -424,3 +424,29 @@ Endpoints:
 Mutation endpoints share existing per-account billing rate limits and browser-origin guards. User/customer/session IDs and redirect URLs cannot be supplied to select another account. Existing admin-only Explorer testing remains available for drafts. Tests use fake Stripe transports; no real payment or OpenAI calls are made.
 
 The next increments remain plan changes with explicit effective dates/proration policy, subscriber notifications, trials, and a separately reviewed live rollout. Stripe-hosted checkout/portal behavior follows [Checkout fulfillment guidance](https://docs.stripe.com/checkout/fulfillment) and [customer portal integration](https://docs.stripe.com/customer-management/integrate-customer-portal).
+
+## Radar-managed Free tier
+
+Migration `20260913_0021` adds a local free-subscription assignment and permits usage records without a Stripe checkout. Deploy the API, research worker and scheduler together through the existing workflow; it runs the migration. No Stripe mapping, new secret, or external service is required for Free. The migration creates a reviewed, published `free` plan if that code does not exist. An existing `free` code is preserved: before allowing new registrations, configure a reviewed revision with **Free — managed by Radar**, zero monthly price, no annual price/mapping/trial. Other zero-price proposals (for example `preview`) are left unchanged.
+
+Default limits: **one digest, one manual run per month, up to ten papers per run/month, no scheduling or scheduled email delivery**. Admins can edit allowances and display text through the normal versioned catalogue. `billing_type=free` is restricted to the reserved `free` code; other codes retain Stripe billing. Free can be published without a provider mapping. Publication controls public visibility; registration uses the latest **reviewed Free** revision even if hidden. Drafts do not replace that registration default. Existing Free assignments retain their saved revision; changing the default affects subsequent enrollments, not existing usage or limits.
+
+Email-confirmed registration assigns Free and writes the enforced access policy in the **same transaction** as user creation and session issuance. Unconfirmed/expired registration attempts receive no account, subscription, or allowance. No Stripe request is made. An idempotent default-plan initializer also supports new databases/first registrations if the catalogue is empty.
+
+Free allowances use the enrollment timestamp as the monthly anniversary, including short-month handling. The existing reservation, completion, failure release, retry, concurrent admission, and deletion-retention rules apply. Free usage has a null checkout ID and remains separate from paid usage. Setting complimentary development access bypasses subscription allowances; re-enabling enforcement restores the same Free assignment, anchor and spent usage, rather than granting another quota.
+
+Existing accounts are not mass-migrated or restricted. Admins retain **Enforce subscription limits** versus **Complimentary development access**, with audit/version checking and the active-run guard. Enforcing an existing account creates its Free assignment if absent. The serialized legacy policy value `sandbox` now means enforced Free or sandbox-paid limits; it is retained for compatibility. Super-admin protections remain unchanged.
+
+An established Stripe subscription continues to take precedence over Free, with the existing invoice and lifecycle policy. Merely opening checkout does not replace Free. This increment does not add automatic paid-to-free downgrades after cancellation or failed payment; those transitions remain part of the planned subscription-change increment. Completed research remains readable. New enforced Free accounts can test upgrading through the existing sandbox checkout, subject to the server enable flag; live payments remain disabled.
+
+The public plans page labels Free without monthly/annual checkout and offers registration or subscription review. Admin user lists/details display the assigned Free name when there is no established Stripe subscription. Subscription and usage shows Free allowances without invoice-verification placeholders.
+
+### Acceptance checks
+
+1. Review/edit the new Free plan after deployment, then register and confirm a new account. Confirm Free is assigned, limits are enforced, and no Stripe customer/checkout was created.
+2. Create a digest within the paper cap; a second digest must be blocked with the existing early guidance. Complete one small run; further runs wait for the monthly reset.
+3. As admin, grant complimentary access and then restore enforcement after active work completes. Previously spent Free usage and its anniversary must remain intact.
+4. Publish a newer reviewed Free revision and register another account. The new account uses the new revision; the first retains its original terms.
+5. Check a pre-existing complimentary account: its access is unchanged until an admin explicitly changes its policy.
+
+The downgrade works before Free enrollment/usage exists; afterward it deliberately refuses to drop that data. Retain the schema or restore a compatible backup rather than deleting subscription history. The catalogue is preserved on downgrade. Tests cover actual verified Free registration, limits, accounting, admin overrides, revision selection, concurrency and schema upgrade/downgrade. Legacy-account test helpers explicitly simulate accounts registered before this rollout; new Free tests exercise the complete current registration path.

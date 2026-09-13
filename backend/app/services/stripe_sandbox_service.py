@@ -238,6 +238,8 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None, co
             from app.services.subscriber_billing_service import available
             if not available(plan):
                 raise Error("This plan is not available for subscriber checkout. Review the current plans.", 409)
+        if plan.configuration.get("billing_type") == "free":
+            raise Error("The Free tier is managed in Radar and does not use Stripe Checkout.", 422)
         if plan.configuration["state"] == "archived":
             raise Error("Archived plans cannot be tested.", 422)
         # Trial/quota settings remain catalogue-only in this initial paid test.

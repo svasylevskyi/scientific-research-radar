@@ -28,13 +28,16 @@ class SubscriptionPlanConfiguration(BaseModel):
     email_delivery: bool = True
     trial_days: int = Field(default=0, ge=0, le=365, strict=True)
     stripe_sandbox: StripeSandboxMapping | None = None
+    billing_type: Literal["stripe", "free"] = "stripe"
     subscriber_visible: bool = False
     display_order: int = Field(default=0, ge=0, le=10000, strict=True)
 
     @model_validator(mode="after")
     def consistent_allowances(self):
-        if self.subscriber_visible and (self.state != "reviewed" or self.tax_display != "inclusive" or not self.stripe_sandbox or self.trial_days):
-            raise ValueError("Subscriber plans must be reviewed, tax-inclusive, mapped to Stripe sandbox and have no trial")
+        if self.billing_type == "free" and (self.monthly_price != 0 or self.annual_price is not None or self.stripe_sandbox or self.trial_days):
+            raise ValueError("Free plans have zero monthly price, no annual price, no Stripe mapping and no trial")
+        if self.subscriber_visible and (self.state != "reviewed" or self.tax_display != "inclusive" or (self.billing_type == "stripe" and not self.stripe_sandbox) or self.trial_days):
+            raise ValueError("Published plans must be reviewed and tax-inclusive with no trial; paid plans also require a Stripe sandbox mapping")
         if self.manual_runs_per_month > self.runs_per_month:
             raise ValueError("Manual runs cannot exceed the total monthly run allowance")
         if self.max_papers_per_run > self.papers_per_month:
@@ -55,3 +58,9 @@ class SubscriptionPlanSave(BaseModel):
     expected_revision: int = Field(ge=0, le=2147483646, strict=True)
     change_note: str = Field(min_length=1, max_length=500)
     configuration: SubscriptionPlanConfiguration
+
+    @model_validator(mode="after")
+    def free_code(self):
+        if (self.code == "free") != (self.configuration.billing_type == "free"):
+            raise ValueError("The reserved free plan code must use Free billing; other codes use Stripe billing")
+        return self

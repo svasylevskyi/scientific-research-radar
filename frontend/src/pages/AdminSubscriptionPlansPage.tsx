@@ -13,7 +13,7 @@ type Configuration = {
   max_digests: number; max_papers_per_run: number; papers_per_month: number;
   runs_per_month: number; manual_runs_per_month: number; schedule_frequencies: string[];
   stripe_sandbox?: StripeMapping | null;
-  subscriber_visible?: boolean; email_delivery: boolean; trial_days: number; display_order: number;
+  billing_type?: "stripe" | "free"; subscriber_visible?: boolean; email_delivery: boolean; trial_days: number; display_order: number;
 };
 type Plan = { id: number; code: string; revision: number; configuration: Configuration;
   change_note: string; created_by: string | null; created_at: string };
@@ -119,7 +119,7 @@ export function AdminSubscriptionPlansPage() {
             <Typography color="text.secondary">{plan.code} · Revision {plan.revision}</Typography>
             <Typography sx={{ mt: 1 }}>{plan.configuration.currency} {plan.configuration.monthly_price} / month{plan.configuration.annual_price !== null && ` · ${plan.configuration.currency} ${plan.configuration.annual_price} / year`}</Typography>
             <Typography variant="body2">{plan.configuration.max_digests} digests · {plan.configuration.papers_per_month} papers · {plan.configuration.runs_per_month} runs per monthly allowance period</Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>Stripe sandbox: {plan.configuration.stripe_sandbox ? "Mapped; verify before use" : "Not mapped"}</Typography>
+            <Typography variant="body2" sx={{ mt: 1 }}>{plan.configuration.billing_type === "free" ? "Managed by Radar; no Stripe mapping required" : `Stripe sandbox: ${plan.configuration.stripe_sandbox ? "Mapped; verify before use" : "Not mapped"}`}</Typography>
             {plan.configuration.stripe_sandbox && <Button disabled={checking !== null || saving} onClick={() => void verify(plan)}>{checking === plan.id ? "Checking Stripe…" : "Check saved revision in Stripe"}</Button>}
             {check?.id === plan.id && (check.error ? <Alert severity="warning">{check.error}</Alert> : check.result && <Alert severity={check.result.matches ? "success" : "warning"}>
               {check.result.matches ? "Sandbox prices match this revision, including explicit inclusive tax behavior." : "Sandbox mapping needs attention."}
@@ -142,21 +142,27 @@ export function AdminSubscriptionPlansPage() {
               <TextField required label="Name" value={form.name} onChange={(e) => update("name", e.target.value)} inputProps={{ maxLength: 100 }} />
               <TextField select label="Internal state" value={form.state} onChange={(e) => update("state", e.target.value)}>{["draft", "reviewed", "archived"].map((s) => <MenuItem key={s} value={s}>{title(s)}</MenuItem>)}</TextField>
               <TextField select label="Currency" value={form.currency} onChange={(e) => update("currency", e.target.value)}>{["EUR", "USD", "GBP", "PLN"].map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}</TextField>
-              <TextField required type="number" label="Monthly price" value={form.monthly_price} onChange={(e) => update("monthly_price", e.target.value)} inputProps={{ min: 0, max: 1000000, step: "0.01" }} />
-              <TextField type="number" label="Annual price (optional)" value={form.annual_price ?? ""} onChange={(e) => update("annual_price", e.target.value || null)} inputProps={{ min: 0, max: 1000000, step: "0.01" }} helperText="Blank means annual billing is not proposed." />
+              <TextField disabled={form.billing_type === "free"} required type="number" label="Monthly price" value={form.monthly_price} onChange={(e) => update("monthly_price", e.target.value)} inputProps={{ min: 0, max: 1000000, step: "0.01" }} />
+              <TextField disabled={form.billing_type === "free"} type="number" label="Annual price (optional)" value={form.annual_price ?? ""} onChange={(e) => update("annual_price", e.target.value || null)} inputProps={{ min: 0, max: 1000000, step: "0.01" }} helperText="Blank means annual billing is not proposed." />
               <TextField select label="Tax display policy" value={form.tax_display} onChange={(e) => update("tax_display", e.target.value)}>{["undecided", "inclusive", "exclusive"].map((s) => <MenuItem key={s} value={s}>{title(s)}</MenuItem>)}</TextField>
             </Box>
             <TextField fullWidth multiline minRows={2} label="Description" value={form.description} onChange={(e) => update("description", e.target.value)} inputProps={{ maxLength: 1000 }} sx={{ my: 2 }} />
-            <Typography variant="h6" gutterBottom>Proposed allowances</Typography>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>Manual runs are part of the total, not additional runs. Monthly allowances also apply to annual plans; no limits are enforced yet. Paper limits currently support up to 30 per run.</Typography>
-            <Box sx={grid}>{limits.map(([key, label, min, max]) => <TextField key={key} required type="number" label={label} value={Number.isNaN(form[key]) ? "" : form[key]} onChange={(e) => update(key, e.target.value === "" ? NaN : Number(e.target.value))} inputProps={{ min, max, step: 1 }} />)}</Box>
+            <Typography variant="h6" gutterBottom>Subscription allowances</Typography>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>Manual runs are part of the total, not additional runs. Monthly allowances apply to Free and annual paid plans. These limits apply when subscription enforcement is enabled. Paper limits currently support up to 30 per run.</Typography>
+            <Box sx={grid}>{limits.map(([key, label, min, max]) => <TextField key={key} required type="number" disabled={key === "trial_days" && form.billing_type === "free"} label={label} value={Number.isNaN(form[key]) ? "" : form[key]} onChange={(e) => update(key, e.target.value === "" ? NaN : Number(e.target.value))} inputProps={{ min, max, step: 1 }} />)}</Box>
             <Typography sx={{ mt: 2 }}>Permitted schedule frequencies (none selected = no scheduling)</Typography>
             <Stack direction="row" flexWrap="wrap">{frequencies.map((frequency) => <FormControlLabel key={frequency} label={title(frequency)} control={<Checkbox checked={form.schedule_frequencies.includes(frequency)} onChange={(e) => update("schedule_frequencies", e.target.checked ? [...form.schedule_frequencies, frequency] : form.schedule_frequencies.filter((f) => f !== frequency))} />} />)}</Stack>
-            <FormControlLabel label="Publish for subscriber sandbox checkout (reviewed, inclusive tax, mapped prices, no trial)" control={<Checkbox checked={form.subscriber_visible ?? false} onChange={(e) => update("subscriber_visible", e.target.checked)} />} />
+            <TextField select label="Billing type" value={form.billing_type ?? "stripe"} onChange={(e) => {
+              if (e.target.value === "free") setForm(current => ({ ...current, billing_type: "free", monthly_price: "0.00", annual_price: null, stripe_sandbox: null, trial_days: 0, tax_display: "inclusive" }));
+              else update("billing_type", "stripe");
+            }} helperText="The reserved code free provides the registration tier. Stripe mappings apply only to paid tiers.">
+              <MenuItem value="stripe">Stripe subscription</MenuItem><MenuItem value="free">Free — managed by Radar</MenuItem>
+            </TextField>
+            <FormControlLabel label="Publish plan (reviewed, inclusive tax, no trial; paid plans require Stripe mappings)" control={<Checkbox checked={form.subscriber_visible ?? false} onChange={(e) => update("subscriber_visible", e.target.checked)} />} />
             <FormControlLabel label="Email delivery included" control={<Checkbox checked={form.email_delivery} onChange={(e) => update("email_delivery", e.target.checked)} />} />
             <Typography variant="h6" sx={{ mt: 3 }}>Stripe sandbox mapping</Typography>
             <Typography color="text.secondary">Optional identifiers for testing only. Save a revision, then use its catalogue card to check Stripe. Checks read product and price details; they never create payments or modify Stripe. API keys belong in server configuration, not this form.</Typography>
-            <FormControlLabel label="Map this plan to Stripe sandbox prices" control={<Checkbox checked={!!form.stripe_sandbox} onChange={(e) => update("stripe_sandbox", e.target.checked ? { product_id: "", monthly_price_id: "", annual_price_id: null } : null)} />} />
+            <FormControlLabel label="Map this plan to Stripe sandbox prices" control={<Checkbox disabled={form.billing_type === "free"} checked={!!form.stripe_sandbox} onChange={(e) => update("stripe_sandbox", e.target.checked ? { product_id: "", monthly_price_id: "", annual_price_id: null } : null)} />} />
             {form.stripe_sandbox && <Box sx={{ ...grid, my: 2 }}>
               <TextField required label="Product ID" value={form.stripe_sandbox.product_id} onChange={(e) => update("stripe_sandbox", { ...form.stripe_sandbox!, product_id: e.target.value })} inputProps={{ pattern: "prod_[A-Za-z0-9]+", maxLength: 255 }} />
               <TextField required label="Monthly Price ID" value={form.stripe_sandbox.monthly_price_id} onChange={(e) => update("stripe_sandbox", { ...form.stripe_sandbox!, monthly_price_id: e.target.value })} inputProps={{ pattern: "price_[A-Za-z0-9]+", maxLength: 255 }} />

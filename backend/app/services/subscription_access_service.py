@@ -50,16 +50,25 @@ def resolve(db, user_id, settings=None):
     result = dict(mode=selected.mode if selected else 'complimentary', version=selected.version if selected else 0,
         allowed=True, reason='Complimentary development access.', status='complimentary', plan=None,
         checkout_id=None, period_start=None, period_end=None, grace_until=None, access_until=None,
-        observed_at=None, cancel_at_period_end=False)
+        observed_at=None, cancel_at_period_end=False, billing_type=None)
     if result['mode'] == 'complimentary':
         return result
     row = db.scalar(select(SandboxCheckout).where(SandboxCheckout.user_id == user_id,
         SandboxCheckout.subscription_id.is_not(None)).order_by(SandboxCheckout.created_at.desc(), SandboxCheckout.id).limit(1))
     result.update(allowed=False, status='unavailable', reason='No verified sandbox subscription. Review Subscription and usage.')
     if not row:
+        from app.models.subscription_access import FreeSubscription
+        free = db.get(FreeSubscription, user_id)
+        if free:
+            plan = db.get(SubscriptionPlanRevision, free.plan_revision_id)
+            start, end = window(free.anchor, stamp)
+            result.update(allowed=True, status='free', reason='Free subscription limits apply.', billing_type='free',
+                plan={'id': plan.id, 'name': plan.configuration['name'], 'configuration': plan.configuration},
+                period_start=start, period_end=end)
+            return result
         return result
     plan = db.get(SubscriptionPlanRevision, row.plan_revision_id)
-    result.update(checkout_id=row.id, status=row.subscription_status, observed_at=utc(row.observed_at) if row.observed_at else None,
+    result.update(billing_type='stripe', checkout_id=row.id, status=row.subscription_status, observed_at=utc(row.observed_at) if row.observed_at else None,
         plan={'id': plan.id, 'name': plan.configuration['name'], 'configuration': plan.configuration},
         cancel_at_period_end=row.cancel_at_period_end)
     if row.billing_anchor:
@@ -219,6 +228,9 @@ def change_policy(db, user_id, actor_id, mode, expected_version, note):
         DigestRun.status.in_([DigestRunStatus.QUEUED, DigestRunStatus.RUNNING])).limit(1))
     if active:
         raise AccessDenied('Wait for the active run to finish before changing access mode.', 409)
+    if mode == 'sandbox':
+        from app.services.free_subscription_service import assign
+        assign(db, user_id, now())
     row = Policy(user_id=user_id, version=version + 1, mode=mode, created_by=actor_id, change_note=note)
     db.add(row)
     db.flush()

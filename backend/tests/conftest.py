@@ -20,13 +20,19 @@ class VerifiedTestClient(TestClient):
     """Explicit account setup helper that completes the real verification API flow."""
     outbox: list
 
-    def register_verified(self, *, json):
+    def register_verified(self, *, json, legacy_account=True):
         pending = self.post("/api/v1/auth/register", json=json)
         if pending.status_code != 202:
             return pending
         challenge = pending.json()
         message = next(message for message in reversed(self.outbox) if message.recipient == challenge["email"])
         code = re.search(r"code is: ([0-9]{6})", message.text).group(1)
+        if legacy_account:
+            # Simulate accounts created before free enrollment existed. New-tier
+            # tests opt out to exercise the complete production registration path.
+            from unittest.mock import patch
+            with patch('app.services.free_subscription_service.enroll_registration'):
+                return self.post(f"/api/v1/auth/register/{challenge['id']}/confirm", json={"code": code})
         return self.post(f"/api/v1/auth/register/{challenge['id']}/confirm", json={"code": code})
 
 

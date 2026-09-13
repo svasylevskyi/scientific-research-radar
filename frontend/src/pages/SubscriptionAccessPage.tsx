@@ -6,7 +6,7 @@ import { AppHeader } from "../components/AppHeader";
 import { apiRequest, ApiError } from "../api/client";
 
 type Access = { email?: string; mode: "complimentary" | "sandbox"; version: number; allowed: boolean; reason: string;
-  payment_status?: string; paid_through?: string | null; payment_issue?: string | null;
+  billing_type?: "free" | "stripe" | null; payment_status?: string; paid_through?: string | null; payment_issue?: string | null;
   status: string; observed_at: string | null; period_start: string | null; period_end: string | null;
   access_until: string | null; grace_until: string | null; cancel_at_period_end: boolean;
   plan: { name: string; configuration: { max_papers_per_run: number; schedule_frequencies: string[]; email_delivery: boolean } } | null;
@@ -62,7 +62,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
   }
   return <Box><AppHeader /><Container component="main" maxWidth="md" sx={{ py: 4 }}>
     <Typography component="h1" variant="h3" gutterBottom>{admin ? "Subscription access" : "Subscription and usage"}</Typography>
-    {admin && <Alert severity="info" sx={{ mb: 2 }}>Sandbox rollout. Opting an account in applies real research limits using its verified test subscription.
+    {admin && <Alert severity="info" sx={{ mb: 2 }}>Choose enforced subscription limits (Free or the verified paid test subscription), or complimentary development access.
       Observation assignments remain separate. Switching modes preserves previously counted usage.</Alert>}
     {admin && !userId && <Button component={Link} to="/admin/users">Choose a user in user administration</Button>}
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -73,13 +73,13 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
       <Alert severity={data.allowed ? (data.grace_until ? "warning" : "info") : "warning"}>{data.reason}</Alert>
       <Paper variant="outlined" sx={{ p: 3 }}>
         <Typography variant="h6">{data.plan?.name ?? (data.mode === "complimentary" ? "Complimentary development access" : "Subscription not verified")}</Typography>
-        <Typography>Access mode: {data.mode === "sandbox" ? "Sandbox subscription limits" : "Complimentary"}</Typography>
+        <Typography>Access mode: {data.mode === "sandbox" ? "Subscription limits enforced" : "Complimentary"}</Typography>
         {data.mode === "sandbox" && <>
           <Typography>Status: {data.status}</Typography>
-          <Typography>Invoice status: {data.payment_status ?? "Not verified"} · Settled coverage through: {date(data.paid_through ?? null)}</Typography>
-          <Typography>Last verified: {date(data.observed_at)}</Typography>
+          {data.billing_type !== "free" && <Typography>Invoice status: {data.payment_status ?? "Not verified"} · Settled coverage through: {date(data.paid_through ?? null)}</Typography>}
+          {data.billing_type !== "free" && <Typography>Last verified: {date(data.observed_at)}</Typography>}
           <Typography>Allowance window: {date(data.period_start)} – {date(data.period_end)}</Typography>
-          <Typography>Verified access until: {date(data.access_until)}</Typography>
+          {data.billing_type !== "free" && <Typography>Verified access until: {date(data.access_until)}</Typography>}
           {data.cancel_at_period_end && <Alert severity="info" sx={{ mt: 1 }}>Cancellation is scheduled. Access continues through the verified period; saved results remain readable afterward.</Alert>}
         </>}
       </Paper>
@@ -90,7 +90,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
         <Typography>Completed papers: {data.usage.completed_papers} · Reserved papers: {data.usage.reserved_papers}</Typography>
         {data.plan && <Typography>Up to {data.plan.configuration.max_papers_per_run} papers per run. Schedules: {data.plan.configuration.schedule_frequencies.join(", ") || "not included"}.
           Email delivery: {data.plan.configuration.email_delivery ? "included" : "not included"}.</Typography>}
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Allowances reset monthly on the subscription anniversary, including annual plans.
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Allowances reset monthly on the Free enrollment anniversary or the paid subscription anniversary, including annual plans.
           Queued work reserves capacity. Successful runs count actual summarized papers; failed runs release their reservation.
           Retrying checks the current window again. Usage shown here starts when sandbox limits are enabled; earlier observation usage remains separate.</Typography>
       </Paper>
@@ -106,7 +106,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
         <Typography variant="h6">Change access mode</Typography>
         <TextField select label="New access mode" value={mode} onChange={e => setMode(e.target.value)}>
           <MenuItem value="complimentary">Complimentary development access</MenuItem>
-          <MenuItem value="sandbox">Enforce sandbox subscription limits</MenuItem>
+          <MenuItem value="sandbox">Enforce subscription limits</MenuItem>
         </TextField>
         <TextField label="Reason for change" value={note} onChange={e => setNote(e.target.value)} inputProps={{ maxLength: 500 }} />
         <Button variant="contained" disabled={busy || !note.trim() || mode === data.mode} onClick={() => { setConfirmedVersion(data.version); setConfirm(true); }}>Review change</Button>
@@ -120,7 +120,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
     </Stack>}
     <Dialog open={confirm} onClose={() => { if (!busy) setConfirm(false); }}>
       <DialogTitle>Change research access?</DialogTitle><DialogContent>
-        {mode === "sandbox" ? "This account will need a verified sandbox subscription and remaining allowance to create digests or start research. Saved results remain accessible." : "This restores complimentary development research access. Existing usage records will be retained."}
+        {mode === "sandbox" ? "This account will use its assigned Free tier or verified paid test subscription, with limits enforced for new digests and research. Saved results remain accessible." : "This restores complimentary development research access. Existing usage records will be retained."}
       </DialogContent><DialogActions><Button disabled={busy} onClick={() => setConfirm(false)}>Cancel</Button><Button disabled={busy} onClick={() => void save()}>Confirm change</Button></DialogActions>
     </Dialog>
   </Container></Box>;
