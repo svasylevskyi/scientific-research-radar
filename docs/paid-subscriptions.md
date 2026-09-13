@@ -450,3 +450,22 @@ The public plans page labels Free without monthly/annual checkout and offers reg
 5. Check a pre-existing complimentary account: its access is unchanged until an admin explicitly changes its policy.
 
 The downgrade works before Free enrollment/usage exists; afterward it deliberately refuses to drop that data. Retain the schema or restore a compatible backup rather than deleting subscription history. The catalogue is preserved on downgrade. Tests cover actual verified Free registration, limits, accounting, admin overrides, revision selection, concurrency and schema upgrade/downgrade. Legacy-account test helpers explicitly simulate accounts registered before this rollout; new Free tests exercise the complete current registration path.
+
+### Plan editor and Stripe product picker
+
+The editor defaults new forms to **Free — managed by Radar**. Billing type replaces the mapping checkbox. Free keeps a zero monthly price and clears annual pricing, trials and Stripe mapping. The existing reserved `free` code remains the registration tier; other plan codes use Stripe billing.
+
+Selecting **Stripe subscription** requires a product and monthly price before a new revision can be saved, including drafts. Old unmapped revisions remain readable. The picker reads active sandbox products and supported flat monthly/yearly prices, shows names, currencies and amounts, and fills Radar pricing from the selected prices. If several prices are eligible, choose the intended price explicitly. Yearly billing remains optional. Missing, unsupported or unavailable products/prices block saving a Stripe revision until corrected; errors offer a reload action. The saved-revision Stripe check and checkout's provider validation remain available and authoritative for provider changes after catalogue retrieval.
+
+A Stripe product belongs to one Radar tier code. Products owned by other tiers stay visible but disabled, and the API rejects reuse. Ownership includes archived and historical revisions, because existing subscriptions retain those revisions. A tier can reuse its own products across revisions. Existing historical cross-tier conflicts are preserved but cannot be saved again until a distinct product is selected. Migration `20260913_0022` adds a unique product-claim table to arbitrate concurrent saves; historical ownership is also read directly from immutable revisions, so no rewriting/backfill is required.
+
+Similar-price warnings are advisory. They compare the edited plan against **all latest non-archived revisions**, including drafts and unpublished tiers, excluding its own code. Same-currency monthly and annual prices are compared separately; equal prices and differences up to 10% of the higher amount warn. Zero equals zero, so Free/zero-price plans are included; missing annual prices are not treated as zero. No currency conversion or monthly-to-yearly comparison is performed. Warnings never prevent saving otherwise valid plans.
+
+Deployment uses the normal migration process. The existing sandbox key needs **Products: Read** and **Prices: Read**, as already required by the saved-mapping check. No new secrets or provider writes are introduced. Catalogue retrieval follows Stripe pagination and fails explicitly rather than returning a partial list above 2,000 products or prices. API references: [list products](https://docs.stripe.com/api/products/list), [list prices](https://docs.stripe.com/api/prices/list).
+
+Acceptance checks:
+1. Open a new plan: Free is selected and the mapping checkbox/ID text inputs are absent.
+2. Edit a paid tier, select a product, confirm the monthly/yearly amounts, and save. Test a product with multiple eligible prices and yearly billing disabled.
+3. Confirm another tier's product is visible but disabled; its own product remains selectable. Archive a tier and confirm its historical product stays reserved.
+4. Compare equal and near-equal prices, including Free versus a zero-price plan, and save despite a warning.
+5. Temporarily use an unavailable sandbox catalogue in a test environment: paid saving pauses with retry guidance; Free editing needs no Stripe request.

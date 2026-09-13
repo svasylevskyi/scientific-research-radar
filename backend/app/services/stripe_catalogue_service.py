@@ -69,3 +69,60 @@ def check_mapping(configuration, settings, *, transport=None):
         raise StripeCatalogueError("Stripe verification failed or returned an unexpected response. Please try again.") from None
     return {"matches": not issues, "issues": issues, "prices": observations,
             "checked_at": datetime.now(timezone.utc), "environment": "sandbox"}
+
+
+def list_products(settings, *, transport=None):
+    """Read the complete bounded catalogue. Never return a silently partial picker."""
+    secret = settings.stripe_sandbox_api_key.get_secret_value() if settings.stripe_sandbox_api_key else ''
+    if not secret.startswith(('rk_test_', 'sk_test_')):
+        raise StripeCatalogueError('Configure STRIPE_SANDBOX_API_KEY with a sandbox key. Live keys are not accepted.', 503)
+    try:
+        with httpx.Client(base_url='https://api.stripe.com/v1/', auth=(secret, ''), timeout=10,
+                          follow_redirects=False, transport=transport) as client:
+            def collect(path, object_type):
+                result, seen = [], set()
+                params = {'limit': 100, 'active': 'true'}
+                if path == 'prices':
+                    params['type'] = 'recurring'
+                for _ in range(20):
+                    response = client.get(path, params=params)
+                    if response.status_code in (401, 403):
+                        raise StripeCatalogueError('Stripe rejected access. Check the sandbox key and read permissions for Products and Prices.', 503)
+                    if response.status_code != 200:
+                        raise StripeCatalogueError('Stripe catalogue is unavailable. Please retry later.')
+                    page = response.json()
+                    if not isinstance(page, dict) or page.get('object') != 'list' or not isinstance(page.get('data'), list) or type(page.get('has_more')) is not bool:
+                        raise StripeCatalogueError('Stripe returned an unexpected catalogue response.')
+                    for item in page['data']:
+                        if not isinstance(item, dict) or item.get('object') != object_type or item.get('livemode') is not False or not isinstance(item.get('id'), str) or item['id'] in seen:
+                            raise StripeCatalogueError('Stripe returned an unexpected or non-sandbox catalogue object.')
+                        seen.add(item['id'])
+                        result.append(item)
+                    if not page['has_more']:
+                        return result
+                    if not page['data']:
+                        raise StripeCatalogueError('Stripe returned invalid catalogue pagination.')
+                    params['starting_after'] = page['data'][-1]['id']
+                raise StripeCatalogueError('Stripe catalogue exceeds the supported size (2,000 products or prices). No partial list was returned.')
+            products = collect('products', 'product')
+            prices = collect('prices', 'price')
+        grouped = {}
+        for price in prices:
+            recurring = price.get('recurring') or {}
+            amount = price.get('unit_amount')
+            if (price.get('active') is not True or price.get('type') != 'recurring'
+                    or recurring.get('interval') not in ('month', 'year') or recurring.get('interval_count') != 1
+                    or recurring.get('usage_type') != 'licensed' or recurring.get('trial_period_days') is not None
+                    or price.get('billing_scheme') != 'per_unit' or price.get('transform_quantity') is not None
+                    or price.get('tax_behavior') != 'inclusive' or price.get('currency') not in ('eur', 'usd', 'gbp', 'pln')
+                    or type(amount) is not int or not 0 <= amount <= 100000000):
+                continue
+            grouped.setdefault(price['product'], []).append({'id': price['id'], 'currency': price['currency'].upper(),
+                'amount': f'{Decimal(amount) / 100:.2f}', 'interval': recurring['interval']})
+        return [{'id': product['id'], 'name': product['name'],
+                 'prices': sorted(grouped.get(product['id'], []), key=lambda p: (p['interval'], p['currency'], Decimal(p['amount']), p['id']))}
+                for product in products if product.get('active') is True]
+    except StripeCatalogueError:
+        raise
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError, KeyError):
+        raise StripeCatalogueError('Stripe catalogue could not be read. Please retry.') from None

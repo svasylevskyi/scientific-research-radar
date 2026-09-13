@@ -6,8 +6,33 @@ from sqlalchemy.exc import IntegrityError
 from app.api.dependencies import CurrentAdmin, DbSession, AppSettings
 from app.models.subscription_plan import SubscriptionPlanRevision
 from app.schemas.subscription_plan import SubscriptionPlanSave
+from app.schemas.subscription_plan import SubscriptionPlanConfiguration
+from pydantic import BaseModel, Field
+from app.services.plan_catalogue_service import claim_product, price_warnings, product_owners
 
 router = APIRouter()
+
+
+class PricePreview(BaseModel):
+    code: str = Field(default="", max_length=60)
+    configuration: SubscriptionPlanConfiguration
+
+
+@router.post("/price-warnings")
+def preview_prices(payload: PricePreview, actor: CurrentAdmin, db: DbSession):
+    return {"warnings": price_warnings(db, payload.code, payload.configuration)}
+
+
+@router.get("/stripe-products")
+def stripe_products(actor: CurrentAdmin, db: DbSession, settings: AppSettings, response: Response):
+    from app.services.stripe_catalogue_service import list_products, StripeCatalogueError
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        products = list_products(settings)
+    except StripeCatalogueError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from None
+    owners = product_owners(db)
+    return {"items": [{**p, "mapped_plan_codes": sorted(owners.get(p["id"], set()))} for p in products]}
 
 
 def serialize(row):
@@ -46,11 +71,13 @@ def save_plan(payload: SubscriptionPlanSave, actor: CurrentAdmin, db: DbSession)
         configuration=payload.configuration.model_dump(mode="json"), change_note=payload.change_note, created_by=actor.id)
     db.add(row)
     try:
+        if payload.configuration.stripe_sandbox:
+            claim_product(db, payload.code, payload.configuration.stripe_sandbox.product_id)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Another admin saved this plan. Reload and review the latest revision.") from exc
-    return serialize(row)
+        raise HTTPException(status_code=409, detail="Another admin saved this plan or claimed its Stripe product. Reload and review the latest catalogue.") from exc
+    return {**serialize(row), "warnings": price_warnings(db, payload.code, payload.configuration)}
 
 
 @router.post("/{code}/revisions/{revision}/check-stripe")

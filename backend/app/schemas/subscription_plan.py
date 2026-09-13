@@ -63,4 +63,6 @@ class SubscriptionPlanSave(BaseModel):
     def free_code(self):
         if (self.code == "free") != (self.configuration.billing_type == "free"):
             raise ValueError("The reserved free plan code must use Free billing; other codes use Stripe billing")
+        if self.configuration.billing_type == "stripe" and not self.configuration.stripe_sandbox:
+            raise ValueError("Stripe subscription plans require a product and monthly price mapping")
         return self

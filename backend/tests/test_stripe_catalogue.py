@@ -76,7 +76,7 @@ def test_live_response_is_rejected_even_with_test_key():
 
 
 def test_mapping_validation_and_optional_backwards_compatibility():
-    assert SubscriptionPlanConfiguration(**payload()['configuration']).stripe_sandbox is None
+    assert SubscriptionPlanConfiguration(**payload(stripe_sandbox=None)['configuration']).stripe_sandbox is None
     config = configuration()
     config['stripe_sandbox']['product_id'] = 'prod_example/../../customers'
     with pytest.raises(ValidationError):

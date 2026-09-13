@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState, type FormEvent } from "react";
 import { Alert, Box, Button, Checkbox, Chip, Container, FormControlLabel, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import { StripeProductPicker } from "../components/StripeProductPicker";
 import { AppHeader } from "../components/AppHeader";
 import { apiRequest, ApiError } from "../api/client";
 
@@ -16,10 +17,10 @@ type Configuration = {
   billing_type?: "stripe" | "free"; subscriber_visible?: boolean; email_delivery: boolean; trial_days: number; display_order: number;
 };
 type Plan = { id: number; code: string; revision: number; configuration: Configuration;
-  change_note: string; created_by: string | null; created_at: string };
+  warnings?: string[]; change_note: string; created_by: string | null; created_at: string };
 type PlanList = { items: Plan[]; total: number };
 const blank = (): Configuration => ({ name: "", description: "", state: "draft", currency: "EUR",
-  monthly_price: "0.00", annual_price: null, tax_display: "undecided", max_digests: 1,
+  billing_type: "free", monthly_price: "0.00", annual_price: null, tax_display: "inclusive", max_digests: 1,
   max_papers_per_run: 10, papers_per_month: 10, runs_per_month: 1, manual_runs_per_month: 1,
   schedule_frequencies: [], email_delivery: true, trial_days: 0, display_order: 0 });
 const limits = [
@@ -51,6 +52,19 @@ export function AdminSubscriptionPlansPage() {
   const [check, setCheck] = useState<{ id: number; result?: StripeCheck; error?: string } | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [stripeValid, setStripeValid] = useState(false);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [warningStatus, setWarningStatus] = useState("");
+  useEffect(() => {
+    let active = true; setWarnings([]); setWarningStatus("Checking similar prices…");
+    const timer = window.setTimeout(() => {
+      apiRequest<{ warnings: string[] }>("/admin/subscription-plans/price-warnings", {
+        method: "POST", body: { code, configuration: form },
+      }).then(data => { if (active) { setWarnings(data.warnings); setWarningStatus(""); } })
+        .catch(() => { if (active) setWarningStatus("Price comparison unavailable. Complete the form or reload the catalogue to retry."); });
+    }, 350);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [code, form, refresh]);
   useEffect(() => {
     let active = true; setLoading(true);
     apiRequest<PlanList>(`/admin/subscription-plans?offset=${offset}&limit=25`)
@@ -72,7 +86,7 @@ export function AdminSubscriptionPlansPage() {
   }
   function reset() { setForm(blank()); setCode(""); setRevision(0); setNote(""); }
   function edit(plan: Plan) {
-    setForm(plan.configuration); setCode(plan.code); setRevision(plan.revision); setNote(""); setError(""); setSuccess("");
+    setForm({ ...plan.configuration, billing_type: plan.configuration.billing_type ?? "stripe" }); setCode(plan.code); setRevision(plan.revision); setNote(""); setError(""); setSuccess("");
     document.getElementById("plan-editor")?.scrollIntoView({ behavior: "smooth" });
   }
   async function verify(plan: Plan) {
@@ -84,7 +98,7 @@ export function AdminSubscriptionPlansPage() {
     finally { setChecking(null); }
   }
   async function save(event: FormEvent) {
-    event.preventDefault(); setSaving(true); setError(""); setSuccess("");
+    event.preventDefault(); if (form.billing_type === "stripe" && !stripeValid) return; setSaving(true); setError(""); setSuccess("");
     try {
       const saved = await apiRequest<Plan>("/admin/subscription-plans", { method: "POST",
         body: { code, expected_revision: revision, change_note: note, configuration: form } });
@@ -152,24 +166,22 @@ export function AdminSubscriptionPlansPage() {
             <Box sx={grid}>{limits.map(([key, label, min, max]) => <TextField key={key} required type="number" disabled={key === "trial_days" && form.billing_type === "free"} label={label} value={Number.isNaN(form[key]) ? "" : form[key]} onChange={(e) => update(key, e.target.value === "" ? NaN : Number(e.target.value))} inputProps={{ min, max, step: 1 }} />)}</Box>
             <Typography sx={{ mt: 2 }}>Permitted schedule frequencies (none selected = no scheduling)</Typography>
             <Stack direction="row" flexWrap="wrap">{frequencies.map((frequency) => <FormControlLabel key={frequency} label={title(frequency)} control={<Checkbox checked={form.schedule_frequencies.includes(frequency)} onChange={(e) => update("schedule_frequencies", e.target.checked ? [...form.schedule_frequencies, frequency] : form.schedule_frequencies.filter((f) => f !== frequency))} />} />)}</Stack>
-            <TextField select label="Billing type" value={form.billing_type ?? "stripe"} onChange={(e) => {
+            <FormControlLabel label="Publish plan (reviewed, inclusive tax, no trial; paid plans require Stripe mappings)" control={<Checkbox checked={form.subscriber_visible ?? false} onChange={(e) => update("subscriber_visible", e.target.checked)} />} />
+            <FormControlLabel label="Email delivery included" control={<Checkbox checked={form.email_delivery} onChange={(e) => update("email_delivery", e.target.checked)} />} />
+            <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Billing</Typography>
+            <TextField select label="Billing type" value={form.billing_type ?? "free"} onChange={(e) => {
               if (e.target.value === "free") setForm(current => ({ ...current, billing_type: "free", monthly_price: "0.00", annual_price: null, stripe_sandbox: null, trial_days: 0, tax_display: "inclusive" }));
-              else update("billing_type", "stripe");
+              else { setStripeValid(false); update("billing_type", "stripe"); }
             }} helperText="The reserved code free provides the registration tier. Stripe mappings apply only to paid tiers.">
               <MenuItem value="stripe">Stripe subscription</MenuItem><MenuItem value="free">Free — managed by Radar</MenuItem>
             </TextField>
-            <FormControlLabel label="Publish plan (reviewed, inclusive tax, no trial; paid plans require Stripe mappings)" control={<Checkbox checked={form.subscriber_visible ?? false} onChange={(e) => update("subscriber_visible", e.target.checked)} />} />
-            <FormControlLabel label="Email delivery included" control={<Checkbox checked={form.email_delivery} onChange={(e) => update("email_delivery", e.target.checked)} />} />
-            <Typography variant="h6" sx={{ mt: 3 }}>Stripe sandbox mapping</Typography>
-            <Typography color="text.secondary">Optional identifiers for testing only. Save a revision, then use its catalogue card to check Stripe. Checks read product and price details; they never create payments or modify Stripe. API keys belong in server configuration, not this form.</Typography>
-            <FormControlLabel label="Map this plan to Stripe sandbox prices" control={<Checkbox disabled={form.billing_type === "free"} checked={!!form.stripe_sandbox} onChange={(e) => update("stripe_sandbox", e.target.checked ? { product_id: "", monthly_price_id: "", annual_price_id: null } : null)} />} />
-            {form.stripe_sandbox && <Box sx={{ ...grid, my: 2 }}>
-              <TextField required label="Product ID" value={form.stripe_sandbox.product_id} onChange={(e) => update("stripe_sandbox", { ...form.stripe_sandbox!, product_id: e.target.value })} inputProps={{ pattern: "prod_[A-Za-z0-9]+", maxLength: 255 }} />
-              <TextField required label="Monthly Price ID" value={form.stripe_sandbox.monthly_price_id} onChange={(e) => update("stripe_sandbox", { ...form.stripe_sandbox!, monthly_price_id: e.target.value })} inputProps={{ pattern: "price_[A-Za-z0-9]+", maxLength: 255 }} />
-              <TextField required={form.annual_price !== null} label="Annual Price ID" value={form.stripe_sandbox.annual_price_id ?? ""} onChange={(e) => update("stripe_sandbox", { ...form.stripe_sandbox!, annual_price_id: e.target.value || null })} inputProps={{ pattern: "price_[A-Za-z0-9]+", maxLength: 255 }} helperText="Required when the plan has an annual price; otherwise leave blank." />
-            </Box>}
+            {form.billing_type === "stripe" && <StripeProductPicker code={code} value={form}
+              onChange={patch => setForm(current => ({ ...current, ...patch }))} onValidityChange={setStripeValid} refresh={refresh} />}
+            {form.billing_type === "free" && <Typography color="text.secondary" sx={{ mt: 1 }}>Managed by Radar with no Stripe product or payment required.</Typography>}
+            {warningStatus && <Typography role="status" color="text.secondary" sx={{ mt: 2 }}>{warningStatus}</Typography>}
+            {warnings.map(warning => <Alert key={warning} severity="warning" sx={{ mt: 2 }}>{warning}</Alert>)}
             <TextField required fullWidth label="Change note" value={note} onChange={(e) => setNote(e.target.value)} inputProps={{ maxLength: 500 }} sx={{ my: 2 }} helperText="Explain this revision for other administrators." />
-            <Stack direction="row" spacing={2}><Button type="submit" variant="contained">{saving ? "Saving…" : "Save revision"}</Button><Button onClick={reset}>Cancel editing</Button></Stack>
+            <Stack direction="row" spacing={2}><Button type="submit" variant="contained" disabled={form.billing_type === "stripe" && !stripeValid}>{saving ? "Saving…" : "Save revision"}</Button><Button onClick={reset}>Cancel editing</Button></Stack>
           </Box>
         </Box>
       </Paper>
