@@ -108,7 +108,14 @@ export function AdminSubscriptionPlansPage() {
         <Stack direction="row" spacing={1} sx={{ mb: 2 }}><Typography variant="h6" sx={{ flex: 1 }}>Catalogue</Typography><Button disabled={saving} onClick={reset}>New plan</Button><Button disabled={loading || saving} onClick={() => { setError(""); setRefresh((v) => v + 1); }}>Reload catalogue</Button></Stack>
         {loading ? <Typography role="status">Loading plans…</Typography> : !list.items.length ? <Typography color="text.secondary">No plans yet. Create your first draft below.</Typography> : <Box sx={grid}>
           {list.items.map((plan) => <Paper key={plan.code} variant="outlined" sx={{ p: 2 }}>
-            <Stack direction="row" spacing={1} alignItems="center"><Typography variant="h6">{plan.configuration.name}</Typography><Chip size="small" label={title(plan.configuration.state)} /></Stack>
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
+              <Typography variant="h6" sx={{ overflowWrap: "anywhere" }}>{plan.configuration.name}</Typography>
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                <Chip size="small" label={title(plan.configuration.state)} />
+                <Chip size="small" variant="outlined" color={plan.configuration.subscriber_visible ? "success" : "default"}
+                  label={plan.configuration.subscriber_visible ? "Published" : "Not published"} />
+              </Stack>
+            </Stack>
             <Typography color="text.secondary">{plan.code} · Revision {plan.revision}</Typography>
             <Typography sx={{ mt: 1 }}>{plan.configuration.currency} {plan.configuration.monthly_price} / month{plan.configuration.annual_price !== null && ` · ${plan.configuration.currency} ${plan.configuration.annual_price} / year`}</Typography>
             <Typography variant="body2">{plan.configuration.max_digests} digests · {plan.configuration.papers_per_month} papers · {plan.configuration.runs_per_month} runs per monthly allowance period</Typography>
