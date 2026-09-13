@@ -6,7 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 import { apiRequest, ApiError } from "../api/client";
 import { startPagePolling } from "../pagePolling";
 import type { BillingStatus } from "../components/SubscriberBilling";
-type Plan = { code: string; revision: number; name: string; description: string; currency: string; monthly_price: string; annual_price: string | null;
+type Plan = { billing_type: "stripe" | "free"; code: string; revision: number; name: string; description: string; currency: string; monthly_price: string; annual_price: string | null;
   max_digests: number; max_papers_per_run: number; papers_per_month: number; runs_per_month: number; manual_runs_per_month: number;
   schedule_frequencies: string[]; email_delivery: boolean };
 export function PlansPage() {
@@ -38,7 +38,7 @@ export function PlansPage() {
   }, [user?.id]);
   const money = (p: Plan, period: string) => new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(Number(period === "annual" ? p.annual_price : p.monthly_price));
   async function checkout() {
-    if (!selection || busy || !billing?.checkout_allowed || billingError) return;
+    if (!selection || selection.plan.billing_type === "free" || busy || !billing?.checkout_allowed || billingError) return;
     setBusy(true);
     try {
       const { url } = await apiRequest<{ url: string }>("/subscription/billing/checkout", { method: "POST", body: {
@@ -51,7 +51,7 @@ export function PlansPage() {
   return <Box><MarketingHeader /><Container component="main" maxWidth="lg" sx={{ py: 6 }}>
     <Chip label="Sandbox subscriptions" color="primary" variant="outlined" />
     <Typography component="h1" variant="h3" sx={{ my: 2 }}>Choose your research plan</Typography>
-    <Alert severity="info" sx={{ mb: 3 }}>Test subscriptions only. Prices include tax. Use Stripe test payment details; no real payment is collected. Checkout is available to accounts enrolled by an administrator.</Alert>
+    <Alert severity="info" sx={{ mb: 3 }}>Free is managed by Radar and assigned after registration. Paid subscriptions are still in sandbox testing: use Stripe test payment details only. Prices include tax; no real payment is collected.</Alert>
     {error && <Alert severity="error">{error}</Alert>}
     {billingError && <Alert severity="error">{billingError} <Button component={Link} to="/subscription">Review billing</Button></Alert>}
     {billing?.reason && <Alert severity="info" sx={{ my: 2 }}>{billing.reason} <Button component={Link} to="/subscription">Subscription and billing</Button></Alert>}
@@ -64,18 +64,18 @@ export function PlansPage() {
       {plans?.map(plan => <Box component="section" key={plan.code} sx={{ p: 3, border: 1, borderColor: "divider", borderRadius: 3 }}>
         <Stack spacing={2}>
           <Typography component="h2" variant="h5">{plan.name}</Typography><Typography>{plan.description}</Typography>
-          <Typography variant="h4">{interval === "annual" && plan.annual_price === null ? "Unavailable" : money(plan, interval)}</Typography>
-          <Typography>Per {interval === "annual" ? "year" : "month"}, tax included.</Typography>
+          <Typography variant="h4">{plan.billing_type === "free" ? "Free" : interval === "annual" && plan.annual_price === null ? "Unavailable" : money(plan, interval)}</Typography>
+          <Typography>{plan.billing_type === "free" ? "No payment details or checkout required." : `Per ${interval === "annual" ? "year" : "month"}, tax included.`}</Typography>
           <Typography>{plan.max_digests} digests · Up to {plan.max_papers_per_run} papers per run</Typography>
           <Typography>{plan.runs_per_month} runs per allowance month, including up to {plan.manual_runs_per_month} manual runs · {plan.papers_per_month} papers total</Typography>
           <Typography>Schedules: {plan.schedule_frequencies.join(", ") || "not included"}. Email delivery: {plan.email_delivery ? "included" : "not included"}.</Typography>
-          {!user && !isInitializing ? <Button component={Link} to="/login" variant="outlined">Sign in to continue</Button> :
+          {plan.billing_type === "free" ? <Button component={Link} to={user ? "/subscription" : "/register"} variant="outlined">{user ? "Review subscription" : "Create a free account"}</Button> : !user && !isInitializing ? <Button component={Link} to="/login" variant="outlined">Sign in to continue</Button> :
             <Button variant="contained" disabled={isInitializing || !billing?.checkout_allowed || !!billingError || !!error || busy || (interval === "annual" && plan.annual_price === null)}
               onClick={() => setSelection({ plan, interval })}>Choose {plan.name}</Button>}
         </Stack>
       </Box>)}
     </Box>
-    <Typography sx={{ mt: 3 }}>Allowances reset monthly on your subscription anniversary, including annual subscriptions. Unused allowance does not roll over. Existing subscribers can manage billing; upgrades and downgrades will be added later.</Typography>
+    <Typography sx={{ mt: 3 }}>Allowances reset monthly on your Free enrollment or paid subscription anniversary, including annual subscriptions. Unused allowance does not roll over. Existing subscribers can manage billing; upgrades and downgrades will be added later.</Typography>
     <Dialog open={!!selection} onClose={() => { if (!busy) setSelection(null); }}>
       <DialogTitle>Continue to sandbox checkout?</DialogTitle><DialogContent>
         {selection && <Typography>{selection.plan.name}: {money(selection.plan, selection.interval)} per {selection.interval === "annual" ? "year" : "month"}, tax included. This test subscription renews until canceled. Access starts after invoice verification. Use test payment details only.</Typography>}

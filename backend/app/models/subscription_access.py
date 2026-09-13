@@ -31,7 +31,7 @@ class SubscriptionRunUsage(Base):
     run_key: Mapped[UUID] = mapped_column(primary_key=True)
     run_id: Mapped[UUID | None] = mapped_column(ForeignKey('digest_runs.id', ondelete='SET NULL'))
     user_id: Mapped[UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
-    checkout_id: Mapped[UUID] = mapped_column(ForeignKey('sandbox_checkouts.id', ondelete='CASCADE'))
+    checkout_id: Mapped[UUID | None] = mapped_column(ForeignKey('sandbox_checkouts.id', ondelete='CASCADE'))
     plan_revision_id: Mapped[int] = mapped_column(ForeignKey('subscription_plan_revisions.id', ondelete='RESTRICT'))
     period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -41,3 +41,10 @@ class SubscriptionRunUsage(Base):
     actual_papers: Mapped[int] = mapped_column(default=0)
     request_context: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class FreeSubscription(Base):
+    __tablename__ = 'free_subscriptions'
+    user_id: Mapped[UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    plan_revision_id: Mapped[int] = mapped_column(ForeignKey('subscription_plan_revisions.id', ondelete='RESTRICT'))
+    anchor: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

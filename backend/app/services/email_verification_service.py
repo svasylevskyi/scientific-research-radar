@@ -145,6 +145,8 @@ class EmailVerificationService:
             else:
                 created = self.users.create(email=challenge.email, full_name=challenge.full_name,
                                             password_hash=challenge.password_hash)
+                from app.services.free_subscription_service import enroll_registration
+                enroll_registration(self.db, created)
                 result = AuthService(self.db, self.settings)._start_session(created)
             self.db.delete(challenge)
             self.db.commit()

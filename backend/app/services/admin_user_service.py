@@ -62,6 +62,11 @@ class AdminUserService:
             Plan, Plan.id == ranked.c.plan_revision_id).where(ranked.c.position == 1,
                 ranked.c.subscription_status.not_in(TERMINAL)))
         names = {uid: config['name'] for uid, config in rows}
+        from app.models.subscription_access import FreeSubscription
+        free_rows = self.db.execute(select(FreeSubscription.user_id, Plan.configuration).join(
+            Plan, Plan.id == FreeSubscription.plan_revision_id).where(FreeSubscription.user_id.in_([u.id for u in users]), ~select(Checkout.id).where(Checkout.user_id == FreeSubscription.user_id, Checkout.subscription_id.is_not(None)).exists()))
+        for uid, config in free_rows:
+            names.setdefault(uid, config['name'])
         return [AdminUserRead.model_validate(u).model_copy(update={'subscription_plan_name': names.get(u.id)}) for u in users]
 
     def get_user(self, *, actor: User, user_id: UUID) -> User:
