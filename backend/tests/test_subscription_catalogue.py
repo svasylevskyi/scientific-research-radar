@@ -11,7 +11,7 @@ URL = '/api/v1/admin/subscription-plans'
 def payload(**changes):
     config = dict(name='Explorer', monthly_price='9.00', max_digests=2, max_papers_per_run=20,
                   papers_per_month=50, runs_per_month=5, manual_runs_per_month=1,
-                  schedule_frequencies=['weekly', 'monthly'])
+                  schedule_frequencies=['weekly', 'monthly'], stripe_sandbox={'product_id': 'prod_explorer', 'monthly_price_id': 'price_month'})
     config.update(changes)
     return dict(code='explorer', expected_revision=0, change_note='Initial proposal', configuration=config)
 
@@ -30,6 +30,7 @@ def test_all_admins_can_customize_but_users_cannot(client, db_session_factory):
     saved = client.post(URL, json=payload(), headers=super_headers)
     assert saved.status_code == 201
     first = saved.json()
+    first.pop('warnings')
     assert first['revision'] == 1
     assert first['configuration']['monthly_price'] == '9.00'
     assert client.post(URL, json=payload(), headers=admin).status_code == 409
@@ -78,8 +79,8 @@ def test_database_rejects_competing_revision_writes(db_session_factory):
 def test_display_order_uses_latest_revision_before_pagination(client, db_session_factory):
     admin = _authorization(_super_admin_login(client, db_session_factory))
     for code, order in [('zebra', 2), ('alpha', 10), ('beta', 2), ('first', 0)]:
-        assert client.post(URL, json={**payload(display_order=order), 'code': code}, headers=admin).status_code == 201
-    assert client.post(URL, json={**payload(display_order=20), 'code': 'first', 'expected_revision': 1}, headers=admin).status_code == 201
+        assert client.post(URL, json={**payload(display_order=order, stripe_sandbox={'product_id': f'prod_{code}', 'monthly_price_id': f'price_{code}'}), 'code': code}, headers=admin).status_code == 201
+    assert client.post(URL, json={**payload(display_order=20, stripe_sandbox={'product_id': 'prod_first', 'monthly_price_id': 'price_first'}), 'code': 'first', 'expected_revision': 1}, headers=admin).status_code == 201
     first = client.get(URL + '?limit=2', headers=admin).json()
     second = client.get(URL + '?limit=2&offset=2', headers=admin).json()
     assert first['total'] == second['total'] == 4

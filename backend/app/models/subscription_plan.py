@@ -5,6 +5,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 
+class StripeProductClaim(Base):
+    """Permanent ownership; historical subscriptions can still use older products."""
+    __tablename__ = "stripe_product_claims"
+    product_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    plan_code: Mapped[str] = mapped_column(String(60))
+
+
 class SubscriptionPlanRevision(Base):
     __tablename__ = "subscription_plan_revisions"
     __table_args__ = (
