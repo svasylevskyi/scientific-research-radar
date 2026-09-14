@@ -1,3 +1,5 @@
+import { AdminSubscriptionPlanEditPage } from "./pages/AdminSubscriptionPlanEditPage";
+import { AdminPricingEditPage } from "./pages/AdminPricingEditPage";
 import { SubscriptionAccessPage } from "./pages/SubscriptionAccessPage";
 import { AdminBillingSyncPage } from "./pages/AdminBillingSyncPage";
 import { AdminSubscriptionObservationPage } from "./pages/AdminSubscriptionObservationPage";
@@ -137,6 +139,10 @@ export default function App() {
           <Route path="/admin/billing-sync" element={<RequireAuth><RequireAdmin><AdminBillingSyncPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/subscription-testing" element={<RequireAuth><RequireAdmin><AdminSandboxBillingPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/subscription-plans" element={<RequireAuth><RequireAdmin><AdminSubscriptionPlansPage /></RequireAdmin></RequireAuth>} />
+          <Route path="/admin/subscription-plans/new" element={<RequireAuth><RequireAdmin><AdminSubscriptionPlanEditPage /></RequireAdmin></RequireAuth>} />
+          <Route path="/admin/subscription-plans/:code/edit" element={<RequireAuth><RequireAdmin><AdminSubscriptionPlanEditPage /></RequireAdmin></RequireAuth>} />
+          <Route path="/admin/pricing/new" element={<RequireAuth><RequireAdmin superAdmin><AdminPricingEditPage /></RequireAdmin></RequireAuth>} />
+          <Route path="/admin/pricing/:priceId/copy" element={<RequireAuth><RequireAdmin superAdmin><AdminPricingEditPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/pricing" element={<RequireAuth><RequireAdmin superAdmin><AdminPricingPage /></RequireAdmin></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

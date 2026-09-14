@@ -9,6 +9,7 @@ PAYLOAD = {"model_name": "test-model", "version": "v1", "input_per_million": "10
 
 def test_only_super_admin_can_read_and_publish_prices(client, db_session_factory):
     assert client.get("/api/v1/admin/pricing").status_code == 401
+    assert client.get("/api/v1/admin/pricing/1").status_code == 401
     member = _register(client)
     headers = _authorization(member)
     for admin in (False, True):
@@ -18,6 +19,7 @@ def test_only_super_admin_can_read_and_publish_prices(client, db_session_factory
                 user.role = "admin"
                 db.commit()
         assert client.get("/api/v1/admin/pricing", headers=headers).status_code == 403
+        assert client.get("/api/v1/admin/pricing/1", headers=headers).status_code == 403
         assert client.post("/api/v1/admin/pricing", json=PAYLOAD, headers=headers).status_code == 403
     super_headers = _authorization(_super_admin_login(client, db_session_factory))
     first = client.post("/api/v1/admin/pricing", json=PAYLOAD, headers=super_headers)
@@ -33,3 +35,18 @@ def test_only_super_admin_can_read_and_publish_prices(client, db_session_factory
     assert [r["is_current"] for r in listed["items"]] == [True, False]
     assert listed["items"][1]["input_per_million"] == "10"
     assert client.patch(f"/api/v1/admin/pricing/{first.json()['id']}", json=PAYLOAD, headers=super_headers).status_code in (404, 405)
+
+
+def test_price_detail_returns_exact_historical_version_without_publishing(client, db_session_factory):
+    headers = _authorization(_super_admin_login(client, db_session_factory))
+    first = client.post("/api/v1/admin/pricing", json=PAYLOAD, headers=headers).json()
+    second = client.post("/api/v1/admin/pricing", json={**PAYLOAD, "version": "v2", "input_per_million": "12"}, headers=headers).json()
+    old = client.get(f"/api/v1/admin/pricing/{first['id']}", headers=headers)
+    assert old.status_code == 200
+    listed = client.get("/api/v1/admin/pricing", headers=headers).json()['items']
+    assert old.json() == listed[1]
+    assert old.json()['input_per_million'] == '10' and not old.json()['is_current']
+    assert client.get(f"/api/v1/admin/pricing/{second['id']}", headers=headers).json() == listed[0]
+    assert listed[0]['is_current']
+    assert client.get("/api/v1/admin/pricing/999999", headers=headers).status_code == 404
+    assert client.get("/api/v1/admin/pricing", headers=headers).json()['total'] == 2

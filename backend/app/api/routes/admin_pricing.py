@@ -28,3 +28,12 @@ def create_price(payload: RadarPriceCreate, actor: CurrentSuperAdmin, db: DbSess
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="This model already has that pricing version. Choose a new version label.") from exc
+
+
+@router.get("/{price_id}")
+def get_price(price_id: int, actor: CurrentSuperAdmin, db: DbSession):
+    row = db.get(RadarPrice, price_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Pricing version not found.")
+    latest_id = db.scalar(select(func.max(RadarPrice.id)).where(RadarPrice.model_name == row.model_name))
+    return {**serialize_price(row), "is_current": latest_id == row.id}
