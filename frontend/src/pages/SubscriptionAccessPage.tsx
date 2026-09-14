@@ -1,3 +1,4 @@
+import { SubscriptionUpgrades } from '../components/SubscriptionUpgrades';
 import { SubscriptionChanges } from '../components/SubscriptionChanges';
 import { FreeDigestPreferences } from "../components/FreeDigestPreferences";
 import { SubscriberBilling } from "../components/SubscriberBilling";
@@ -70,7 +71,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {!data && !error && (!admin || userId) && <Typography role="status">Loading subscription…</Typography>}
     {data && <Stack spacing={2}>
-      {!admin && <><SubscriberBilling /><SubscriptionChanges /></>}
+      {!admin && <><SubscriberBilling /><SubscriptionUpgrades /><SubscriptionChanges /></>}
       {!admin && data.mode === "sandbox" && <FreeDigestPreferences billingType={data.billing_type} />}
       {data.email && <Typography>{data.email}</Typography>}
       <Alert severity={data.allowed ? (data.grace_until ? "warning" : "info") : "warning"}>{data.reason}</Alert>
@@ -97,10 +98,10 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
           Queued work reserves capacity. Successful runs count actual summarized papers; failed runs release their reservation.
           Retrying checks the current window again. Usage shown here starts when sandbox limits are enabled; earlier observation usage remains separate.</Typography>
       </Paper>
-      {!admin && <Paper id="upgrade" tabIndex={-1} variant="outlined" sx={{ p: 3, scrollMarginTop: 100 }}>
+      {!admin && <Paper variant="outlined" sx={{ p: 3 }}>
         <Typography variant="h6">Need higher allowances?</Typography>
         <Typography>Upgrade to a plan with more digest slots, runs or papers, or additional scheduling options.
-          Self-service upgrades are not available in this development version. Contact the Radar administrator to discuss access; viewing plans does not change your subscription.</Typography>
+          Eligible paid subscribers can preview and confirm an upgrade above. Monthly/yearly switches and downgrades take effect at renewal. Viewing plans does not change your subscription.</Typography>
         <Typography variant="body2" sx={{ mt: 1 }}>Digest slots are freed by deleting a digest and do not reset each month. Research allowances reset on the date shown above.
           Payment recovery restores verified paid access. If Free is active, its remaining allowances are available while billing is resolved.</Typography>
         <Button component={Link} to="/plans">Compare plans</Button>
