@@ -44,7 +44,7 @@ def window(anchor, stamp):
     return month_at(anchor, offset), month_at(anchor, offset + 1)
 
 
-def resolve(db, user_id, settings=None):
+def _resolve_billing(db, user_id, settings=None):
     settings, stamp = settings or get_settings(), now()
     selected = policy(db, user_id)
     result = dict(mode=selected.mode if selected else 'complimentary', version=selected.version if selected else 0,
@@ -54,7 +54,7 @@ def resolve(db, user_id, settings=None):
     if result['mode'] == 'complimentary':
         return result
     row = db.scalar(select(SandboxCheckout).where(SandboxCheckout.user_id == user_id,
-        SandboxCheckout.subscription_id.is_not(None)).order_by(SandboxCheckout.created_at.desc(), SandboxCheckout.id).limit(1))
+        SandboxCheckout.subscription_id.is_not(None)).order_by(SandboxCheckout.created_at.desc(), SandboxCheckout.id.desc()).limit(1))
     result.update(allowed=False, status='unavailable', reason='No verified sandbox subscription. Review Subscription and usage.')
     if not row:
         from app.models.subscription_access import FreeSubscription
@@ -73,6 +73,9 @@ def resolve(db, user_id, settings=None):
         cancel_at_period_end=row.cancel_at_period_end)
     if row.billing_anchor:
         result['period_start'], result['period_end'] = window(row.billing_anchor, stamp)
+    if row.subscription_status in {'canceled', 'incomplete_expired', 'incomplete'}:
+        result.update(fallback_eligible=True, reason='The paid subscription ended or its initial payment is incomplete.')
+        return result
     from app.services.billing_invoice_service import assessment
     payment = assessment(db, row, stamp, settings.subscription_grace_days)
     result.update(payment_status=payment['status'], paid_through=payment['paid_through'], payment_issue=payment['issue'])
@@ -95,7 +98,73 @@ def resolve(db, user_id, settings=None):
             else 'Renewal grace period has ended. Resolve payment to start new research.'))
     else:
         result['reason'] = 'The subscription does not currently allow new research. Saved results remain available.'
+    if not result['allowed'] and not payment['issue'] and row.price_matches and row.billing_anchor and row.observed_at and row.invoices_checked_at:
+        ended = row.cancel_at_period_end and payment['paid_through'] and stamp >= payment['paid_through']
+        failed = not payment['covered'] and ((row.subscription_status in {'past_due', 'unpaid'} and not payment['grace_until']) or (row.subscription_status in {'active', 'past_due', 'unpaid'} and payment['grace_until'] and stamp >= payment['grace_until']))
+        if ended or failed:
+            result['fallback_eligible'] = True
     return result
+
+
+def resolve(db, user_id, settings=None):
+    # Changes are staged in the caller's transaction. Read APIs commit them too.
+    selected = policy(db, user_id)
+    if not selected or selected.mode == 'complimentary':
+        return _resolve_billing(db, user_id, settings)
+    lock(db, user_id)
+    result = _resolve_billing(db, user_id, settings)
+    from app.models.subscription_access import SubscriptionAccountState as State, FreeSubscription
+    from app.services.free_subscription_service import assign
+    stamp = now()
+    state = db.get(State, user_id, populate_existing=True)
+    free = db.get(FreeSubscription, user_id)
+    if state is None:
+        paid = db.get(SandboxCheckout, result['checkout_id']) if result['checkout_id'] else None
+        anchor = paid.billing_anchor if paid and paid.billing_anchor else free.anchor if free else stamp
+        state = State(user_id=user_id, allowance_anchor=anchor, preferred_digest_ids=[])
+        db.add(state); db.flush()
+    if result.get('fallback_eligible') or (state.fallback_since is not None and not result['allowed']):
+        free = assign(db, user_id, state.allowance_anchor)
+        plan = db.get(SubscriptionPlanRevision, free.plan_revision_id)
+        result.update(allowed=True, billing_type='free', status='free', checkout_id=None,
+            plan={'id': plan.id, 'name': plan.configuration['name'], 'configuration': plan.configuration},
+            grace_until=None, access_until=None, fallback=True,
+            reason='Free access applies because paid access has ended. Saved research is retained. Any outstanding payment and Stripe retries remain separate.')
+    else:
+        result['fallback'] = False
+    result['period_start'], result['period_end'] = window(state.allowance_anchor, stamp)
+    if result['allowed'] and result['billing_type']:
+        kind = result['billing_type']
+        if kind == 'free' and result['fallback'] and state.fallback_since is None:
+            state.fallback_since = stamp
+        if kind == 'stripe':
+            state.fallback_since = None
+        state.effective_type = kind
+    result['fallback_since'] = utc(state.fallback_since) if state.fallback_since else None
+    if result['billing_type'] == 'free' and result['allowed']:
+        ids = free_digest_ids(db, user_id, state, result['plan']['configuration']['max_digests'])
+        result['active_digest_ids'] = ids
+        # Pauses are latched: recovery never resumes work without explicit schedule save.
+        for digest in db.scalars(select(Digest).where(Digest.owner_id == user_id, Digest.schedule.is_not(None))):
+            config = result['plan']['configuration']
+            if (str(digest.id) not in ids or digest.schedule['frequency'] not in config['schedule_frequencies']
+                    or (digest.schedule.get('send_email') and not config['email_delivery'])):
+                digest.schedule_paused = True
+                digest.schedule_next_at = None
+                digest.subscription_retry_at = None
+    db.flush()
+    return result
+
+
+def free_digest_ids(db, user_id, state, limit, *, persist=True):
+    # Most recently used, then edited/created, with a deterministic ID tiebreaker.
+    available = [str(uid) for uid in db.scalars(select(Digest.id).where(Digest.owner_id == user_id)
+        .order_by(func.coalesce(Digest.latest_successful_run_at, Digest.updated_at).desc(), Digest.created_at.desc(), Digest.id))]
+    chosen = [uid for uid in state.preferred_digest_ids if uid in available][:limit]
+    chosen += [uid for uid in available if uid not in chosen][:max(0, limit - len(chosen))]
+    if persist and state.preferred_digest_ids != chosen:
+        state.preferred_digest_ids = chosen
+    return chosen
 
 
 def totals(db, user_id, access):
@@ -105,8 +174,8 @@ def totals(db, user_id, access):
         func.coalesce(func.sum(case((Usage.trigger == 'manual', 1), else_=0)), 0),
         func.coalesce(func.sum(case((Usage.state == 'settled', Usage.actual_papers), else_=0)), 0),
         func.coalesce(func.sum(case((Usage.state == 'reserved', Usage.requested_papers), else_=0)), 0)
-    ).where(Usage.user_id == user_id, Usage.checkout_id == access['checkout_id'],
-        Usage.period_start == access['period_start'], Usage.state.in_(['reserved', 'settled']))
+    ).where(Usage.user_id == user_id, Usage.period_end > access['period_start'] if access['period_start'] else Usage.period_start.is_(None),
+        Usage.period_start < access['period_end'] if access['period_end'] else Usage.period_end.is_(None), Usage.state.in_(['reserved', 'settled']))
     return dict(zip(['completed_runs', 'reserved_runs', 'manual_runs', 'completed_papers', 'reserved_papers'], map(int, db.execute(query).one())))
 
 
@@ -114,7 +183,9 @@ def overview(db, user_id, settings=None):
     access = resolve(db, user_id, settings)
     usage = totals(db, user_id, access)
     config = access['plan']['configuration'] if access['plan'] else None
-    count = db.scalar(select(func.count()).select_from(Digest).where(Digest.owner_id == user_id))
+    total_count = db.scalar(select(func.count()).select_from(Digest).where(Digest.owner_id == user_id))
+    count = len(access['active_digest_ids']) if 'active_digest_ids' in access else total_count
+    access['retained_digest_count'] = total_count
     access.update(usage=usage, digest_count=count, remaining={
         'runs': max(0, config['runs_per_month'] - usage['completed_runs'] - usage['reserved_runs']) if config else None,
         'manual_runs': max(0, config['manual_runs_per_month'] - usage['manual_runs']) if config else None,
@@ -144,13 +215,19 @@ def overview(db, user_id, settings=None):
     return access
 
 
-def assess(db, user_id, requested_papers, trigger='manual', schedule=None, settings=None):
+def assess(db, user_id, requested_papers, trigger='manual', schedule=None, settings=None, *, digest_id=None):
     access = resolve(db, user_id, settings)
     if access['mode'] == 'complimentary':
         return access, []
     if not access['allowed']:
         return access, [access['reason']]
     count = db.scalar(select(func.count()).select_from(Digest).where(Digest.owner_id == user_id))
+    if 'active_digest_ids' in access:
+        count = len(access['active_digest_ids'])
+        if digest_id is not None and str(digest_id) not in access['active_digest_ids']:
+            return access, ['This digest is inactive under Free. Choose it in Subscription and usage to run research; saved results remain available.']
+    if trigger == 'scheduled' and digest_id is not None and db.get(Digest, digest_id).schedule_paused:
+        return access, ['This schedule is paused. Review and save it to resume from its next future occurrence.']
     usage = totals(db, user_id, access)
     config = access['plan']['configuration']
     issues = reasons(config, usage, requested_papers=requested_papers,
@@ -190,7 +267,7 @@ def reserve(db, run, *, schedule=None, settings=None):
     if existing and existing.state in ('reserved', 'settled'):
         return
     context = run_context(db, run, existing=existing, schedule=schedule)
-    access, issues = assess(db, run.owner_id, run.digest_snapshot['maximum_papers'], str(run.trigger), context, settings)
+    access, issues = assess(db, run.owner_id, run.digest_snapshot['maximum_papers'], str(run.trigger), context, settings, digest_id=run.digest_id)
     if issues:
         raise AccessDenied(' '.join(issues))
     if access['mode'] == 'complimentary':
@@ -250,6 +327,8 @@ def check_details(db, user_id, *, requested_papers=None, creating=False, schedul
     config = access['plan']['configuration']
     if creating:
         count = db.scalar(select(func.count()).select_from(Digest).where(Digest.owner_id == user_id))
+        if 'active_digest_ids' in access:
+            count = len(access['active_digest_ids'])
         if count >= config['max_digests']:
             raise AccessDenied('Digest limit reached. Delete an unused digest before creating another.')
     if requested_papers is not None and requested_papers > config['max_papers_per_run']:

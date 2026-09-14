@@ -12,6 +12,11 @@ def schedule_preview(db, settings, digest, *, now=None):
     now = utc(now or datetime.now(timezone.utc))
     if not digest.schedule:
         return SchedulePreviewRead(state="not_scheduled", as_of=now)
+    from app.services.subscription_access_service import resolve
+    resolve(db, digest.owner_id, settings)
+    if digest.schedule_paused:
+        return SchedulePreviewRead(state="waiting_for_subscription", as_of=now,
+            subscription_message="Schedule paused after a subscription change. Its settings are retained. Review and save it when your plan permits scheduling to resume from the next future occurrence.")
     schedule = DigestSchedule.model_validate(digest.schedule)
     cursor = utc(digest.schedule_next_at) if digest.schedule_next_at else None
     dates = []
@@ -45,7 +50,7 @@ def schedule_preview(db, settings, digest, *, now=None):
             result.state = "due"
     if dates and active is None:
         from app.services.subscription_access_service import assess
-        access, issues = assess(db, digest.owner_id, digest.maximum_papers, 'scheduled', digest.schedule, settings)
+        access, issues = assess(db, digest.owner_id, digest.maximum_papers, 'scheduled', digest.schedule, settings, digest_id=digest.id)
         if issues:
             result.state = "waiting_for_subscription"
             result.subscription_message = ' '.join(issues)

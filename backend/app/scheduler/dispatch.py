@@ -25,7 +25,7 @@ class ScheduleDispatcher:
         now = utc(now or datetime.now(timezone.utc))
         with self.sessions() as db:
             ids = list(db.scalars(select(Digest.id).join(User, Digest.owner_id == User.id).where(
-                Digest.schedule_next_at <= now, User.is_active.is_(True),
+                Digest.schedule_next_at <= now, Digest.schedule_paused.is_(False), User.is_active.is_(True),
                 or_(Digest.subscription_retry_at.is_(None), Digest.subscription_retry_at <= now)
             ).order_by(Digest.schedule_next_at, Digest.id).limit(100)))
         queued = 0
@@ -40,6 +40,11 @@ class ScheduleDispatcher:
                 db.refresh(digest)
                 if not digest.schedule or not digest.schedule_next_at or utc(digest.schedule_next_at) > now:
                     db.rollback()
+                    continue
+                from app.services.subscription_access_service import resolve
+                resolve(db, digest.owner_id, self.settings)
+                if digest.schedule_paused:
+                    db.commit()
                     continue
                 original_cursor = digest.schedule_next_at
                 schedule = DigestSchedule.model_validate(digest.schedule)

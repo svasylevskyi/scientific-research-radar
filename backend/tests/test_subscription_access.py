@@ -102,7 +102,7 @@ def test_failure_releases_retry_uses_current_window(client, enrolled, db_session
         assert access.utc(row.period_start) == later and row.state == 'reserved'
 
 
-@pytest.mark.parametrize('status,allowed', [('active', True), ('past_due', False), ('unpaid', False), ('canceled', False), ('trialing', False), ('incomplete', False)])
+@pytest.mark.parametrize('status,allowed', [('active', True), ('past_due', False), ('unpaid', False), ('canceled', True), ('trialing', False), ('incomplete', True)])
 def test_subscription_status_rules(client, enrolled, db_session_factory, status, allowed):
     setup, checkout = enrolled
     uid = setup[0]
@@ -370,7 +370,8 @@ def test_accepted_run_settles_after_cancellation(client, enrolled, db_session_fa
     with db_session_factory() as db:
         assert db.get(DigestRun, rid).status == 'completed'
         assert db.get(Usage, rid).state == 'settled'
-        assert not access.resolve(db, setup[0])['allowed']
+        assert access.resolve(db, setup[0])['billing_type'] == 'free'
+        assert access.overview(db, setup[0])['remaining']['runs'] == 0
 
 
 def test_early_creation_capabilities_and_freed_slot(client, enrolled, db_session_factory):
@@ -420,7 +421,8 @@ def test_inactive_access_preview_keeps_existing_paper_edit_boundary(client, enro
     with db_session_factory() as db:
         db.get(SandboxCheckout, checkout).subscription_status = 'canceled'; db.commit()
     data = client.get('/api/v1/subscription', headers=setup[1]).json()
-    assert not data['create_allowed'] and not data['schedule_allowed'] and data['paper_limit'] == 0
+    assert not data['create_allowed'] and not data['schedule_allowed'] and data['paper_limit'] == 10
+    assert data['billing_type'] == 'free'
 
 
 def test_manual_only_exhaustion_warns_before_form(client, enrolled, db_session_factory):

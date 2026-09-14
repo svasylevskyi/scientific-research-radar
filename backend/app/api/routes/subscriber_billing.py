@@ -49,3 +49,9 @@ def refresh(actor: CurrentUser, db: DbSession, settings: AppSettings):
 def portal(actor: CurrentUser, db: DbSession, settings: AppSettings):
     limit(db, settings, actor)
     return call(db, service.portal, settings, actor.id)
+
+
+@router.post('/billing/cancel')
+def cancel(actor: CurrentUser, db: DbSession, settings: AppSettings):
+    limit(db, settings, actor)
+    return call(db, service.cancel, settings, actor.id)

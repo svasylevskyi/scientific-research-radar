@@ -64,6 +64,7 @@ class DigestService:
     ) -> Digest:
         digest = self.get_owned(owner=owner, digest_id=digest_id)
         check_details(self.db, owner.id, schedule=schedule.model_dump(mode="json"))
+        digest.schedule_paused = False
         digest.schedule = schedule.model_dump(mode="json")
         digest.subscription_retry_at = None
         digest.schedule_next_at = first_dispatch(schedule, datetime.now(timezone.utc))
@@ -71,6 +72,7 @@ class DigestService:
 
     def delete_schedule(self, *, owner: User, digest_id: UUID) -> None:
         digest = self.get_owned(owner=owner, digest_id=digest_id)
+        digest.schedule_paused = False
         digest.schedule = None
         digest.subscription_retry_at = None
         digest.schedule_next_at = None

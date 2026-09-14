@@ -47,7 +47,7 @@ class AdminUserService:
 
     def serialize_users(self, users):
         """One batch lookup for the visible page; no Stripe requests or per-user queries."""
-        from sqlalchemy import func, select
+        from sqlalchemy import func, select, or_
         from app.models.stripe_sandbox import SandboxCheckout as Checkout
         from app.models.subscription_plan import SubscriptionPlanRevision as Plan
         from app.schemas.user import AdminUserRead
@@ -62,11 +62,11 @@ class AdminUserService:
             Plan, Plan.id == ranked.c.plan_revision_id).where(ranked.c.position == 1,
                 ranked.c.subscription_status.not_in(TERMINAL)))
         names = {uid: config['name'] for uid, config in rows}
-        from app.models.subscription_access import FreeSubscription
+        from app.models.subscription_access import FreeSubscription, SubscriptionAccountState
         free_rows = self.db.execute(select(FreeSubscription.user_id, Plan.configuration).join(
-            Plan, Plan.id == FreeSubscription.plan_revision_id).where(FreeSubscription.user_id.in_([u.id for u in users]), ~select(Checkout.id).where(Checkout.user_id == FreeSubscription.user_id, Checkout.subscription_id.is_not(None)).exists()))
+            Plan, Plan.id == FreeSubscription.plan_revision_id).outerjoin(SubscriptionAccountState, SubscriptionAccountState.user_id == FreeSubscription.user_id).where(FreeSubscription.user_id.in_([u.id for u in users]), or_(SubscriptionAccountState.effective_type == 'free', ~select(Checkout.id).where(Checkout.user_id == FreeSubscription.user_id, Checkout.subscription_id.is_not(None)).exists())))
         for uid, config in free_rows:
-            names.setdefault(uid, config['name'])
+            names[uid] = config['name']
         return [AdminUserRead.model_validate(u).model_copy(update={'subscription_plan_name': names.get(u.id)}) for u in users]
 
     def get_user(self, *, actor: User, user_id: UUID) -> User:

@@ -124,6 +124,9 @@ def tagged(obj, row):
 
 
 def observe_subscription(db, client, row, subscription_id):
+    from app.services.subscription_access_service import resolve
+    # Materialize an elapsed fallback before recovery can replace the old observation.
+    resolve(db, row.user_id, client.settings if hasattr(client, 'settings') else None)
     subscription_id = identifier(subscription_id, "sub_")
     value = client.request("GET", f"subscriptions/{subscription_id}")
     tagged(value, row)
@@ -162,6 +165,8 @@ def observe_subscription(db, client, row, subscription_id):
     from app.services.billing_invoice_service import reconcile
     reconcile(db, client, row, value.get('latest_invoice'))
     row.observed_at = datetime.now(timezone.utc)
+    db.flush()
+    resolve(db, row.user_id, client.settings if hasattr(client, "settings") else None)
 
 
 def observe_checkout(db, client, row, value):
@@ -291,7 +296,7 @@ def refresh(db, settings, user_id, *, client=None):
     return overview(db, settings, user_id)
 
 
-def portal(db, settings, user_id, *, client=None, subscriber=False):
+def portal(db, settings, user_id, *, client=None, subscriber=False, cancel=False):
     enabled(settings)
     client = client or StripeSandboxClient(settings)
     config_id = settings.stripe_sandbox_portal_configuration_id
@@ -306,10 +311,17 @@ def portal(db, settings, user_id, *, client=None, subscriber=False):
     features = config.get("features") or {}
     if (config.get("id") != config_id or config.get("active") is not True
         or (features.get("subscription_update") or {}).get("enabled") is not False
-        or (features.get("subscription_cancel") or {}).get("enabled") is not True):
-        raise Error("The sandbox portal must be active, allow cancellation, and disable subscription plan updates.", 422)
-    value = client.request("POST", "billing_portal/sessions", data={"customer": row.customer_id,
-        "configuration": config_id, "return_url": settings.frontend_base_url + ("/subscription?stripe_return=portal" if subscriber else "/admin/subscription-testing?stripe_return=portal")})
+        or (features.get("subscription_cancel") or {}).get("enabled") is not True
+        or (features.get("subscription_cancel") or {}).get("mode") != "at_period_end"):
+        raise Error("The sandbox portal must be active, allow cancellation at period end, and disable subscription plan updates.", 422)
+    data = {"customer": row.customer_id, "configuration": config_id,
+        "return_url": settings.frontend_base_url + ("/subscription?stripe_return=portal" if subscriber else "/admin/subscription-testing?stripe_return=portal")}
+    if cancel:
+        if not row.subscription_id or row.subscription_status in TERMINAL or row.cancel_at_period_end:
+            raise Error("No renewable subscription is available to cancel. Refresh billing status.", 409)
+        data.update({"flow_data[type]": "subscription_cancel",
+            "flow_data[subscription_cancel][subscription]": identifier(row.subscription_id, "sub_")})
+    value = client.request("POST", "billing_portal/sessions", data=data)
     if value.get("object") != "billing_portal.session" or value.get("customer") != row.customer_id:
         raise Error("Stripe returned an unexpected portal customer.")
     url = redirect_url(value.get("url"), "billing.stripe.com")
