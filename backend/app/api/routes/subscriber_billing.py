@@ -55,3 +55,63 @@ def portal(actor: CurrentUser, db: DbSession, settings: AppSettings):
 def cancel(actor: CurrentUser, db: DbSession, settings: AppSettings):
     limit(db, settings, actor)
     return call(db, service.cancel, settings, actor.id)
+
+
+from datetime import datetime
+from uuid import UUID
+from app.services import subscription_change_service as changes
+
+
+class ChangeSelection(Selection):
+    expected_period_end: datetime
+    digest_ids: list[UUID] = Field(max_length=10000)
+
+
+class ActiveDigests(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    digest_ids: list[UUID] = Field(max_length=10000)
+
+
+@router.get('/billing/changes')
+def change_options(actor: CurrentUser, db: DbSession, settings: AppSettings, response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    return changes.options(db, settings, actor.id)
+
+
+@router.post('/billing/changes')
+def schedule_change(payload: ChangeSelection, actor: CurrentUser, db: DbSession, settings: AppSettings):
+    limit(db, settings, actor)
+    return call(db, changes.schedule, settings, actor.id, payload.code, payload.revision, payload.interval, payload.expected_period_end, payload.digest_ids)
+
+
+@router.post('/billing/changes/{change_id}/undo')
+def undo_change(change_id: UUID, actor: CurrentUser, db: DbSession, settings: AppSettings):
+    limit(db, settings, actor)
+    return call(db, changes.undo, settings, actor.id, change_id)
+
+
+@router.post('/billing/changes/{change_id}/retry')
+def retry_change(change_id: UUID, actor: CurrentUser, db: DbSession, settings: AppSettings):
+    limit(db, settings, actor)
+    return call(db, changes.retry, settings, actor.id, change_id)
+
+
+@router.get('/billing/active-digests')
+def active_digests(actor: CurrentUser, db: DbSession, settings: AppSettings, response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    return call(db, changes.active_digests, settings, actor.id)
+
+
+@router.put('/billing/active-digests')
+def select_active_digests(payload: ActiveDigests, actor: CurrentUser, db: DbSession, settings: AppSettings):
+    return call(db, changes.active_digests, settings, actor.id, payload.digest_ids)
+
+
+@router.get('/billing/notifications')
+def notifications(actor: CurrentUser, db: DbSession, response: Response):
+    from sqlalchemy import select
+    from app.models.subscription_change import BillingNotification
+    response.headers['Cache-Control'] = 'no-store'
+    return {'items': [{'id': n.id, 'subject': n.subject, 'text': n.text, 'email_status': n.state, 'created_at': n.created_at}
+        for n in db.scalars(select(BillingNotification).where(BillingNotification.user_id == actor.id)
+            .order_by(BillingNotification.created_at.desc(), BillingNotification.id).limit(20))]}

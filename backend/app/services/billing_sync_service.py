@@ -162,7 +162,10 @@ def tick(factory, settings, *, client=None):
         claimed = claim(db)
     if claimed:
         process(factory, settings, *claimed, client=client)
-    return claimed is not None
+    from app.services import subscription_change_service as changes, billing_notification_service as notifications
+    changed = changes.tick(factory, settings)
+    notified = notifications.tick(factory, settings)
+    return claimed is not None or changed or notified
 
 
 async def worker_loop(factory, settings):

@@ -76,12 +76,15 @@ def observe(db, checkout, value):
             quantity = Decimal(str(line.get('quantity_decimal') if line.get('quantity_decimal') is not None else line.get('quantity')))
         except InvalidOperation:
             quantity = Decimal(0)
-        if linked != checkout.subscription_id or price != checkout.price_id or quantity != 1:
+        from app.services.subscription_change_service import expected_invoice_price
+        if linked != checkout.subscription_id or price != expected_invoice_price(db, checkout, start) or quantity != 1:
             issue = 'Invoice line does not match the subscription, quantity or saved price.'
         elif details.get('proration', line.get('proration')) is not False or not start or not end or start >= end:
             issue = 'Prorated or unverified invoice coverage needs manual review.'
     reason = value.get('billing_reason') or 'unknown'
-    if reason not in {'subscription_create', 'subscription_cycle'}:
+    from app.models.subscription_change import SubscriptionChange
+    transition_invoice = reason == 'subscription_update' and start and db.scalar(select(SubscriptionChange.id).where(SubscriptionChange.checkout_id == checkout.id, SubscriptionChange.applied_at.is_not(None), SubscriptionChange.effective_at == start))
+    if reason not in {'subscription_create', 'subscription_cycle'} and not transition_invoice:
         issue = 'This invoice is not a supported initial or renewal invoice.'
     if currency.upper() != config['currency'] or value.get('collection_method') != 'charge_automatically':
         issue = 'Invoice currency or collection method differs from the supported subscription setup.'
@@ -171,7 +174,7 @@ def assessment(db, checkout, at, grace_days):
         return result
     if invoice.status == 'paid' and invoice.paid_at and invoice.amount_remaining == 0:
         result.update(covered=utc(invoice.period_start) <= at < utc(invoice.period_end), paid_through=utc(invoice.period_end))
-    elif invoice.status == 'open' and invoice.attempt_count > 0 and invoice.billing_reason == 'subscription_cycle':
+    elif invoice.status == 'open' and invoice.attempt_count > 0 and invoice.billing_reason in {'subscription_cycle', 'subscription_update'}:
         prior = db.scalar(select(func.count()).select_from(BillingInvoice).where(
             BillingInvoice.checkout_id == checkout.id, BillingInvoice.id != invoice.id, BillingInvoice.status == 'paid',
             BillingInvoice.issue.is_(None), BillingInvoice.amount_remaining == 0, BillingInvoice.paid_at.is_not(None),

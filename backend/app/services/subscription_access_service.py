@@ -137,17 +137,30 @@ def resolve(db, user_id, settings=None):
         kind = result['billing_type']
         if kind == 'free' and result['fallback'] and state.fallback_since is None:
             state.fallback_since = stamp
+            from app.services.billing_notification_service import enqueue
+            enqueue(db, user_id, f'fallback:{user_id}:{stamp.isoformat()}', 'Free access is now active',
+                'Paid access ended or payment grace expired. Your Free limits now apply. Saved research is retained, incompatible schedules are paused, and used allowance is preserved. Outstanding Stripe payments remain separate.')
         if kind == 'stripe':
+            if state.fallback_since is not None:
+                from app.services.billing_notification_service import enqueue
+                enqueue(db, user_id, f'recovery:{user_id}:{utc(state.fallback_since).isoformat()}', 'Paid access restored',
+                    'Your paid access has been verified again. Used allowance is preserved. Review and explicitly save any paused schedule to resume future runs.')
             state.fallback_since = None
         state.effective_type = kind
     result['fallback_since'] = utc(state.fallback_since) if state.fallback_since else None
-    if result['billing_type'] == 'free' and result['allowed']:
-        ids = free_digest_ids(db, user_id, state, result['plan']['configuration']['max_digests'])
+    if result['billing_type'] in {'free', 'stripe'} and result['allowed']:
+        ids = free_digest_ids(db, user_id, state, result['plan']['configuration']['max_digests'], paid=result['billing_type'] == 'stripe')
         result['active_digest_ids'] = ids
-        # Pauses are latched: recovery never resumes work without explicit schedule save.
+        from app.models.subscription_change import SubscriptionChange
+        changed_paid_plan = result['checkout_id'] and db.scalar(select(SubscriptionChange.id).where(
+            SubscriptionChange.checkout_id == result['checkout_id'], SubscriptionChange.applied_at.is_not(None)).limit(1))
+        # Pauses are latched only for Free fallback or an actual paid transition.
+        # Ordinary pre-existing policy restrictions retain their previous deferral behavior.
         for digest in db.scalars(select(Digest).where(Digest.owner_id == user_id, Digest.schedule.is_not(None))):
+            if not digest.schedule or (result['billing_type'] == 'stripe' and not changed_paid_plan):
+                continue
             config = result['plan']['configuration']
-            if (str(digest.id) not in ids or digest.schedule['frequency'] not in config['schedule_frequencies']
+            if (str(digest.id) not in ids or digest.maximum_papers > config['max_papers_per_run'] or digest.schedule['frequency'] not in config['schedule_frequencies']
                     or (digest.schedule.get('send_email') and not config['email_delivery'])):
                 digest.schedule_paused = True
                 digest.schedule_next_at = None
@@ -156,14 +169,16 @@ def resolve(db, user_id, settings=None):
     return result
 
 
-def free_digest_ids(db, user_id, state, limit, *, persist=True):
+def free_digest_ids(db, user_id, state, limit, *, persist=True, paid=False):
     # Most recently used, then edited/created, with a deterministic ID tiebreaker.
     available = [str(uid) for uid in db.scalars(select(Digest.id).where(Digest.owner_id == user_id)
         .order_by(func.coalesce(Digest.latest_successful_run_at, Digest.updated_at).desc(), Digest.created_at.desc(), Digest.id))]
-    chosen = [uid for uid in state.preferred_digest_ids if uid in available][:limit]
+    attribute = 'paid_digest_ids' if paid else 'preferred_digest_ids'
+    preferences = getattr(state, attribute) or []
+    chosen = [uid for uid in preferences if uid in available][:limit]
     chosen += [uid for uid in available if uid not in chosen][:max(0, limit - len(chosen))]
-    if persist and state.preferred_digest_ids != chosen:
-        state.preferred_digest_ids = chosen
+    if persist and preferences != chosen:
+        setattr(state, attribute, chosen)
     return chosen
 
 
@@ -225,7 +240,7 @@ def assess(db, user_id, requested_papers, trigger='manual', schedule=None, setti
     if 'active_digest_ids' in access:
         count = len(access['active_digest_ids'])
         if digest_id is not None and str(digest_id) not in access['active_digest_ids']:
-            return access, ['This digest is inactive under Free. Choose it in Subscription and usage to run research; saved results remain available.']
+            return access, ['This digest is inactive under your plan. Choose it in Subscription and usage to run research; saved results remain available.']
     if trigger == 'scheduled' and digest_id is not None and db.get(Digest, digest_id).schedule_paused:
         return access, ['This schedule is paused. Review and save it to resume from its next future occurrence.']
     usage = totals(db, user_id, access)

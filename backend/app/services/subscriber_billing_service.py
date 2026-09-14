@@ -33,6 +33,8 @@ def require_opt_in(db, uid):
 
 
 def status(db, settings, uid):
+    from app.services.subscription_change_service import blocking
+    change_pending = blocking(db, uid) is not None
     row = billing.latest(db, uid)
     pending = bool(row and row.checkout_status in ('creating', 'open'))
     subscribed = bool(row and row.subscription_id and row.subscription_status not in billing.TERMINAL)
@@ -40,7 +42,7 @@ def status(db, settings, uid):
     enabled = settings.stripe_sandbox_checkout_enabled
     reason = ('Sandbox checkout is disabled.' if not enabled else
         'Contact the administrator to enroll this account in sandbox subscription testing.' if not eligible else
-        'You already have a subscription. Use Manage billing; plan changes are not available yet.' if subscribed else
+        'You already have a subscription. Review scheduled changes below, or use Manage billing for payment details.' if subscribed else
         'Resume the pending checkout before selecting another plan.' if pending else '')
     attempt = None
     if row:
@@ -50,7 +52,7 @@ def status(db, settings, uid):
     return {'sandbox': True, 'checkout_allowed': enabled and eligible and not subscribed and not pending,
         'resume_allowed': enabled and eligible and pending and not subscribed,
         'portal_allowed': bool(enabled and row and row.customer_id and settings.stripe_sandbox_portal_configuration_id),
-        'cancel_allowed': bool(enabled and subscribed and not row.cancel_at_period_end and settings.stripe_sandbox_portal_configuration_id),
+        'cancel_allowed': bool(enabled and subscribed and not change_pending and not row.cancel_at_period_end and settings.stripe_sandbox_portal_configuration_id),
         'cancel_at_period_end': bool(row and row.cancel_at_period_end),
         'period_end': billing.utc(row.period_end) if row and row.period_end else None,
         'reason': reason, 'attempt': attempt}

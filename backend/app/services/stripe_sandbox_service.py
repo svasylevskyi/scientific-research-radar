@@ -138,6 +138,8 @@ def observe_subscription(db, client, row, subscription_id):
     status = value.get("status")
     if status not in STATUSES:
         raise Error("Stripe returned an unknown subscription status.")
+    from app.services.subscription_change_service import observe as observe_change
+    observe_change(db, client, row, value)
     items = (value.get("items") or {}).get("data") or []
     row.price_matches = (len(items) == 1 and (items[0].get("price") or {}).get("id") == row.price_id
                          and items[0].get("quantity") == 1)
@@ -165,6 +167,13 @@ def observe_subscription(db, client, row, subscription_id):
     from app.services.billing_invoice_service import reconcile
     reconcile(db, client, row, value.get('latest_invoice'))
     row.observed_at = datetime.now(timezone.utc)
+    from app.services.subscription_change_service import paid
+    from app.services.billing_notification_service import capture
+    from app.services.billing_invoice_service import assessment
+    from app.core.config import get_settings
+    settings = client.settings if hasattr(client, 'settings') else get_settings()
+    paid(db, row, settings)
+    capture(db, row, assessment(db, row, datetime.now(timezone.utc), settings.subscription_grace_days))
     db.flush()
     resolve(db, row.user_id, client.settings if hasattr(client, "settings") else None)
 
@@ -307,6 +316,10 @@ def portal(db, settings, user_id, *, client=None, subscriber=False, cancel=False
     row = latest(db, user_id)
     if not row or not row.customer_id:
         raise Error("Complete a sandbox checkout before opening the portal.", 409)
+    from app.services.subscription_change_service import blocking
+    change_pending = blocking(db, user_id) is not None
+    if change_pending and cancel:
+        raise Error("Complete or undo the scheduled plan change before cancelling renewal.", 409)
     config = client.request("GET", f"billing_portal/configurations/{config_id}")
     features = config.get("features") or {}
     if (config.get("id") != config_id or config.get("active") is not True
@@ -316,6 +329,8 @@ def portal(db, settings, user_id, *, client=None, subscriber=False, cancel=False
         raise Error("The sandbox portal must be active, allow cancellation at period end, and disable subscription plan updates.", 422)
     data = {"customer": row.customer_id, "configuration": config_id,
         "return_url": settings.frontend_base_url + ("/subscription?stripe_return=portal" if subscriber else "/admin/subscription-testing?stripe_return=portal")}
+    if change_pending:
+        data["flow_data[type]"] = "payment_method_update"
     if cancel:
         if not row.subscription_id or row.subscription_status in TERMINAL or row.cancel_at_period_end:
             raise Error("No renewable subscription is available to cancel. Refresh billing status.", 409)

@@ -24,6 +24,7 @@ class SandboxCheckout(Base):
     subscription_id: Mapped[str | None] = mapped_column(String(255), unique=True)
     subscription_status: Mapped[str | None] = mapped_column(String(30))
     customer_id: Mapped[str | None] = mapped_column(String(255))
+    notification_state: Mapped[dict] = mapped_column(JSON, default=dict)
     cancel_at_period_end: Mapped[bool] = mapped_column(default=False)
     price_matches: Mapped[bool] = mapped_column(default=True)
     latest_invoice_id: Mapped[str | None] = mapped_column(String(255))
