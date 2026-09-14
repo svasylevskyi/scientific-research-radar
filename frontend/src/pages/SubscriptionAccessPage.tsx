@@ -1,3 +1,4 @@
+import { SubscriptionChanges } from '../components/SubscriptionChanges';
 import { FreeDigestPreferences } from "../components/FreeDigestPreferences";
 import { SubscriberBilling } from "../components/SubscriberBilling";
 import { useEffect, useState } from "react";
@@ -69,7 +70,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {!data && !error && (!admin || userId) && <Typography role="status">Loading subscription…</Typography>}
     {data && <Stack spacing={2}>
-      {!admin && <SubscriberBilling />}
+      {!admin && <><SubscriberBilling /><SubscriptionChanges /></>}
       {!admin && data.mode === "sandbox" && <FreeDigestPreferences billingType={data.billing_type} />}
       {data.email && <Typography>{data.email}</Typography>}
       <Alert severity={data.allowed ? (data.grace_until ? "warning" : "info") : "warning"}>{data.reason}</Alert>

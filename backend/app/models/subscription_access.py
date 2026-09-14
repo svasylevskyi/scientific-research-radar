@@ -55,6 +55,7 @@ class SubscriptionAccountState(Base):
     __tablename__ = 'subscription_account_states'
     user_id: Mapped[UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
     allowance_anchor: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    paid_digest_ids: Mapped[list] = mapped_column(JSON, default=list)
     preferred_digest_ids: Mapped[list] = mapped_column(JSON, default=list)
     effective_type: Mapped[str | None] = mapped_column(String(16))
     fallback_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
