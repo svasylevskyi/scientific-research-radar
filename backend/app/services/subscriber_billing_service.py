@@ -34,7 +34,8 @@ def require_opt_in(db, uid):
 
 def status(db, settings, uid):
     from app.services.subscription_change_service import blocking
-    change_pending = blocking(db, uid) is not None
+    from app.services.subscription_upgrade_service import blocking as upgrade_pending
+    change_pending = blocking(db, uid) is not None or upgrade_pending(db, uid) is not None
     row = billing.latest(db, uid)
     pending = bool(row and row.checkout_status in ('creating', 'open'))
     subscribed = bool(row and row.subscription_id and row.subscription_status not in billing.TERMINAL)

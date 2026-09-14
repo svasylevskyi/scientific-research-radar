@@ -27,7 +27,8 @@ Error = StripeCatalogueError
 TERMINAL = {"canceled", "incomplete_expired"}
 STATUSES = {"incomplete", "incomplete_expired", "trialing", "active", "past_due", "canceled", "unpaid", "paused"}
 EVENTS = {"checkout.session.completed", "checkout.session.expired", "customer.subscription.created",
-          "customer.subscription.updated", "customer.subscription.deleted"} | INVOICE_EVENTS
+          "customer.subscription.updated", "customer.subscription.deleted",
+          "customer.subscription.pending_update_applied", "customer.subscription.pending_update_expired"} | INVOICE_EVENTS
 
 
 def utc(value):
@@ -140,6 +141,8 @@ def observe_subscription(db, client, row, subscription_id):
         raise Error("Stripe returned an unknown subscription status.")
     from app.services.subscription_change_service import observe as observe_change
     observe_change(db, client, row, value)
+    from app.services.subscription_upgrade_service import observe as observe_upgrade
+    observe_upgrade(db, client, row, value)
     items = (value.get("items") or {}).get("data") or []
     row.price_matches = (len(items) == 1 and (items[0].get("price") or {}).get("id") == row.price_id
                          and items[0].get("quantity") == 1)
@@ -219,6 +222,9 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None, co
     enabled(settings)
     client = client or StripeSandboxClient(settings)
     lock_account(db, user_id)
+    from app.services.subscription_upgrade_service import blocking as upgrade_pending
+    if upgrade_pending(db, user_id):
+        raise Error('Resolve the pending upgrade before starting another checkout.', 409)
     if subscriber:
         from app.services.subscriber_billing_service import require_opt_in
         require_opt_in(db, user_id)
@@ -317,9 +323,10 @@ def portal(db, settings, user_id, *, client=None, subscriber=False, cancel=False
     if not row or not row.customer_id:
         raise Error("Complete a sandbox checkout before opening the portal.", 409)
     from app.services.subscription_change_service import blocking
-    change_pending = blocking(db, user_id) is not None
+    from app.services.subscription_upgrade_service import blocking as upgrade_pending
+    change_pending = blocking(db, user_id) is not None or upgrade_pending(db, user_id) is not None
     if change_pending and cancel:
-        raise Error("Complete or undo the scheduled plan change before cancelling renewal.", 409)
+        raise Error("Resolve the pending subscription change before cancelling renewal.", 409)
     config = client.request("GET", f"billing_portal/configurations/{config_id}")
     features = config.get("features") or {}
     if (config.get("id") != config_id or config.get("active") is not True

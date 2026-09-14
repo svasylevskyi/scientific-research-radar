@@ -70,7 +70,8 @@ def options(db, settings, uid):
     if not settings.stripe_sandbox_checkout_enabled or not subscribers.opted_in(db, uid):
         result['reason'] = 'Subscription changes are unavailable for this account.'
         return result
-    if blocking(db, uid):
+    from app.services.subscription_upgrade_service import blocking as upgrade_pending
+    if blocking(db, uid) or upgrade_pending(db, uid):
         result['reason'] = 'Complete or undo the existing change before choosing another.'
         return result
     source = db.get(Plan, checkout.plan_revision_id)
@@ -129,6 +130,9 @@ def schedule(db, settings, uid, code, revision, interval, expected_end, digest_i
     client = billing.StripeSandboxClient(settings)
     billing.lock_account(db, uid)
     subscribers.require_opt_in(db, uid)
+    from app.services.subscription_upgrade_service import blocking as upgrade_pending
+    if upgrade_pending(db, uid):
+        raise billing.Error('Resolve the pending upgrade before scheduling another change.', 409)
     existing = blocking(db, uid)
     if existing:
         target = db.get(Plan, existing.target_revision_id)
@@ -395,15 +399,19 @@ def paid(db, checkout, settings):
 
 
 def expected_invoice_price(db, checkout, period_start):
-    """Historical invoice verification follows applied bindings, not today's price."""
-    changes = list(db.scalars(select(Change).where(Change.checkout_id == checkout.id, Change.applied_at.is_not(None))
-        .order_by(Change.effective_at, Change.created_at)))
-    if not changes or period_start is None:
+    """Historical full-period invoices follow both scheduled and paid upgrade bindings."""
+    from app.models.subscription_upgrade import SubscriptionUpgrade
+    events = [(billing.utc(c.effective_at), c.source_price_id, c.target_price_id) for c in db.scalars(
+        select(Change).where(Change.checkout_id == checkout.id, Change.applied_at.is_not(None)))]
+    events += [(billing.utc(u.proration_at), u.source_price_id, u.target_price_id) for u in db.scalars(
+        select(SubscriptionUpgrade).where(SubscriptionUpgrade.checkout_id == checkout.id, SubscriptionUpgrade.applied_at.is_not(None)))]
+    events.sort(key=lambda e: e[0])
+    if not events or period_start is None:
         return checkout.price_id
-    price = changes[0].source_price_id
-    for change in changes:
-        if period_start >= billing.utc(change.effective_at):
-            price = change.target_price_id
+    price = events[0][1]
+    for effective, source, target in events:
+        if period_start >= effective:
+            price = target
     return price
 
 

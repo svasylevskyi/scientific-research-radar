@@ -522,6 +522,32 @@ Acceptance checks in the sandbox:
 - Advance through renewal with successful and failed payments. Confirm immutable target binding, historical invoice validity, grace/Free fallback/recovery, preserved used quota, paused incompatible schedules, and explicit future resumption.
 - Confirm cross-account requests and stale revision/date selections are rejected, and that email failures do not lose in-app notifications.
 
-Next increment: immediate paid upgrades with explicit proration previews and entitlement changes only after verified payment. Live-payment enablement and broader launch-readiness work remain separate.
+Immediate paid upgrades are described below. Live-payment enablement and broader launch-readiness work remain separate.
 
 Provider references: [Subscription schedules](https://docs.stripe.com/billing/subscriptions/subscription-schedules), [update phases](https://docs.stripe.com/api/subscription_schedules/update), [release a schedule](https://docs.stripe.com/api/subscription_schedules/release).
+
+
+### Immediate paid upgrades and verified prorated payment
+
+**Upgrade your paid plan** offers reviewed, published paid tiers with a higher price and no reduction in any allowance or capability. Upgrades keep the existing monthly or annual billing interval, currency, and renewal date. Interval switches continue through Changes at renewal. A ten-minute saved preview shows the unused-time credit, remaining-period charge, total due now, next recurring price/date, and target limits. Confirming revalidates the subscription, target mapping, and exact amount using the same frozen Stripe proration timestamp.
+
+Radar saves consent and exact request parameters before updating Stripe with `pending_if_incomplete` and `always_invoice`. A timeout retries the original idempotency key, never a new charge. Pending payment or authentication leaves the original paid benefits in effect under their existing coverage; it does not start renewal grace or grant the upgrade. The subscriber can open the verified Stripe-hosted invoice to complete payment, or refresh the saved request. Expiration/voiding of an unapplied upgrade keeps the original plan. An unresolved upgrade blocks another checkout, scheduled change, or cancellation; Manage billing remains available for payment-method updates.
+
+**Activation requires evidence:** the canonical subscription must actually use the saved target price with no pending update, and the paid invoice must exactly match both complete prorated lines, their subscription/item ownership, quantity, currency, dates, credit/debit amounts, total, and settlement. The original paid invoice and any intervening upgrade invoices are freshly verified as a bounded chain. Manual settlement, credit notes, discounts, balances, extra or paginated lines, unknown invoices, and unsupported configurations require review. The existing restrictions on trial, automatic tax, multi-item and manually collected subscriptions remain. No zero-net-charge upgrades are submitted. Upgrades are unavailable in the final fifteen minutes before renewal. Unresolved writes older than 23 hours require operator reconciliation rather than replay.
+
+The account allowance reset date and already used quota do not change. Saved research remains available; additional paid capacity becomes available after verification. Paused schedules require explicit review/save to resume. Completion, pending payment, and expiration use the existing transactional notification outbox. Webhooks and background reconciliation update the same durable request, so closing the browser does not abandon payment verification. Invoice uncertainty cannot activate a higher tier. If reconciliation first sees a completed upgrade only after its original billing period has ended, it requires operator review rather than inferring an earlier entitlement change.
+
+**Deployment:** use the normal deployment script, which automatically applies migration **20260914_0025**. No manual migration or new secret is required. The restricted sandbox key now needs **Subscriptions: Write** for updates and **Invoices: Write** for preview creation, together with its existing read/dependency permissions. Existing subscription-update and invoice webhooks plus polling suffice; Radar also accepts `customer.subscription.pending_update_applied` and `customer.subscription.pending_update_expired`. Keep portal plan changes disabled. Retain submitted upgrade history during rollback: invoice verification depends on it, and the downgrade refuses to delete it.
+
+For `needs_review`, inspect the saved upgrade, canonical subscription, and associated invoices in Stripe, then refresh/retry after correcting the discrepancy. Retry of a review state only reconciles evidence; it does not initiate a replacement charge. Do not delete history or directly grant the target tier to resolve an ambiguous charge.
+
+Sandbox acceptance checks:
+
+- Preview and confirm a monthly upgrade and an annual upgrade. Verify due-now amounts, unchanged renewal/reset dates, preserved usage, and activation only after settlement.
+- Require authentication or fail payment. Confirm the original plan remains, complete payment through the hosted invoice, and verify activation and one logical completion notification.
+- Let a pending invoice expire/void, then request a new preview. Confirm the original plan continues and the subsequent paid upgrade works.
+- Retry lost responses before and after Stripe accepts the request; confirm one logical update and no replacement charge.
+- Adjust an invoice, alter the subscription externally, or submit a stale/foreign quote. Confirm higher benefits are withheld and actionable errors are shown.
+- Renew after one or several upgrades. Confirm full-price renewal verification, qualifying grace, Free fallback/recovery, and rejection of invalid prior supplemental payment evidence.
+
+Provider references: [pending updates](https://docs.stripe.com/billing/subscriptions/pending-updates), [invoice previews](https://docs.stripe.com/api/invoices/create_preview), [subscription updates](https://docs.stripe.com/api/subscriptions/update).

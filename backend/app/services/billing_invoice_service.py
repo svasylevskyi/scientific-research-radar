@@ -1,6 +1,7 @@
 """Canonical, read-only sandbox invoice reconciliation. Caller owns the transaction."""
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from types import SimpleNamespace
 from urllib.parse import urlencode
 from sqlalchemy import func, select
 from app.models.billing_invoice import BillingInvoice
@@ -86,6 +87,10 @@ def observe(db, checkout, value):
     transition_invoice = reason == 'subscription_update' and start and db.scalar(select(SubscriptionChange.id).where(SubscriptionChange.checkout_id == checkout.id, SubscriptionChange.applied_at.is_not(None), SubscriptionChange.effective_at == start))
     if reason not in {'subscription_create', 'subscription_cycle'} and not transition_invoice:
         issue = 'This invoice is not a supported initial or renewal invoice.'
+    from app.services.subscription_upgrade_service import invoice_issue
+    upgrade_check = invoice_issue(db, checkout, value)
+    if upgrade_check is not None:
+        issue, start, end = upgrade_check['issue'], upgrade_check['start'], upgrade_check['end']
     if currency.upper() != config['currency'] or value.get('collection_method') != 'charge_automatically':
         issue = 'Invoice currency or collection method differs from the supported subscription setup.'
     if value.get('paid_out_of_band') is True or value.get('amount_paid_off_stripe', 0) or value.get('post_payment_credit_notes_amount', 0) or value.get('pre_payment_credit_notes_amount', 0):
@@ -158,11 +163,40 @@ def reconcile(db, client, checkout, latest_id):
     checkout.invoices_checked_at = datetime.now(timezone.utc)
 
 
-def assessment(db, checkout, at, grace_days):
-    invoice = db.get(BillingInvoice, checkout.latest_invoice_id) if checkout.latest_invoice_id else None
+def assessment(db, checkout, at, grace_days, *, invoice_id=None, _depth=0):
+    selected_id = invoice_id or checkout.latest_invoice_id
+    invoice = db.get(BillingInvoice, selected_id) if selected_id else None
     result = dict(status=invoice.status if invoice else 'unverified', paid_through=None, grace_until=None,
         covered=False, issue='No verified current invoice. Reconcile billing to verify payment.')
     if not invoice or invoice.checkout_id != checkout.id:
+        return result
+    from app.models.subscription_upgrade import SubscriptionUpgrade
+    upgrade = db.scalar(select(SubscriptionUpgrade).where(SubscriptionUpgrade.invoice_id == invoice.id, SubscriptionUpgrade.checkout_id == checkout.id))
+    if upgrade:
+        if _depth >= 16:
+            result['issue'] = 'Upgrade payment evidence chain needs review.'
+            return result
+        # A failed optional upgrade must not revoke the previously paid plan.
+        if upgrade.applied_at is None:
+            if checkout.plan_revision_id == upgrade.source_revision_id and checkout.price_matches:
+                return assessment(db, checkout, at, grace_days, invoice_id=upgrade.source_invoice_id, _depth=_depth + 1)
+            result['issue'] = 'Upgrade payment has not been verified for the current plan.'
+            return result
+        if (invoice.issue or invoice.status != 'paid' or not invoice.paid_at or invoice.amount_remaining != 0
+            or invoice.amount_paid != upgrade.quote['amount_due']):
+            result['issue'] = invoice.issue or 'The prorated upgrade payment is not settled.'
+            return result
+        if (not checkout.period_start or not checkout.period_end
+            or utc(checkout.period_start) != utc(upgrade.period_start) or utc(checkout.period_end) != utc(upgrade.period_end)):
+            result['issue'] = 'Upgrade evidence does not cover the current billing period.'
+            return result
+        source = SimpleNamespace(**{k: getattr(checkout, k) for k in ('id', 'latest_invoice_id', 'period_start', 'period_end', 'cancel_at_period_end')},
+            plan_revision_id=upgrade.source_revision_id, price_matches=True)
+        base = assessment(db, source, at, grace_days, invoice_id=upgrade.source_invoice_id, _depth=_depth + 1)
+        if not base['covered'] or base['issue']:
+            result['issue'] = base['issue'] or 'The original paid coverage for this upgrade has expired.'
+            return result
+        result.update(status='paid', paid_through=utc(upgrade.period_end), covered=utc(upgrade.proration_at) <= at < utc(upgrade.period_end), issue=None)
         return result
     result['issue'] = invoice.issue
     if invoice.issue or not checkout.period_start or not checkout.period_end or not invoice.period_start or not invoice.period_end:
@@ -175,11 +209,17 @@ def assessment(db, checkout, at, grace_days):
     if invoice.status == 'paid' and invoice.paid_at and invoice.amount_remaining == 0:
         result.update(covered=utc(invoice.period_start) <= at < utc(invoice.period_end), paid_through=utc(invoice.period_end))
     elif invoice.status == 'open' and invoice.attempt_count > 0 and invoice.billing_reason in {'subscription_cycle', 'subscription_update'}:
-        prior = db.scalar(select(func.count()).select_from(BillingInvoice).where(
+        candidates = list(db.scalars(select(BillingInvoice).where(
             BillingInvoice.checkout_id == checkout.id, BillingInvoice.id != invoice.id, BillingInvoice.status == 'paid',
             BillingInvoice.issue.is_(None), BillingInvoice.amount_remaining == 0, BillingInvoice.paid_at.is_not(None),
-            BillingInvoice.period_start < checkout.period_start, BillingInvoice.period_end == checkout.period_start))
-        if prior:
+            BillingInvoice.period_start < checkout.period_start, BillingInvoice.period_end == checkout.period_start).order_by(BillingInvoice.created_at.desc()).limit(16)))
+        prior_upgrade = db.scalar(select(SubscriptionUpgrade).where(
+            SubscriptionUpgrade.checkout_id == checkout.id, SubscriptionUpgrade.applied_at.is_not(None),
+            SubscriptionUpgrade.period_end == checkout.period_start).order_by(SubscriptionUpgrade.proration_at.desc()).limit(1))
+        # The original lower-tier invoice alone cannot justify grace after an upgrade.
+        settled = (settled_chain(db, db.get(BillingInvoice, prior_upgrade.invoice_id)) if prior_upgrade
+            else any(settled_chain(db, candidate) for candidate in candidates))
+        if settled:
             end = utc(invoice.period_start) + timedelta(days=grace_days)
             if checkout.cancel_at_period_end:
                 end = min(end, utc(checkout.period_end))
@@ -191,3 +231,18 @@ def serialized(row):
     return {k: utc(v) if isinstance(v := getattr(row, k), datetime) else v for k in (
         'id', 'status', 'currency', 'amount_due', 'amount_paid', 'amount_remaining', 'attempt_count', 'billing_reason',
         'period_start', 'period_end', 'paid_at', 'next_payment_attempt', 'issue', 'created_at', 'observed_at')}
+
+
+def settled_chain(db, invoice, seen=None):
+    from app.models.subscription_upgrade import SubscriptionUpgrade
+    seen = set() if seen is None else seen
+    if not invoice or invoice.id in seen or len(seen) >= 16 or invoice.issue:
+        return False
+    seen.add(invoice.id)
+    upgrade = db.scalar(select(SubscriptionUpgrade).where(SubscriptionUpgrade.invoice_id == invoice.id, SubscriptionUpgrade.checkout_id == invoice.checkout_id))
+    if upgrade and upgrade.applied_at is None and upgrade.state == 'expired' and invoice.status == 'void':
+        return settled_chain(db, db.get(BillingInvoice, upgrade.source_invoice_id), seen)
+    if invoice.status != 'paid' or not invoice.paid_at or invoice.amount_remaining:
+        return False
+    return not upgrade or (upgrade.applied_at is not None and invoice.amount_paid == upgrade.quote['amount_due']
+        and settled_chain(db, db.get(BillingInvoice, upgrade.source_invoice_id), seen))

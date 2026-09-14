@@ -46,3 +46,4 @@ from app.models.billing_sync import BillingSyncJob, BillingSyncHeartbeat
 from app.models.subscription_access import SubscriptionAccessPolicy, SubscriptionRunUsage, FreeSubscription
 from app.models.billing_invoice import BillingInvoice
 from app.models.subscription_change import SubscriptionChange, BillingNotification
+from app.models.subscription_upgrade import SubscriptionUpgrade

@@ -115,3 +115,42 @@ def notifications(actor: CurrentUser, db: DbSession, response: Response):
     return {'items': [{'id': n.id, 'subject': n.subject, 'text': n.text, 'email_status': n.state, 'created_at': n.created_at}
         for n in db.scalars(select(BillingNotification).where(BillingNotification.user_id == actor.id)
             .order_by(BillingNotification.created_at.desc(), BillingNotification.id).limit(20))]}
+
+
+from app.services import subscription_upgrade_service as upgrades
+
+
+class UpgradeSelection(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    code: str = Field(pattern=r'^[a-z][a-z0-9-]{0,59}$')
+    revision: int = Field(ge=1)
+
+
+@router.get('/billing/upgrades')
+def upgrade_options(actor: CurrentUser, db: DbSession, settings: AppSettings, response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    return upgrades.options(db, settings, actor.id)
+
+
+@router.post('/billing/upgrades/preview')
+def preview_upgrade(payload: UpgradeSelection, actor: CurrentUser, db: DbSession, settings: AppSettings):
+    limit(db, settings, actor)
+    return call(db, upgrades.preview, settings, actor.id, payload.code, payload.revision)
+
+
+@router.post('/billing/upgrades/{quote_id}/confirm')
+def confirm_upgrade(quote_id: UUID, actor: CurrentUser, db: DbSession, settings: AppSettings):
+    limit(db, settings, actor)
+    return call(db, upgrades.confirm, settings, actor.id, quote_id)
+
+
+@router.post('/billing/upgrades/{quote_id}/retry')
+def retry_upgrade(quote_id: UUID, actor: CurrentUser, db: DbSession, settings: AppSettings):
+    limit(db, settings, actor)
+    return call(db, upgrades.retry, settings, actor.id, quote_id)
+
+
+@router.post('/billing/upgrades/{quote_id}/payment')
+def upgrade_payment(quote_id: UUID, actor: CurrentUser, db: DbSession, settings: AppSettings):
+    limit(db, settings, actor)
+    return call(db, upgrades.payment, settings, actor.id, quote_id)
