@@ -28,3 +28,9 @@ export function filterRuns(runs: DigestRunSummary[], from: string, to: string) {
     return (!from || day >= from) && (!to || day <= to);
   });
 }
+
+/** Prefer available research output before falling back to technical execution details. */
+export function resultTab(requested: string, available: Record<string, boolean>, admin: boolean) {
+  if (available[requested]) return requested;
+  return ["briefing", "trends", "papers"].find(key => available[key]) ?? (admin ? "diagnostics" : "steps");
+}

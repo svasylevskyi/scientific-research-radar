@@ -1,3 +1,4 @@
+import { AdminBillingNavigation } from "../components/AdminBillingNavigation";
 import { useCallback, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -17,7 +18,6 @@ import {
 } from "@mui/material";
 import { AppHeader } from "../components/AppHeader";
 import { ApiError } from "../api/client";
-
 import { subscriptionsApi } from "../api/subscriptions";
 import { usePollingResource } from "../hooks/usePollingResource";
 const date = (s: string | null) =>
@@ -75,6 +75,7 @@ function AccessEditor() {
     <Box>
       <AppHeader />
       <Container component="main" maxWidth="md" sx={{ py: 4 }}>
+        <AdminBillingNavigation current="access" userId={userId} email={data?.email} />
         <Typography component="h1" variant="h3" gutterBottom>
           Subscription access
         </Typography>
@@ -250,12 +251,6 @@ function AccessEditor() {
                   }}
                 >
                   Review change
-                </Button>
-                <Button
-                  component={Link}
-                  to={`/admin/billing-sync?user_id=${userId}`}
-                >
-                  Billing synchronization
                 </Button>
                 <Typography variant="h6">Access policy history</Typography>
                 {!data.history?.length && (

@@ -1,10 +1,9 @@
+import { AdminDigestNavigation } from "../components/AdminDigestNavigation";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { AllowanceNotice } from "../components/AllowanceNotice";
 import { RetryRunButton } from "../components/RetryRunButton";
-import { AdminDigestCostSummary } from "../components/AdminDigestCostSummary";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
-import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import { DigestScheduleControl } from "../components/DigestScheduleControl";
 import {
@@ -26,7 +25,6 @@ import {
 } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-
 import { ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi, digestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
@@ -327,6 +325,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
           <Alert severity="error">{error ?? "Digest not found."}</Alert>
         ) : (
           <>
+            {admin && <AdminDigestNavigation digestId={digestId} current="details" />}
             <Typography component="h1" variant="h3" sx={{ mb: 1 }}>{digest.topic}</Typography>
             <Typography color="text.secondary" sx={{ mb: 3 }}>
               Review and update the research scope and reporting settings.
@@ -337,20 +336,11 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                 <Typography variant="caption" color="text.secondary">Digest owner</Typography>
                 <Typography fontWeight={700}>{digest.owner.full_name}</Typography>
                 <Typography color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{digest.owner.email}</Typography>
-                <Button
-                  component={RouterLink}
-                  to={`/admin/digests/${digestId}/runs`}
-                  startIcon={<HistoryRoundedIcon />}
-                  sx={{ mt: 1.5 }}
-                >
-                  Review digest runs
-                </Button>
               </Paper>
             )}
             {error && <Alert severity="error" sx={{ mb: 2.5 }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 2.5 }}>{success}</Alert>}
 
-            {admin && <AdminDigestCostSummary key={digestId} digestId={digestId} />}
             {!admin && (
               <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3 }, mb: 3, borderRadius: 3 }}>
                 <Typography variant="h6" sx={{ mb: 0.75 }}>Radar controls</Typography>
@@ -405,7 +395,6 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                 )}
               </Paper>
             )}
-
             {!admin && hasSuccessfulRun ? (
               <DigestWorkspace key={digestId} digestId={digestId} runs={runs} latestRun={latestRun}
                 details={digestDetails} runBlocked={runBlocked || isStartingRun} onRetry={retryRun} onUpdate={updateRun} />
