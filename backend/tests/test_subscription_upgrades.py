@@ -93,6 +93,8 @@ class UpgradeProvider:
 def upgrading(changing, db_session_factory, monkeypatch):
     uid, auth, provider, sub, clock, schedule_stub = changing
     monkeypatch.setattr(upgrades, 'now', lambda: clock[0])
+    from app.services import billing_upgrade_observation
+    monkeypatch.setattr(billing_upgrade_observation, 'now', lambda: clock[0])
     sub['items']['data'][0]['id'] = 'si_test'
     with db_session_factory() as db:
         source = db.get(Plan, 1)

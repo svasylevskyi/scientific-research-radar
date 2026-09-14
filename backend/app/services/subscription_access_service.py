@@ -3,22 +3,24 @@
 No Stripe calls in request admission. Accepted work keeps its reservation when
 billing changes; retries are new admissions. Old observation rows are never moved.
 """
+
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import case, func, select
+
 from app.core.config import get_settings
-from app.models.subscription_access import SubscriptionAccessPolicy as Policy, SubscriptionRunUsage as Usage
-from app.models.stripe_sandbox import SandboxCheckout
-from app.models.subscription_plan import SubscriptionPlanRevision
 from app.models.digest import Digest
 from app.models.digest_run import DigestRun, DigestRunPaper, DigestRunStatus
-from app.services.subscription_observation_service import lock, utc, reasons
-
-
-class AccessDenied(ValueError):
-    def __init__(self, message, status=403):
-        super().__init__(message)
-        self.status = status
+from app.models.stripe_sandbox import SandboxCheckout
+from app.models.subscription_access import SubscriptionAccessPolicy as Policy
+from app.models.subscription_access import SubscriptionRunUsage as Usage
+from app.models.subscription_plan import SubscriptionPlanRevision
+from app.services.billing_invoice_service import assessment
+from app.services.billing_notification_service import enqueue
+from app.services.billing_policy import AccessDenied
+from app.services.free_subscription_service import assign
+from app.services.subscription_observation_service import lock, reasons, utc
 
 
 def now():
@@ -76,7 +78,6 @@ def _resolve_billing(db, user_id, settings=None):
     if row.subscription_status in {'canceled', 'incomplete_expired', 'incomplete'}:
         result.update(fallback_eligible=True, reason='The paid subscription ended or its initial payment is incomplete.')
         return result
-    from app.services.billing_invoice_service import assessment
     payment = assessment(db, row, stamp, settings.subscription_grace_days)
     result.update(payment_status=payment['status'], paid_through=payment['paid_through'], payment_issue=payment['issue'])
     if not row.price_matches:
@@ -113,8 +114,8 @@ def resolve(db, user_id, settings=None):
         return _resolve_billing(db, user_id, settings)
     lock(db, user_id)
     result = _resolve_billing(db, user_id, settings)
-    from app.models.subscription_access import SubscriptionAccountState as State, FreeSubscription
-    from app.services.free_subscription_service import assign
+    from app.models.subscription_access import FreeSubscription
+    from app.models.subscription_access import SubscriptionAccountState as State
     stamp = now()
     state = db.get(State, user_id, populate_existing=True)
     free = db.get(FreeSubscription, user_id)
@@ -137,12 +138,10 @@ def resolve(db, user_id, settings=None):
         kind = result['billing_type']
         if kind == 'free' and result['fallback'] and state.fallback_since is None:
             state.fallback_since = stamp
-            from app.services.billing_notification_service import enqueue
             enqueue(db, user_id, f'fallback:{user_id}:{stamp.isoformat()}', 'Free access is now active',
                 'Paid access ended or payment grace expired. Your Free limits now apply. Saved research is retained, incompatible schedules are paused, and used allowance is preserved. Outstanding Stripe payments remain separate.')
         if kind == 'stripe':
             if state.fallback_since is not None:
-                from app.services.billing_notification_service import enqueue
                 enqueue(db, user_id, f'recovery:{user_id}:{utc(state.fallback_since).isoformat()}', 'Paid access restored',
                     'Your paid access has been verified again. Used allowance is preserved. Review and explicitly save any paused schedule to resume future runs.')
             state.fallback_since = None
@@ -265,8 +264,8 @@ def run_context(db, run, *, existing=None, schedule=None):
     # Retried scheduled work retains its original distribution/frequency intent.
     context = existing.request_context if existing else dict(schedule or {})
     if existing is None and str(run.trigger) == 'scheduled':
-        from app.models.subscription_observation import ObservedRunUsage
         from app.models.digest_email_delivery import DigestEmailDelivery
+        from app.models.subscription_observation import ObservedRunUsage
         observation = db.get(ObservedRunUsage, run.id)
         if observation and observation.assessments:
             original = observation.assessments[0]['request_context']
@@ -321,7 +320,6 @@ def change_policy(db, user_id, actor_id, mode, expected_version, note):
     if active:
         raise AccessDenied('Wait for the active run to finish before changing access mode.', 409)
     if mode == 'sandbox':
-        from app.services.free_subscription_service import assign
         assign(db, user_id, now())
     row = Policy(user_id=user_id, version=version + 1, mode=mode, created_by=actor_id, change_note=note)
     db.add(row)

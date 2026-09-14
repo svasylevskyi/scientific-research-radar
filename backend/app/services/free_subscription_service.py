@@ -1,8 +1,12 @@
 """Local free-tier enrollment. Call inside the registration/account transaction."""
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+
+from app.models.subscription_access import FreeSubscription
+from app.models.subscription_access import SubscriptionAccessPolicy as Policy
 from app.models.subscription_plan import SubscriptionPlanRevision as Plan
-from app.models.subscription_access import FreeSubscription, SubscriptionAccessPolicy as Policy
+from app.services.billing_policy import AccessDenied
 
 
 def default_configuration():
@@ -20,7 +24,6 @@ def default_plan(db):
     if plan:
         return plan
     if db.scalar(select(Plan.id).where(Plan.code == 'free').limit(1)):
-        from app.services.subscription_access_service import AccessDenied
         raise AccessDenied('The registration Free plan needs administrator review.', 503)
     try:
         with db.begin_nested():

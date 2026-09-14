@@ -77,6 +77,8 @@ def changing(subscriber, client, db_session_factory, monkeypatch):
     uid, auth, provider = subscriber
     clock = [datetime.now(timezone.utc).replace(microsecond=0)]
     monkeypatch.setattr(changes, 'now', lambda: clock[0])
+    from app.services import billing_change_observation
+    monkeypatch.setattr(billing_change_observation, 'now', lambda: clock[0])
     monkeypatch.setattr(access, 'now', lambda: clock[0])
     monkeypatch.setattr(get_settings(), 'subscription_sync_max_age_seconds', 400 * 86400)
     provider.client.settings.subscription_sync_max_age_seconds = 400 * 86400

@@ -3,22 +3,38 @@
 Only the canonical subscription plus our verified schedule can change the saved
 plan binding. Browser returns and webhook payloads never grant entitlements.
 """
+
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from uuid import UUID
-from sqlalchemy import select, func
-from app.models.subscription_change import SubscriptionChange as Change
-from app.models.subscription_plan import SubscriptionPlanRevision as Plan
+
+from sqlalchemy import func, select
+
+from app.models.digest import Digest
 from app.models.stripe_sandbox import SandboxCheckout
 from app.models.subscription_access import SubscriptionAccountState
-from app.models.digest import Digest
+from app.models.subscription_change import SubscriptionChange as Change
+from app.models.subscription_plan import SubscriptionPlanRevision as Plan
+from app.services import billing_policy as subscribers
 from app.services import stripe_sandbox_service as billing
-from app.services import subscriber_billing_service as subscribers
-from app.services.billing_invoice_service import assessment, ref, stamp
+from app.services.billing_change_observation import (
+    has_target,
+    notice,
+    observe,
+    verified_schedule,
+)
+from app.services.billing_change_observation import paid as paid
+from app.services.billing_invoice_service import assessment, ref
+from app.services.billing_payment_rules import (
+    expected_invoice_price as expected_invoice_price,
+)
+from app.services.billing_policy import CHANGE_TERMINAL as TERMINAL
+from app.services.billing_policy import LIMITS as LIMITS
+from app.services.billing_policy import blocking_change as blocking
+from app.services.billing_policy import blocking_upgrade as upgrade_pending
+from app.services.billing_policy import simple_subscription, subscription
+from app.services.subscription_access_service import AccessDenied, resolve
 
-TERMINAL = {'applied', 'undone', 'stopped'}
 WORK = {'preparing', 'undoing', 'finalizing'}
-LIMITS = ('max_digests', 'max_papers_per_run', 'papers_per_month', 'runs_per_month', 'manual_runs_per_month')
 
 
 def now():
@@ -27,17 +43,6 @@ def now():
 
 def latest(db, uid):
     return db.scalar(select(Change).where(Change.user_id == uid).order_by(Change.created_at.desc(), Change.id.desc()).limit(1))
-
-
-def blocking(db, uid):
-    return db.scalar(select(Change).where(Change.user_id == uid, Change.state.not_in(TERMINAL)).limit(1))
-
-
-def notice(db, change, event, message):
-    from app.services.billing_notification_service import enqueue
-    target = db.get(Plan, change.target_revision_id).configuration
-    enqueue(db, change.user_id, f'change:{change.id}:{event}', 'Subscription change ' + event,
-        f"{message}\nPlan: {target['name']} ({change.target_interval}).\nScheduled renewal: {billing.utc(change.effective_at).isoformat()}.\nYour saved research and monthly allowance clock are preserved.")
 
 
 def serialized(db, row):
@@ -70,7 +75,6 @@ def options(db, settings, uid):
     if not settings.stripe_sandbox_checkout_enabled or not subscribers.opted_in(db, uid):
         result['reason'] = 'Subscription changes are unavailable for this account.'
         return result
-    from app.services.subscription_upgrade_service import blocking as upgrade_pending
     if blocking(db, uid) or upgrade_pending(db, uid):
         result['reason'] = 'Complete or undo the existing change before choosing another.'
         return result
@@ -97,24 +101,6 @@ def options(db, settings, uid):
     return result
 
 
-def subscription(client, checkout):
-    value = client.request('GET', 'subscriptions/' + billing.identifier(checkout.subscription_id, 'sub_'))
-    billing.tagged(value, checkout)
-    if value.get('id') != checkout.subscription_id or value.get('object') != 'subscription' or ref(value.get('customer')) != checkout.customer_id or value.get('livemode') is not False:
-        raise billing.Error('Subscription ownership could not be verified.', 409)
-    return value
-
-
-def simple_subscription(value):
-    items = (value.get('items') or {}).get('data') or []
-    if (len(items) != 1 or (value.get('items') or {}).get('has_more') is True or items[0].get('quantity') != 1
-        or value.get('collection_method') != 'charge_automatically' or value.get('pending_update') or value.get('pause_collection')
-        or value.get('discounts') or value.get('discount') or value.get('default_tax_rates')
-        or (value.get('automatic_tax') or {}).get('enabled') or items[0].get('discounts') or items[0].get('tax_rates')
-        or value.get('trial_end') or value.get('cancel_at') or value.get('pending_invoice_item_interval')):
-        raise billing.Error('This subscription has billing customizations that require operator review before a scheduled change.', 409)
-
-
 def choose_ids(db, uid, ids, maximum):
     available = {str(i) for i in db.scalars(select(Digest.id).where(Digest.owner_id == uid))}
     chosen = [str(i) for i in ids]
@@ -130,7 +116,6 @@ def schedule(db, settings, uid, code, revision, interval, expected_end, digest_i
     client = billing.StripeSandboxClient(settings)
     billing.lock_account(db, uid)
     subscribers.require_opt_in(db, uid)
-    from app.services.subscription_upgrade_service import blocking as upgrade_pending
     if upgrade_pending(db, uid):
         raise billing.Error('Resolve the pending upgrade before scheduling another change.', 409)
     existing = blocking(db, uid)
@@ -170,29 +155,6 @@ def schedule(db, settings, uid, code, revision, interval, expected_end, digest_i
     db.add(change)
     db.commit()  # Durable intent before the external side effect; account lock is reacquired below.
     return retry(db, settings, uid, change.id)
-
-
-def verified_schedule(client, checkout, change):
-    value = client.request('GET', 'subscription_schedules/' + billing.identifier(change.schedule_id, 'sub_sched_'))
-    if (value.get('id') != change.schedule_id or value.get('object') != 'subscription_schedule' or value.get('livemode') is not False
-        or ref(value.get('customer')) != checkout.customer_id
-        or ref(value.get('subscription') or value.get('released_subscription')) != checkout.subscription_id):
-        raise billing.Error('Scheduled change ownership could not be verified.', 409)
-    return value
-
-
-def has_target(value, change):
-    phases = value.get('phases') or []
-    if (value.get('end_behavior') != 'release' or (value.get('metadata') or {}).get('radar_change_id') != str(change.id)
-        or len(phases) != 2):
-        return False
-    first, target = phases
-    boundary = int(billing.utc(change.effective_at).timestamp())
-    return (first.get('end_date') == boundary and len(first.get('items') or []) == 1
-        and ref(first['items'][0].get('price')) == change.source_price_id and first['items'][0].get('quantity') == 1
-        and target.get('start_date') == boundary and len(target.get('items') or []) == 1
-        and ref(target['items'][0].get('price')) == change.target_price_id and target['items'][0].get('quantity') == 1
-        and target.get('proration_behavior') == 'none' and target.get('billing_cycle_anchor') == 'phase_start')
 
 
 def advance(db, client, change):
@@ -352,69 +314,6 @@ def undo(db, settings, uid, change_id):
     return retry(db, settings, uid, change.id)
 
 
-def observe(db, client, checkout, value):
-    """Called before matching price and reconciling invoices; never commits."""
-    change = db.scalar(select(Change).where(Change.checkout_id == checkout.id, Change.state.not_in(TERMINAL))
-        .order_by(Change.created_at.desc()).limit(1))
-    if not change or not change.schedule_id:
-        return
-    if value.get('status') in billing.TERMINAL:
-        change.state = 'stopped'
-        notice(db, change, 'stopped', 'The subscription ended before this change completed. Review your Free access and billing status.')
-        return
-    items = (value.get('items') or {}).get('data') or []
-    if len(items) != 1 or items[0].get('quantity') != 1:
-        return
-    price = ref(items[0].get('price'))
-    start = stamp(items[0].get('current_period_start', value.get('current_period_start')))
-    if price == change.target_price_id and start and start >= billing.utc(change.effective_at):
-        schedule = verified_schedule(client, checkout, change)
-        if not has_target(schedule, change):
-            return
-        if schedule.get('status') == 'released' and (schedule.get('released_at') or 0) < int(billing.utc(change.effective_at).timestamp()):
-            return  # An undone schedule cannot authorize a later unrelated price edit.
-        checkout.plan_revision_id, checkout.price_id, checkout.interval = change.target_revision_id, change.target_price_id, change.target_interval
-        if change.applied_at is None:
-            change.applied_at = billing.utc(change.effective_at)
-            change.state = 'awaiting_payment'
-            state = db.get(SubscriptionAccountState, checkout.user_id)
-            if state:
-                state.paid_digest_ids = change.digest_ids
-        db.flush()
-    elif value.get('status') in billing.TERMINAL:
-        change.state = 'stopped'
-        notice(db, change, 'stopped', 'The subscription ended before this change completed. Review your Free access and billing status.')
-    elif change.state in {'scheduled', 'preparing', 'needs_review'} and price == change.source_price_id:
-        schedule = verified_schedule(client, checkout, change)
-        if schedule.get('status') in {'released', 'canceled'}:
-            change.state = 'stopped'
-            notice(db, change, 'stopped', 'The schedule was removed in Stripe. Review the current subscription before choosing another change.')
-
-
-def paid(db, checkout, settings):
-    change = db.scalar(select(Change).where(Change.checkout_id == checkout.id, Change.state == 'awaiting_payment'))
-    if change and checkout.price_matches and checkout.subscription_status == 'active' and assessment(db, checkout, now(), settings.subscription_grace_days)['covered']:
-        change.state, change.next_attempt_at = 'finalizing', now()
-        notice(db, change, 'completed', 'Payment was verified and your subscription change is now in effect.')
-
-
-def expected_invoice_price(db, checkout, period_start):
-    """Historical full-period invoices follow both scheduled and paid upgrade bindings."""
-    from app.models.subscription_upgrade import SubscriptionUpgrade
-    events = [(billing.utc(c.effective_at), c.source_price_id, c.target_price_id) for c in db.scalars(
-        select(Change).where(Change.checkout_id == checkout.id, Change.applied_at.is_not(None)))]
-    events += [(billing.utc(u.proration_at), u.source_price_id, u.target_price_id) for u in db.scalars(
-        select(SubscriptionUpgrade).where(SubscriptionUpgrade.checkout_id == checkout.id, SubscriptionUpgrade.applied_at.is_not(None)))]
-    events.sort(key=lambda e: e[0])
-    if not events or period_start is None:
-        return checkout.price_id
-    price = events[0][1]
-    for effective, source, target in events:
-        if period_start >= effective:
-            price = target
-    return price
-
-
 def tick(factory, settings):
     if not settings.stripe_sandbox_checkout_enabled:
         return False
@@ -428,7 +327,6 @@ def tick(factory, settings):
 
 
 def active_digests(db, settings, uid, ids=None):
-    from app.services.subscription_access_service import resolve, AccessDenied
     try:
         current = resolve(db, uid, settings)
     except AccessDenied as exc:
