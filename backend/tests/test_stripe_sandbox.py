@@ -30,7 +30,8 @@ WEBHOOK = '/api/v1/webhooks/stripe-sandbox'
 def settings():
     return SimpleNamespace(stripe_sandbox_api_key=SecretStr('rk_test_fake'),
         stripe_sandbox_webhook_secret=SecretStr('whsec_testing'), stripe_sandbox_checkout_enabled=True,
-        stripe_sandbox_portal_configuration_id='bpc_test', frontend_base_url='https://radar.example')
+        stripe_sandbox_portal_configuration_id='bpc_test', frontend_base_url='https://radar.example',
+        subscription_grace_days=3, subscription_sync_max_age_seconds=86400)
 
 
 class Provider:
@@ -80,7 +81,7 @@ class Provider:
             result = self.subscriptions[path.split('/')[-1]]
         elif path.startswith('billing_portal/configurations/'):
             result = {'id': 'bpc_test', 'livemode': False, 'active': True,
-                      'features': {'subscription_update': {'enabled': self.portal_updates}, 'subscription_cancel': {'enabled': True}}}
+                      'features': {'subscription_update': {'enabled': self.portal_updates}, 'subscription_cancel': {'enabled': True, 'mode': 'at_period_end'}}}
         elif path == 'billing_portal/sessions':
             result = {'id': 'bps_test', 'object': 'billing_portal.session', 'customer': body['customer'], 'url': 'https://billing.stripe.com/p/session/test'}
         else:

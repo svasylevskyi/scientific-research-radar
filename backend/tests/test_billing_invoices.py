@@ -186,13 +186,13 @@ def test_grace_requires_previous_settlement_and_never_restarts(client, enrolled,
         row.observed_at = row.invoices_checked_at = at
         current.attempt_count = 5; row.delinquent_since = at
         db.commit()
-        assert not access.resolve(db, uid)['allowed']
-        assert access.resolve(db, uid)['grace_until'] == end
+        assert access.resolve(db, uid)['billing_type'] == 'free'
+        assert invoices.assessment(db, row, at, 3)['grace_until'] == end
         current.status, current.amount_paid, current.amount_remaining, current.paid_at = 'paid', 900, 0, at
         row.subscription_status = 'active'; db.commit()
         assert access.resolve(db, uid)['allowed']
         row.subscription_status = 'canceled'; db.commit()
-        assert not access.resolve(db, uid)['allowed']
+        assert access.resolve(db, uid)['billing_type'] == 'free'
 
 
 def test_unverified_invoice_blocks_only_opted_in_account(client, enrolled, db_session_factory):

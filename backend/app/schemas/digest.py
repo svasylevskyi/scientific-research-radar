@@ -156,6 +156,7 @@ class DigestRead(BaseModel):
     frequency: DigestFrequency | None
     schedule: DigestSchedule | None = None
     schedule_next_at: datetime | None = None
+    schedule_paused: bool = False
     latest_successful_run_at: datetime | None = None
     maximum_papers: int
     created_at: datetime
@@ -166,7 +167,7 @@ class DigestRead(BaseModel):
     def schedule_exhausted(self) -> bool:
         # Dispatch advances the cursor before execution. A null cursor means even
         # the next recurrence is beyond the exclusive end, not just "not running".
-        return self.schedule is not None and self.schedule.ends_at is not None and (
+        return not self.schedule_paused and self.schedule is not None and self.schedule.ends_at is not None and (
             self.schedule_next_at is None
             or (self.schedule.ends_at is not None and self.schedule.ends_at <= datetime.now(timezone.utc))
         )

@@ -45,8 +45,10 @@ def invoices(checkout_id: UUID, actor: CurrentAdmin, db: DbSession, settings: Ap
         discrepancies.append('The current invoice is settled, but the subscription is not active. Review its lifecycle state.')
     if payment['issue']:
         discrepancies.append(payment['issue'])
-    return {'items': [serialized(r) for r in db.scalars(query.order_by(BillingInvoice.created_at.desc(), BillingInvoice.id).offset(offset).limit(limit))],
+    data = {'items': [serialized(r) for r in db.scalars(query.order_by(BillingInvoice.created_at.desc(), BillingInvoice.id).offset(offset).limit(limit))],
         'total': db.scalar(select(func.count()).select_from(query.subquery())), 'latest_invoice_id': row.latest_invoice_id,
         'checked_at': row.invoices_checked_at, 'history_complete': row.invoice_history_complete,
         'discrepancies': discrepancies, 'payment': payment,
         'account_access': {'mode': access['mode'], 'allowed': access['allowed'], 'reason': access['reason']}}
+    db.commit()
+    return data

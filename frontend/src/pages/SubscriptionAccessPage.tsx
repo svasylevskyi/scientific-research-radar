@@ -1,3 +1,4 @@
+import { FreeDigestPreferences } from "../components/FreeDigestPreferences";
 import { SubscriberBilling } from "../components/SubscriberBilling";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
@@ -69,6 +70,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
     {!data && !error && (!admin || userId) && <Typography role="status">Loading subscription…</Typography>}
     {data && <Stack spacing={2}>
       {!admin && <SubscriberBilling />}
+      {!admin && data.mode === "sandbox" && <FreeDigestPreferences billingType={data.billing_type} />}
       {data.email && <Typography>{data.email}</Typography>}
       <Alert severity={data.allowed ? (data.grace_until ? "warning" : "info") : "warning"}>{data.reason}</Alert>
       <Paper variant="outlined" sx={{ p: 3 }}>
@@ -80,7 +82,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
           {data.billing_type !== "free" && <Typography>Last verified: {date(data.observed_at)}</Typography>}
           <Typography>Allowance window: {date(data.period_start)} – {date(data.period_end)}</Typography>
           {data.billing_type !== "free" && <Typography>Verified access until: {date(data.access_until)}</Typography>}
-          {data.cancel_at_period_end && <Alert severity="info" sx={{ mt: 1 }}>Cancellation is scheduled. Access continues through the verified period; saved results remain readable afterward.</Alert>}
+          {data.cancel_at_period_end && data.billing_type !== "free" && <Alert severity="info" sx={{ mt: 1 }}>Cancellation is scheduled. Paid access continues through the verified period, then Free applies automatically. Your saved research is retained.</Alert>}
         </>}
       </Paper>
       <Paper variant="outlined" sx={{ p: 3 }}>
@@ -90,7 +92,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
         <Typography>Completed papers: {data.usage.completed_papers} · Reserved papers: {data.usage.reserved_papers}</Typography>
         {data.plan && <Typography>Up to {data.plan.configuration.max_papers_per_run} papers per run. Schedules: {data.plan.configuration.schedule_frequencies.join(", ") || "not included"}.
           Email delivery: {data.plan.configuration.email_delivery ? "included" : "not included"}.</Typography>}
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Allowances reset monthly on the Free enrollment anniversary or the paid subscription anniversary, including annual plans.
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Allowances reset on the account’s monthly anniversary, including annual plans. Cancellation, Free fallback, and payment recovery preserve the allowance clock and usage.
           Queued work reserves capacity. Successful runs count actual summarized papers; failed runs release their reservation.
           Retrying checks the current window again. Usage shown here starts when sandbox limits are enabled; earlier observation usage remains separate.</Typography>
       </Paper>
@@ -99,7 +101,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
         <Typography>Upgrade to a plan with more digest slots, runs or papers, or additional scheduling options.
           Self-service upgrades are not available in this development version. Contact the Radar administrator to discuss access; viewing plans does not change your subscription.</Typography>
         <Typography variant="body2" sx={{ mt: 1 }}>Digest slots are freed by deleting a digest and do not reset each month. Research allowances reset on the date shown above.
-          Payment or synchronization issues must be resolved before research can resume.</Typography>
+          Payment recovery restores verified paid access. If Free is active, its remaining allowances are available while billing is resolved.</Typography>
         <Button component={Link} to="/plans">Compare plans</Button>
       </Paper>}
       {admin && <Paper variant="outlined" sx={{ p: 3 }}><Stack spacing={2}>

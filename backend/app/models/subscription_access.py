@@ -48,3 +48,13 @@ class FreeSubscription(Base):
     user_id: Mapped[UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
     plan_revision_id: Mapped[int] = mapped_column(ForeignKey('subscription_plan_revisions.id', ondelete='RESTRICT'))
     anchor: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class SubscriptionAccountState(Base):
+    """Account allowance clock and retained Free digest preferences."""
+    __tablename__ = 'subscription_account_states'
+    user_id: Mapped[UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    allowance_anchor: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    preferred_digest_ids: Mapped[list] = mapped_column(JSON, default=list)
+    effective_type: Mapped[str | None] = mapped_column(String(16))
+    fallback_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

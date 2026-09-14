@@ -50,6 +50,9 @@ def status(db, settings, uid):
     return {'sandbox': True, 'checkout_allowed': enabled and eligible and not subscribed and not pending,
         'resume_allowed': enabled and eligible and pending and not subscribed,
         'portal_allowed': bool(enabled and row and row.customer_id and settings.stripe_sandbox_portal_configuration_id),
+        'cancel_allowed': bool(enabled and subscribed and not row.cancel_at_period_end and settings.stripe_sandbox_portal_configuration_id),
+        'cancel_at_period_end': bool(row and row.cancel_at_period_end),
+        'period_end': billing.utc(row.period_end) if row and row.period_end else None,
         'reason': reason, 'attempt': attempt}
 
 
@@ -74,3 +77,7 @@ def refresh(db, settings, uid):
 def portal(db, settings, uid):
     # Existing customers can manage/cancel even after an admin removes opt-in.
     return billing.portal(db, settings, uid, subscriber=True)
+
+
+def cancel(db, settings, uid):
+    return billing.portal(db, settings, uid, subscriber=True, cancel=True)

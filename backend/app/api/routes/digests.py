@@ -71,7 +71,9 @@ def update_digest(
 def preview_digest_schedule(digest_id: UUID, current_user: CurrentUser,
                             service: DigestServiceDep, db: DbSession, settings: AppSettings):
     digest = _run(lambda: service.get_owned(owner=current_user, digest_id=digest_id))
-    return schedule_preview(db, settings, digest)
+    data = schedule_preview(db, settings, digest)
+    db.commit()
+    return data
 
 
 @router.put("/{digest_id}/schedule", response_model=DigestRead)

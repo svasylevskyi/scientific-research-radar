@@ -2,7 +2,7 @@ from datetime import date, datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, String, func, select
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, String, func, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship, column_property
 
 from app.db.base import Base
@@ -55,6 +55,7 @@ class Digest(Base):
     reporting_to: Mapped[date] = mapped_column(Date, nullable=False)
     frequency: Mapped[DigestFrequency | None] = mapped_column(String(16), nullable=True)
     schedule: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    schedule_paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     subscription_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     schedule_next_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     maximum_papers: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
