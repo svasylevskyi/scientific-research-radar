@@ -1,3 +1,4 @@
+import { AdminBillingNavigation } from "../components/AdminBillingNavigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Alert, Box, Button, Container, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
@@ -91,7 +92,7 @@ export function AdminSubscriptionObservationPage() {
   const options = plans.filter(plan => plan.configuration.state !== "archived");
   if (data?.assignment.plan && !options.some(plan => plan.id === data.assignment.plan?.id)) options.unshift(data.assignment.plan);
   return <Box><AppHeader /><Container component="main" maxWidth="lg" sx={{ py: 4 }}>
-    <Button component={Link} to="/admin/subscription-plans">Back to plans</Button>
+    <AdminBillingNavigation current="observation" userId={userId} email={data?.user.email} />
     <Typography variant="h3" component="h1" gutterBottom>Subscription observation</Typography>
     <Alert severity="info" sx={{ mb: 3 }}>Observation assignments compare usage against a fixed plan revision. Effective access is managed separately under Subscription access;
       they do not change billing or block any action. Allowances use UTC calendar months, including annual plans.</Alert>

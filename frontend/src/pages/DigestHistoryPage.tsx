@@ -1,375 +1,118 @@
-import { RetryRunButton } from "../components/RetryRunButton";
-import { AdminDigestCostSummary } from "../components/AdminDigestCostSummary";
-import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import type { AdminDigest } from "../types/digest";
+import { useCallback } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
 import {
   Alert,
   Box,
   Button,
-  Chip,
-  CircularProgress,
   Container,
-  Divider,
   Paper,
-  Stack,
-  Tab,
-  Tabs,
   Typography,
 } from "@mui/material";
-import { useEffect, useState, type ReactNode } from "react";
-import { Link as RouterLink, useLocation, useParams, useSearchParams } from "react-router-dom";
-
-import { AdminCostDetails, AdminCostSummary, useAdminRunCosts } from "../components/AdminRunCosts";
-import { ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi, digestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
-import { DigestRunFeedback } from "../components/DigestRunFeedback";
-import { DigestRunProgress } from "../components/DigestRunProgress";
-import {
-  DigestBriefingResult,
-  PaperSummariesResult,
-  TrendAnalysisResult,
-} from "../components/DigestRunResults";
-import type { Digest, DigestRunDetail, DigestRunStatus, DigestRunSummary } from "../types/digest";
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function statusColor(status: DigestRunStatus): "default" | "success" | "error" | "info" {
-  if (status === "completed") return "success";
-  if (status === "failed") return "error";
-  return "info";
-}
-
-function TabPanel({ active, children }: { active: boolean; children: ReactNode }) {
-  if (!active) return null;
-  return <Box role="tabpanel" sx={{ pt: 3 }}>{children}</Box>;
-}
-
+import { AdminDigestNavigation } from "../components/AdminDigestNavigation";
+import { DigestWorkspace } from "../components/DigestWorkspace";
+import { usePollingResource } from "../hooks/usePollingResource";
+import { loadRunHistory } from "../runHistory";
 export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
   const { digestId = "" } = useParams();
   const location = useLocation();
   const routeState = location.state as { success?: string } | null;
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedRunId = searchParams.get("run_id") ?? "";
-  const [digest, setDigest] = useState<Digest | null>(null);
-  const [runs, setRuns] = useState<DigestRunSummary[]>([]);
-  const [selectedRun, setSelectedRun] = useState<DigestRunDetail | null>(null);
-  const [tab, setTab] = useState<number | "costs">(0);
-  const costs = useAdminRunCosts(admin, digestId, selectedRun);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingRun, setIsLoadingRun] = useState(false);
-  const [isRetrying, setIsRetrying] = useState(false);
-  const [isSavingFeedback, setIsSavingFeedback] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const selectedRunIsInProgress = Boolean(
-    selectedRun && ["queued", "running"].includes(selectedRun.status),
-  );
-
-  useEffect(() => {
-    let active = true;
-    setIsLoading(true);
-    setError(null);
-    Promise.all([
+  const load = useCallback(async () => {
+    const [digest, runs] = await Promise.all([
       admin ? adminDigestsApi.get(digestId) : digestsApi.get(digestId),
-      admin
-        ? adminDigestsApi.listRuns(digestId, { offset: 0, limit: 100 })
-        : digestRunsApi.list(digestId, { offset: 0, limit: 100 }),
-    ])
-      .then(([digestResult, historyResult]) => {
-        if (!active) return;
-        setDigest(digestResult);
-        setRuns(historyResult.items);
-        const firstRun = historyResult.items[0];
-        if (!selectedRunId && firstRun) {
-          setSearchParams({ run_id: firstRun.id }, { replace: true });
-        }
-      })
-      .catch((caught) => {
-        if (active) {
-          setError(caught instanceof ApiError ? caught.message : "Could not load digest history.");
-        }
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [admin, digestId, setSearchParams]);
-
-  useEffect(() => {
-    if (!selectedRunId) {
-      setSelectedRun(null);
-      return;
-    }
-    let active = true;
-    setIsLoadingRun(true);
-    setError(null);
-    const request = admin
-      ? adminDigestsApi.getRun(digestId, selectedRunId)
-      : digestRunsApi.get(digestId, selectedRunId);
-    request
-      .then((result) => {
-        if (active) setSelectedRun(result);
-      })
-      .catch((caught) => {
-        if (active) {
-          setError(caught instanceof ApiError ? caught.message : "Could not load this radar run.");
-        }
-      })
-      .finally(() => {
-        if (active) setIsLoadingRun(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [admin, digestId, selectedRunId]);
-
-  useEffect(() => {
-    if (!selectedRun || !["queued", "running"].includes(selectedRun.status)) return;
-    let active = true;
-    const runId = selectedRun.id;
-
-    async function refreshRun() {
-      try {
-        const result = admin
-          ? await adminDigestsApi.getRun(digestId, runId)
-          : await digestRunsApi.get(digestId, runId);
-        if (!active) return;
-        setSelectedRun(result);
-        setRuns((current) => current.map((run) => (run.id === result.id ? result : run)));
-      } catch {
-        // Preserve the last known state and retry on the next polling interval.
-      }
-    }
-
-    const interval = window.setInterval(() => void refreshRun(), 2500);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [admin, digestId, selectedRun?.id, selectedRun?.status]);
-
-  async function retryRun() {
-    if (!selectedRun) return;
-    setIsRetrying(true);
-    setError(null);
-    try {
-      const retried = await digestRunsApi.retry(digestId, selectedRun.id);
-      setSelectedRun(retried);
-      setRuns((current) => current.map((run) => run.id === retried.id ? retried : run));
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not retry this radar run.");
-    } finally {
-      setIsRetrying(false);
-    }
-  }
-
-  async function saveFeedback(feedback: string) {
-    if (!selectedRun) return;
-    setIsSavingFeedback(true);
-    setError(null);
-    try {
-      const updated = await digestRunsApi.updateFeedback(
-        digestId,
-        selectedRun.id,
-        feedback,
-      );
-      setSelectedRun(updated);
-      setRuns((current) => current.map((run) => run.id === updated.id ? updated : run));
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not save your feedback.");
-    } finally {
-      setIsSavingFeedback(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!selectedRun) return;
-    const availability = [
-      Boolean(selectedRun.briefing),
-      Boolean(selectedRun.trend_analysis),
-      Boolean(selectedRun.search_data || selectedRun.relevance_data || selectedRun.paper_results.length),
-      !selectedRunIsInProgress,
-      selectedRun.status === "completed",
-    ];
-    if (selectedRunIsInProgress) availability.splice(3, 1);
-    if (tab === "costs" && admin) return;
-    if (tab === "costs" || !availability[tab]) {
-      const firstAvailable = availability.findIndex(Boolean);
-      if (firstAvailable >= 0) setTab(firstAvailable);
-    }
-  }, [admin, selectedRun, selectedRunIsInProgress, tab]);
-
+      loadRunHistory((offset) =>
+        admin
+          ? adminDigestsApi.listRuns(digestId, { offset, limit: 100 })
+          : digestRunsApi.list(digestId, { offset, limit: 100 }),
+      ),
+    ]);
+    return { digest, runs, owner: "owner" in digest ? (digest as AdminDigest).owner : null };
+  }, [admin, digestId]);
+  const resource = usePollingResource(load, 30000);
+  const data = resource.data;
   return (
-    <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
+    <Box>
       <AppHeader />
       <Container component="main" maxWidth="lg" sx={{ py: { xs: 3, sm: 6 } }}>
-        <Button
-          component={RouterLink}
-          to={admin ? `/admin/digests/${digestId}` : `/digests/${digestId}`}
-          color="inherit"
-          startIcon={<ArrowBackRoundedIcon />}
-          sx={{ mb: 2 }}
-        >
-          {admin ? "Back to digest management" : "Back to digest"}
-        </Button>
-
-        <Typography component="h1" variant="h3" sx={{ mb: 0.75 }}>
-          {admin ? "Digest run review" : "Digest history"}
+        {admin ? (
+          <AdminDigestNavigation digestId={digestId} current="runs" />
+        ) : (
+          <Button component={Link} to={`/digests/${digestId}`}>
+            Back to digest
+          </Button>
+        )}
+        <Typography component="h1" variant="h3" gutterBottom>
+          {data?.digest.topic ?? "Digest research output"}
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 3 }}>
-          {digest?.topic ?? "Review previous radar runs and their stored output stages."}
+          Review research output by run. Execution details and usage estimates
+          are available in run diagnostics.
         </Typography>
-        {admin && digest && <AdminDigestCostSummary key={digestId} digestId={digestId} />}
-        {routeState?.success && <Alert severity="success" sx={{ mb: 2.5 }}>{routeState.success}</Alert>}
-        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
-        {isLoading ? (
-          <Box role="status" aria-label="Loading digest history" sx={{ py: 10, display: "grid", placeItems: "center" }}>
-            <CircularProgress size={34} />
-          </Box>
-        ) : runs.length === 0 ? (
-          <Paper variant="outlined" sx={{ p: 5, textAlign: "center", borderRadius: 3 }}>
-            <Typography variant="h6">This digest has not been run yet</Typography>
-            <Typography color="text.secondary">
-              {admin
-                ? "No radar runs have been created for this digest."
-                : "Return to the digest and select Run now."}
-            </Typography>
-          </Paper>
-        ) : (
-          <Stack direction={{ xs: "column", md: "row" }} spacing={3} alignItems="flex-start">
-            <Paper variant="outlined" sx={{ width: { xs: "100%", md: 300 }, borderRadius: 3, overflow: "hidden" }}>
-              <Typography variant="h6" sx={{ px: 2.25, pt: 2.25, pb: 1.5 }}>Runs</Typography>
-              <Divider />
-              <Stack>
-                {runs.map((run) => (
-                  <Button
-                    key={run.id}
-                    color="inherit"
-                    onClick={() => setSearchParams({ run_id: run.id })}
-                    sx={{
-                      px: 2.25,
-                      py: 1.75,
-                      borderRadius: 0,
-                      justifyContent: "flex-start",
-                      textAlign: "left",
-                      bgcolor: selectedRunId === run.id ? "action.selected" : undefined,
-                    }}
-                  >
-                    <Box sx={{ width: "100%" }}>
-                      <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ mb: 0.5 }}>
-                        <Typography fontWeight={700}>{formatDateTime(run.started_at)}</Typography>
-                        <Chip size="small" color={statusColor(run.status)} label={run.status} />
-                      </Stack>
-                      <Typography variant="body2" color="text.secondary">
-                        {run.paper_count} {run.paper_count === 1 ? "paper" : "papers"} · {run.trigger}
-                      </Typography>
-                    </Box>
-                  </Button>
-                ))}
-              </Stack>
-            </Paper>
-
-            <Box sx={{ minWidth: 0, flex: 1, width: "100%" }}>
-              {isLoadingRun || !selectedRun ? (
-                <Box role="status" aria-label="Loading radar run" sx={{ py: 8, display: "grid", placeItems: "center" }}>
-                  <CircularProgress size={32} />
-                </Box>
-              ) : (
-                <Stack spacing={3}>
-                  {selectedRunIsInProgress && (
-                    <DigestRunProgress run={selectedRun} />
-                  )}
-                  {admin && (
-                    <Alert severity="info">
-                      OpenAI response jobs created: {selectedRun.request_count}. Paper-summary
-                      batches can make this number exceed four.
-                    </Alert>
-                  )}
-                  {admin && <AdminCostSummary {...costs} />}
-                  {!admin && selectedRun.status === "failed" && (
-                    <Alert severity="error">
-                      {selectedRun.error_message ?? "This radar run failed."}
-                      <RetryRunButton digestId={digestId} runId={selectedRun.id} disabled={isRetrying} onRetry={() => void retryRun()} />
-                    </Alert>
-                  )}
-                  <Box>
-                    <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
-                      <Tabs
-                        value={tab}
-                        onChange={(_event, nextTab) => setTab(nextTab)}
-                        variant="scrollable"
-                        scrollButtons="auto"
-                        aria-label="Digest run output stages"
-                      >
-                        <Tab label="Digest Briefing" disabled={!selectedRun.briefing} />
-                        <Tab label="Trend Analysis" disabled={!selectedRun.trend_analysis} />
-                        <Tab
-                          label="Paper Summaries"
-                          disabled={!selectedRun.search_data && !selectedRun.relevance_data && selectedRun.paper_results.length === 0}
-                        />
-                        {!selectedRunIsInProgress && (
-                          <Tab label="Run Steps" />
-                        )}
-                        <Tab label="Feedback" disabled={selectedRun.status !== "completed"} />
-                        {admin && <Tab label="Usage & Cost" value="costs" />}
-                      </Tabs>
-                    </Paper>
-                    {admin && <TabPanel active={tab === "costs"}><AdminCostDetails {...costs} /></TabPanel>}
-                    <TabPanel active={tab === 0 && Boolean(selectedRun.briefing)}>
-                      <DigestBriefingResult run={selectedRun} />
-                    </TabPanel>
-                    {!selectedRunIsInProgress && (
-                      <TabPanel active={tab === 3}>
-                        <DigestRunProgress run={selectedRun} />
-                      </TabPanel>
-                    )}
-                    <TabPanel
-                      active={
-                        tab === (selectedRunIsInProgress ? 3 : 4) &&
-                        selectedRun.status === "completed"
-                      }
-                    >
-                      <DigestRunFeedback
-                        run={selectedRun}
-                        editable={
-                          !admin &&
-                          selectedRun.id === runs[0]?.id &&
-                          selectedRun.status === "completed"
-                        }
-                        isSaving={isSavingFeedback}
-                        onSave={saveFeedback}
-                      />
-                    </TabPanel>
-                    <TabPanel active={tab === 1 && Boolean(selectedRun.trend_analysis)}>
-                      <TrendAnalysisResult run={selectedRun} />
-                    </TabPanel>
-                    <TabPanel
-                      active={
-                        tab === 2 &&
-                        Boolean(selectedRun.search_data || selectedRun.relevance_data || selectedRun.paper_results.length)
-                      }
-                    >
-                      <PaperSummariesResult run={selectedRun} />
-                    </TabPanel>
-                    {!selectedRun.briefing && !selectedRun.trend_analysis && !selectedRun.search_data &&
-                      !selectedRun.relevance_data && selectedRun.paper_results.length === 0 && (
-                        <Alert severity="info" sx={{ mt: 2 }}>
-                          Results will appear here as stages complete.
-                        </Alert>
-                      )}
-                  </Box>
-                </Stack>
-              )}
-            </Box>
-          </Stack>
+        {data?.owner && (
+          <Typography sx={{ mb: 2, overflowWrap: "anywhere" }}>
+            Owner:{" "}
+            <Button
+              component={Link}
+              to={`/admin/users/${data.owner.id}`}
+              sx={{ textTransform: "none" }}
+            >
+              {data.owner.full_name} · {data.owner.email}
+            </Button>
+          </Typography>
         )}
+        {routeState?.success && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            {routeState.success}
+          </Alert>
+        )}
+        {resource.error && (
+          <Alert
+            severity="error"
+            sx={{ mb: 2 }}
+            action={
+              <Button onClick={() => void resource.refresh()}>Retry</Button>
+            }
+          >
+            {resource.error}
+          </Alert>
+        )}
+        {resource.loading && (
+          <Typography role="status">Loading digest history…</Typography>
+        )}
+        {data &&
+          (data.runs.length ? (
+            <DigestWorkspace
+              key={digestId}
+              admin={admin}
+              digestId={digestId}
+              runs={data.runs}
+              latestRun={null}
+              runBlocked={admin}
+              onRetry={async (run) => {
+                await digestRunsApi.retry(digestId, run.id);
+                await resource.refresh();
+              }}
+              onUpdate={() => void resource.refresh()}
+              details={
+                <Paper variant="outlined" sx={{ p: 3 }}>
+                  <Typography variant="h6">Research scope</Typography>
+                  <Typography>{data.digest.topic}</Typography>
+                  <Button
+                    component={Link}
+                    to={`${admin ? "/admin" : ""}/digests/${digestId}`}
+                  >
+                    Open digest details and settings
+                  </Button>
+                </Paper>
+              }
+            />
+          ) : (
+            <Paper variant="outlined" sx={{ p: 3 }}>
+              <Typography>This digest has not been run yet.</Typography>
+            </Paper>
+          ))}
       </Container>
     </Box>
   );
