@@ -1,131 +1,231 @@
-import { SubscriptionUpgrades } from '../components/SubscriptionUpgrades';
-import { SubscriptionChanges } from '../components/SubscriptionChanges';
-import { FreeDigestPreferences } from "../components/FreeDigestPreferences";
-import { SubscriberBilling } from "../components/SubscriberBilling";
-import { useEffect, useState } from "react";
-import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { Alert, Box, Button, Container, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import { useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  Alert,
+  Box,
+  Button,
+  Container,
+  Paper,
+  Stack,
+  Tab,
+  Tabs,
+  Typography,
+} from "@mui/material";
+import { useAuth } from "../auth/AuthContext";
 import { AppHeader } from "../components/AppHeader";
-import { apiRequest, ApiError } from "../api/client";
-
-type Access = { email?: string; mode: "complimentary" | "sandbox"; version: number; allowed: boolean; reason: string;
-  billing_type?: "free" | "stripe" | null; payment_status?: string; paid_through?: string | null; payment_issue?: string | null;
-  status: string; observed_at: string | null; period_start: string | null; period_end: string | null;
-  access_until: string | null; grace_until: string | null; cancel_at_period_end: boolean;
-  plan: { name: string; configuration: { max_papers_per_run: number; schedule_frequencies: string[]; email_delivery: boolean } } | null;
-  remaining: { runs: number | null; manual_runs: number | null; papers: number | null; digests: number | null };
-  usage: { completed_runs: number; reserved_runs: number; completed_papers: number; reserved_papers: number };
-  history?: { version: number; mode: string; created_at: string; change_note: string }[] };
-const date = (s: string | null) => s ? new Date(s).toLocaleString() : "Not available";
+import {
+  SubscriptionData,
+  useSubscription,
+} from "../components/SubscriptionData";
+import {
+  SubscriptionOverview,
+  subscriptionDate,
+} from "../components/SubscriptionOverview";
+import { SubscriberBilling } from "../components/SubscriberBilling";
+import { SubscriptionUpgrades } from "../components/SubscriptionUpgrades";
+import { SubscriptionChanges } from "../components/SubscriptionChanges";
+import { FreeDigestPreferences } from "../components/FreeDigestPreferences";
+import { PaidDigestPreferences } from "../components/PaidDigestPreferences";
+import { AdminSubscriptionAccessPage } from "./AdminSubscriptionAccessPage";
+import { subscriptionSection } from "../subscriptionPresentation";
 
 export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
-  const [params] = useSearchParams();
+  const { user } = useAuth();
+  if (admin) return <AdminSubscriptionAccessPage />;
+  return (
+    <Box>
+      <AppHeader />
+      <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
+        <Typography component="h1" variant="h3" gutterBottom>
+          Subscription and usage
+        </Typography>
+        <Typography color="text.secondary" sx={{ mb: 3 }}>
+          Your plan, remaining research allowances, and subscription settings.
+        </Typography>
+        <SubscriptionData key={user?.id}>
+          <SubscriberSections />
+        </SubscriptionData>
+      </Container>
+    </Box>
+  );
+}
+function SubscriberSections() {
+  const { access, notices, upgrades, changes } = useSubscription();
   const location = useLocation();
-  const userId = params.get("user_id");
-  const [data, setData] = useState<Access | null>(null);
-  const [error, setError] = useState("");
-  const [refresh, setRefresh] = useState(0);
-  const [mode, setMode] = useState("complimentary");
-  const [note, setNote] = useState("");
-  const [confirm, setConfirm] = useState(false);
-  const [confirmedVersion, setConfirmedVersion] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [offset, setOffset] = useState(0);
+  const navigate = useNavigate();
+  const section = subscriptionSection(location.hash);
   useEffect(() => {
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    setData(null); setError("");
-    async function poll() {
-      if (admin && !userId) return;
-      try {
-        const result = await apiRequest<Access>(admin ? `/admin/subscription-access/${userId}?offset=${offset}` : "/subscription");
-        if (active) { setData(result); setError(""); }
-      } catch (err) { if (active) setError(err instanceof ApiError ? err.message : "Could not load subscription details."); }
-      if (active) timer = setTimeout(poll, 10000);
-    }
-    void poll(); return () => { active = false; clearTimeout(timer); };
-  }, [admin, userId, refresh, offset]);
-  const loaded = data !== null;
-  useEffect(() => {
-    if (loaded && location.hash === "#upgrade") {
-      document.getElementById("upgrade")?.scrollIntoView({ block: "start" });
-      document.getElementById("upgrade")?.focus({ preventScroll: true });
-    }
-  }, [loaded, location.hash]);
-  async function save() {
-    if (!data || !userId) return;
-    setBusy(true);
-    try {
-      await apiRequest(`/admin/subscription-access/${userId}/policy`, { method: "POST", body: {
-        mode, expected_version: confirmedVersion, change_note: note,
-      } });
-      setConfirm(false); setNote(""); setOffset(0); setRefresh(x => x + 1);
-    } catch (err) { setError(err instanceof ApiError ? err.message : "Could not change access policy."); setConfirm(false); }
-    finally { setBusy(false); }
-  }
-  return <Box><AppHeader /><Container component="main" maxWidth="md" sx={{ py: 4 }}>
-    <Typography component="h1" variant="h3" gutterBottom>{admin ? "Subscription access" : "Subscription and usage"}</Typography>
-    {admin && <Alert severity="info" sx={{ mb: 2 }}>Choose enforced subscription limits (Free or the verified paid test subscription), or complimentary development access.
-      Observation assignments remain separate. Switching modes preserves previously counted usage.</Alert>}
-    {admin && !userId && <Button component={Link} to="/admin/users">Choose a user in user administration</Button>}
-    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-    {!data && !error && (!admin || userId) && <Typography role="status">Loading subscription…</Typography>}
-    {data && <Stack spacing={2}>
-      {!admin && <><SubscriberBilling /><SubscriptionUpgrades /><SubscriptionChanges /></>}
-      {!admin && data.mode === "sandbox" && <FreeDigestPreferences billingType={data.billing_type} />}
-      {data.email && <Typography>{data.email}</Typography>}
-      <Alert severity={data.allowed ? (data.grace_until ? "warning" : "info") : "warning"}>{data.reason}</Alert>
-      <Paper variant="outlined" sx={{ p: 3 }}>
-        <Typography variant="h6">{data.plan?.name ?? (data.mode === "complimentary" ? "Complimentary development access" : "Subscription not verified")}</Typography>
-        <Typography>Access mode: {data.mode === "sandbox" ? "Subscription limits enforced" : "Complimentary"}</Typography>
-        {data.mode === "sandbox" && <>
-          <Typography>Status: {data.status}</Typography>
-          {data.billing_type !== "free" && <Typography>Invoice status: {data.payment_status ?? "Not verified"} · Settled coverage through: {date(data.paid_through ?? null)}</Typography>}
-          {data.billing_type !== "free" && <Typography>Last verified: {date(data.observed_at)}</Typography>}
-          <Typography>Allowance window: {date(data.period_start)} – {date(data.period_end)}</Typography>
-          {data.billing_type !== "free" && <Typography>Verified access until: {date(data.access_until)}</Typography>}
-          {data.cancel_at_period_end && data.billing_type !== "free" && <Alert severity="info" sx={{ mt: 1 }}>Cancellation is scheduled. Paid access continues through the verified period, then Free applies automatically. Your saved research is retained.</Alert>}
-        </>}
-      </Paper>
-      <Paper variant="outlined" sx={{ p: 3 }}>
-        <Typography variant="h6">Available allowances</Typography>
-        {Object.entries(data.remaining).map(([key, value]) => <Typography key={key}>{key.replaceAll("_", " ")}: {value ?? (data.mode === "complimentary" ? "No subscription limit" : "Not available")}</Typography>)}
-        <Typography sx={{ mt: 1 }}>Completed runs: {data.usage.completed_runs} · Reserved runs: {data.usage.reserved_runs}</Typography>
-        <Typography>Completed papers: {data.usage.completed_papers} · Reserved papers: {data.usage.reserved_papers}</Typography>
-        {data.plan && <Typography>Up to {data.plan.configuration.max_papers_per_run} papers per run. Schedules: {data.plan.configuration.schedule_frequencies.join(", ") || "not included"}.
-          Email delivery: {data.plan.configuration.email_delivery ? "included" : "not included"}.</Typography>}
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Allowances reset on the account’s monthly anniversary, including annual plans. Cancellation, Free fallback, and payment recovery preserve the allowance clock and usage.
-          Queued work reserves capacity. Successful runs count actual summarized papers; failed runs release their reservation.
-          Retrying checks the current window again. Usage shown here starts when sandbox limits are enabled; earlier observation usage remains separate.</Typography>
-      </Paper>
-      {!admin && <Paper variant="outlined" sx={{ p: 3 }}>
-        <Typography variant="h6">Need higher allowances?</Typography>
-        <Typography>Upgrade to a plan with more digest slots, runs or papers, or additional scheduling options.
-          Eligible paid subscribers can preview and confirm an upgrade above. Monthly/yearly switches and downgrades take effect at renewal. Viewing plans does not change your subscription.</Typography>
-        <Typography variant="body2" sx={{ mt: 1 }}>Digest slots are freed by deleting a digest and do not reset each month. Research allowances reset on the date shown above.
-          Payment recovery restores verified paid access. If Free is active, its remaining allowances are available while billing is resolved.</Typography>
-        <Button component={Link} to="/plans">Compare plans</Button>
-      </Paper>}
-      {admin && <Paper variant="outlined" sx={{ p: 3 }}><Stack spacing={2}>
-        <Typography variant="h6">Change access mode</Typography>
-        <TextField select label="New access mode" value={mode} onChange={e => setMode(e.target.value)}>
-          <MenuItem value="complimentary">Complimentary development access</MenuItem>
-          <MenuItem value="sandbox">Enforce subscription limits</MenuItem>
-        </TextField>
-        <TextField label="Reason for change" value={note} onChange={e => setNote(e.target.value)} inputProps={{ maxLength: 500 }} />
-        <Button variant="contained" disabled={busy || !note.trim() || mode === data.mode} onClick={() => { setConfirmedVersion(data.version); setConfirm(true); }}>Review change</Button>
-        <Button component={Link} to={`/admin/billing-sync?user_id=${userId}`}>Billing synchronization</Button>
-        <Typography variant="h6">Access policy history</Typography>
-        {!data.history?.length && <Typography>No policy changes recorded.</Typography>}
-        {data.history?.map(row => <Typography key={row.version}>Revision {row.version} · {row.mode} · {date(row.created_at)} — {row.change_note}</Typography>)}
-        <Stack direction="row"><Button disabled={!offset} onClick={() => setOffset(x => Math.max(0, x - 25))}>Previous</Button>
-          <Button disabled={(data.history?.length ?? 0) < 25} onClick={() => setOffset(x => x + 25)}>Next</Button></Stack>
-      </Stack></Paper>}
-    </Stack>}
-    <Dialog open={confirm} onClose={() => { if (!busy) setConfirm(false); }}>
-      <DialogTitle>Change research access?</DialogTitle><DialogContent>
-        {mode === "sandbox" ? "This account will use its assigned Free tier or verified paid test subscription, with limits enforced for new digests and research. Saved results remain accessible." : "This restores complimentary development research access. Existing usage records will be retained."}
-      </DialogContent><DialogActions><Button disabled={busy} onClick={() => setConfirm(false)}>Cancel</Button><Button disabled={busy} onClick={() => void save()}>Confirm change</Button></DialogActions>
-    </Dialog>
-  </Container></Box>;
+    if (!location.hash) return;
+    const target = document.getElementById(location.hash.slice(1));
+    target?.scrollIntoView({ block: "start" });
+    target?.focus({ preventScroll: true });
+  }, [location.hash]);
+  return (
+    <Stack spacing={3}>
+      <SubscriptionOverview />
+      <Tabs
+        value={section}
+        onChange={(_, value) =>
+          navigate(
+            { hash: "#" + value, search: location.search },
+            { preventScrollReset: true },
+          )
+        }
+        variant="scrollable"
+        scrollButtons="auto"
+        aria-label="Subscription settings"
+      >
+        <Tab
+          id="subscription-tab-plans"
+          value="plans"
+          label="Plan changes"
+          aria-controls="subscription-panel-plans"
+        />
+        <Tab
+          id="subscription-tab-billing"
+          value="billing"
+          label="Billing and invoices"
+          aria-controls="subscription-panel-billing"
+        />
+        <Tab
+          id="subscription-tab-digests"
+          value="digests"
+          label="Active digests"
+          aria-controls="subscription-panel-digests"
+        />
+        <Tab
+          id="subscription-tab-notifications"
+          value="notifications"
+          label={`Notifications (${notices.length})`}
+          aria-controls="subscription-panel-notifications"
+        />
+      </Tabs>
+      {(["plans", "billing", "digests", "notifications"] as const).map(
+        (name) => (
+          <Box
+            key={name}
+            role="tabpanel"
+            id={`subscription-panel-${name}`}
+            aria-labelledby={`subscription-tab-${name}`}
+            hidden={section !== name}
+          >
+            <Stack
+              spacing={2}
+              id={name}
+              tabIndex={-1}
+              sx={{ scrollMarginTop: 100 }}
+            >
+              {name === "plans" && (
+                <>
+                  <Paper variant="outlined" sx={{ p: 3 }}>
+                    <Typography>
+                      Paid upgrades start after the prorated payment is
+                      verified. Downgrades and monthly/yearly switches start at
+                      renewal. Free is available after registration; cancelling
+                      a paid plan moves it to Free after verified paid access
+                      ends.
+                    </Typography>
+                    <Button component={Link} to="/plans">
+                      Compare available plans
+                    </Button>
+                  </Paper>
+                  {(access.billing_type === "stripe" || upgrades.upgrade) && (
+                    <SubscriptionUpgrades />
+                  )}
+                  <Box id="changes" tabIndex={-1} sx={{ scrollMarginTop: 100 }}>
+                    {(access.billing_type === "stripe" || changes.change) && (
+                      <SubscriptionChanges />
+                    )}
+                  </Box>
+                </>
+              )}
+              {name === "billing" && (
+                <>
+                  <SubscriberBilling />
+                  <Paper variant="outlined" sx={{ p: 3 }}>
+                    <Typography variant="h6">
+                      Payment and access details
+                    </Typography>
+                    <Typography>
+                      Payment status:{" "}
+                      {access.payment_status ?? "Not applicable"}
+                    </Typography>
+                    <Typography>
+                      Verified paid coverage through:{" "}
+                      {subscriptionDate(access.paid_through)}
+                    </Typography>
+                    <Typography>
+                      Last verified: {subscriptionDate(access.observed_at)}
+                    </Typography>
+                    {access.grace_until && (
+                      <Typography>
+                        Payment grace ends:{" "}
+                        {subscriptionDate(access.grace_until)}
+                      </Typography>
+                    )}
+                    {access.payment_issue && (
+                      <Alert severity="warning">{access.payment_issue}</Alert>
+                    )}
+                    <Typography variant="body2">
+                      A Stripe return page is not proof of payment. Benefits
+                      follow verified payment and subscription status. Saved
+                      research remains available when research access is paused.
+                    </Typography>
+                  </Paper>
+                </>
+              )}
+              {name === "digests" && (
+                <>
+                  <PaidDigestPreferences />
+                  {access.mode === "sandbox" ? (
+                    <FreeDigestPreferences />
+                  ) : (
+                    <Typography>
+                      Complimentary access has no subscription digest limit.
+                    </Typography>
+                  )}
+                  <Typography variant="body2">
+                    Plan changes do not delete research. Paused schedules need
+                    explicit review and saving before they resume.
+                  </Typography>
+                  <Button component={Link} to="/radar">
+                    Open workspace
+                  </Button>
+                </>
+              )}
+              {name === "notifications" && (
+                <>
+                  {!notices.length && (
+                    <Typography>No subscription notifications yet.</Typography>
+                  )}
+                  {notices.map((n) => (
+                    <Alert
+                      key={n.id}
+                      severity={
+                        n.email_status === "failed" ? "warning" : "info"
+                      }
+                    >
+                      <Typography fontWeight={700}>{n.subject}</Typography>
+                      <Typography variant="caption">
+                        {subscriptionDate(n.created_at)}
+                      </Typography>
+                      <Typography sx={{ whiteSpace: "pre-line" }}>
+                        {n.text}
+                      </Typography>
+                      {n.email_status === "failed" && (
+                        <Typography variant="body2">
+                          Email delivery failed. This notification remains
+                          available here.
+                        </Typography>
+                      )}
+                    </Alert>
+                  ))}
+                </>
+              )}
+            </Stack>
+          </Box>
+        ),
+      )}
+    </Stack>
+  );
 }
