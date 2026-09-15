@@ -31,7 +31,7 @@ export function AdminInvoiceReview({ checkoutId }: { checkoutId: string }) {
         <Typography>Historical import: {data.history_complete ? "caught up" : "in progress; more pages will be checked"}.</Typography>
         <Alert severity={data.account_access.allowed ? "info" : "warning"}>Account access ({data.account_access.mode}): {data.account_access.reason}</Alert>
         {data.discrepancies.map((text, i) => <Alert severity="warning" key={i}>{text}</Alert>)}
-        {!data.items.length && <Typography>No invoices stored yet. Use Reconcile now on the reconciliation job after granting the sandbox key Invoices read permission.</Typography>}
+        {!data.items.length && <Typography>No invoices stored yet. Use Reconcile now on the reconciliation job after granting the Stripe key Invoices read permission.</Typography>}
         {data.items.map(invoice => <Box key={invoice.id} sx={{ p: 2, border: 1, borderColor: "divider", borderRadius: 1 }}>
           <Typography variant="subtitle1">{invoice.id} · {invoice.status}</Typography>
           <Typography>Currency: {invoice.currency.toUpperCase()}. Amounts in minor units: due {invoice.amount_due}, settled {invoice.amount_paid}, remaining {invoice.amount_remaining}.</Typography>

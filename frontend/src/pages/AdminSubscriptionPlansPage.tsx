@@ -148,7 +148,7 @@ export function AdminSubscriptionPlansPage() {
             to="/admin/subscription-testing"
             variant="outlined"
           >
-            Test sandbox billing
+            Test billing
           </Button>
           <Button
             component={Link}
@@ -169,7 +169,7 @@ export function AdminSubscriptionPlansPage() {
           </Button>
         </Stack>
         <Alert severity="info" sx={{ mb: 3 }}>
-          Publishing a reviewed plan makes it visible for sandbox subscriber
+          Publishing a reviewed plan makes it visible for subscriber
           checkout. Existing subscriptions keep their saved revision and
           allowances.
         </Alert>

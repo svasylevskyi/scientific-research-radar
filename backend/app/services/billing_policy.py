@@ -56,7 +56,7 @@ def opted_in(db: Session, *, user_id: UUID) -> bool:
 def require_opt_in(db: Session, *, user_id: UUID) -> None:
     if not opted_in(db, user_id=user_id):
         raise billing.Error(
-            "Subscriber checkout is available to accounts enrolled in sandbox testing. Contact the administrator to join.",
+            "Subscriber checkout is available to accounts enrolled in subscription limits. Contact the administrator to join.",
             403,
         )
 
@@ -80,7 +80,7 @@ def subscription(
         value.get("id") != checkout.subscription_id
         or value.get("object") != "subscription"
         or ref(value.get("customer")) != checkout.customer_id
-        or value.get("livemode") is not False
+        or value.get("livemode") is not checkout.livemode
     ):
         raise billing.Error("Subscription ownership could not be verified.", 409)
     return value

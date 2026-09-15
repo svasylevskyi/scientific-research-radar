@@ -29,6 +29,7 @@ import { useEffect, useState } from "react";
 import { Link as RouterLink, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { StripeModeBadge } from "./StripeModeBadge";
 import { Brand } from "./Brand";
 
 export function AppHeader() {
@@ -146,6 +147,7 @@ export function AppHeader() {
             <Brand compact />
           </Box>
           <Box sx={{ flexGrow: 1 }} />
+          {(user?.role === "admin" || user?.is_super_admin) && <StripeModeBadge />}
           {collapsed ? (
             <>
               <Tooltip title="Open navigation menu">

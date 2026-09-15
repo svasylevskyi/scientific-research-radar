@@ -1,3 +1,6 @@
+> **Current deployment setup:** [Stripe sandbox/live configuration](stripe-deployment.md).
+> The increment notes below are historical. Live mode is now supported through deployment configuration; sandbox-only statements and older permission lists are superseded by that guide.
+
 # Paid subscriptions implementation branch
 
 Work continues on `feature/paid-subscriptions`, with each reviewed increment merged separately. Sandbox checkout is disabled by default. Current subscriber rollout instructions are in the final section below; earlier sections document prior increments.

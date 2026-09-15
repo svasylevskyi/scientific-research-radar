@@ -1,4 +1,4 @@
-from types import SimpleNamespace
+from app.core.config import Settings
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 import httpx
@@ -12,7 +12,7 @@ from app.services.stripe_catalogue_service import list_products, StripeCatalogue
 from test_subscription_catalogue import payload, URL
 from test_digests import _authorization, _super_admin_login, _register
 
-SETTINGS = SimpleNamespace(stripe_sandbox_api_key=SecretStr('rk_test_fake'))
+SETTINGS = Settings(stripe_sandbox_api_key=SecretStr('rk_test_fake'))
 PRICE = dict(id='price_month', object='price', livemode=False, active=True, product='prod_one',
     currency='eur', unit_amount=900, type='recurring', billing_scheme='per_unit', tax_behavior='inclusive',
     recurring={'interval': 'month', 'interval_count': 1, 'usage_type': 'licensed'})
@@ -62,7 +62,7 @@ def test_catalogue_live_and_malformed_pages_rejected():
             list_products(SETTINGS, transport=httpx.MockTransport(lambda _: httpx.Response(200, json=data)))
     mock, calls = catalogue_mock()
     with pytest.raises(StripeCatalogueError):
-        list_products(SimpleNamespace(stripe_sandbox_api_key=SecretStr('sk_live_fake')), transport=mock)
+        list_products(Settings.model_construct(stripe_sandbox_api_key=SecretStr('sk_live_fake')), transport=mock)
     assert not calls
 
 

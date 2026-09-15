@@ -14,7 +14,7 @@ from pydantic import SecretStr
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.db.base import Base
 from app.models.stripe_sandbox import SandboxCheckout, SandboxStripeEvent
 from app.models.subscription_plan import SubscriptionPlanRevision
@@ -28,7 +28,7 @@ WEBHOOK = '/api/v1/webhooks/stripe-sandbox'
 
 
 def settings():
-    return SimpleNamespace(stripe_sandbox_api_key=SecretStr('rk_test_fake'),
+    return Settings(stripe_sandbox_api_key=SecretStr('rk_test_fake'),
         stripe_sandbox_webhook_secret=SecretStr('whsec_testing'), stripe_sandbox_checkout_enabled=True,
         stripe_sandbox_portal_configuration_id='bpc_test', frontend_base_url='https://radar.example',
         subscription_grace_days=3, subscription_sync_max_age_seconds=86400)

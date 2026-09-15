@@ -1,4 +1,4 @@
-"""Durable sandbox synchronization; no billing writes, assignments or enforcement.
+"""Durable Stripe synchronization; no billing writes, assignments or enforcement.
 
 Claims are committed before work. A token and deadline fence every later commit.
 Only minimized, signature-verified event data enters the inbox. Provider reads and
@@ -45,7 +45,7 @@ def receive(db, settings, event):
             details = metadata(obj)
             linked = subscription_id(obj)
             checkout = db.scalar(select(SandboxCheckout).where(SandboxCheckout.subscription_id == linked)) if linked else None
-            if checkout is None and details.get('radar_sandbox') == '1':
+            if checkout is None and billing.matches_metadata(details, settings.stripe_mode):
                 checkout = db.get(SandboxCheckout, UUID(details.get('radar_attempt_id', '')))
             if checkout is None:
                 return {'received': True, 'ignored': True}
@@ -53,18 +53,20 @@ def receive(db, settings, event):
             object_id = billing.identifier(obj.get('id'), 'in_')
         else:
             metadata = obj.get('metadata') or {}
-            if metadata.get('radar_sandbox') != '1':
+            if not billing.matches_metadata(metadata, settings.stripe_mode):
                 return {'received': True, 'ignored': True}
             attempt_id = UUID(metadata.get('radar_attempt_id', ''))
-            object_id = billing.identifier(obj.get('id'), 'sub_' if event['type'].startswith('customer.subscription.') else 'cs_test_')
+            object_id = billing.identifier(obj.get('id'), 'sub_' if event['type'].startswith('customer.subscription.') else ('cs_live_' if settings.stripe_livemode else 'cs_test_'))
             checkout = db.get(SandboxCheckout, attempt_id)
     except (KeyError, TypeError, AttributeError, ValueError, billing.Error):
         raise billing.Error('Invalid sandbox event object.', 400) from None
     if not checkout:
         return {'received': True, 'ignored': True}
+    if checkout.livemode != settings.stripe_livemode:
+        raise billing.Error('Event checkout belongs to a different Stripe mode.', 400)
     # No card/customer details or arbitrary provider fields are stored.
     minimal = {'id': event['id'], 'type': event['type'], 'data': {'object': {'id': object_id,
-        'metadata': {'radar_attempt_id': str(attempt_id), 'radar_sandbox': '1'}}}}
+        'metadata': {'radar_attempt_id': str(attempt_id), 'radar_sandbox': '0' if settings.stripe_livemode else '1', 'radar_mode': settings.stripe_mode}}}}
     db.execute(insert(db, Job).values(**job_values(checkout, event['id'], 'webhook', now(),
         event_type=event['type'], payload=minimal)).on_conflict_do_nothing(index_elements=['id']))
     db.commit()  # Acknowledge only after durable persistence; duplicate IDs do not reset work.
@@ -124,7 +126,7 @@ def process(factory, settings, job_id, token, *, client=None):
                 billing.lock_account(db, checkout.user_id)
                 db.refresh(checkout)
                 if not checkout.checkout_id and not checkout.subscription_id:
-                    raise billing.Error('No Stripe identifier is saved. Resume the original checkout from Sandbox billing; do not create another attempt.', 409)
+                    raise billing.Error('No Stripe identifier is saved. Resume the original checkout from Billing; do not create another attempt.', 409)
                 billing.sync_attempt(db, client or billing.StripeSandboxClient(settings), checkout)
                 terminal = checkout.subscription_status in billing.TERMINAL or (checkout.checkout_status == 'expired' and not checkout.subscription_id)
                 following = None if terminal and (not checkout.subscription_id or checkout.invoice_history_complete) else now() + timedelta(seconds=settings.stripe_sync_reconcile_seconds)
@@ -140,7 +142,7 @@ def process(factory, settings, job_id, token, *, client=None):
         # The failed transaction has already rolled back; persist retry metadata
         # separately, but only if this worker still owns the claim.
         message = str(exc)[:500] if isinstance(exc, billing.Error) else 'Synchronization failed internally. Retry or check the API service logs.'
-        logger.warning('Sandbox billing synchronization failed for job %s (%s)', job_id, type(exc).__name__)
+        logger.warning('Billing synchronization failed for job %s (%s)', job_id, type(exc).__name__)
         with factory() as db:
             if db.execute(update(Job).execution_options(synchronize_session=False).where(owned(job_id, token)).values(lease_token=token)).rowcount != 1:
                 db.rollback()
@@ -158,6 +160,7 @@ def process(factory, settings, job_id, token, *, client=None):
 
 def tick(factory, settings, *, client=None):
     with factory() as db:
+        billing.ensure_database_mode(db, settings)
         seed_reconciliation(db)
         claimed = claim(db)
     if claimed:

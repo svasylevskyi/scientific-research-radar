@@ -80,7 +80,7 @@ function AccessEditor() {
           Subscription access
         </Typography>
         <Alert severity="info" sx={{ mb: 2 }}>
-          Choose enforced subscription limits (Free or the verified paid test
+          Choose enforced subscription limits (Free or the verified paid
           subscription), or complimentary development access. Observation
           assignments remain separate. Switching modes preserves previously
           counted usage.
@@ -211,7 +211,7 @@ function AccessEditor() {
                 preserve the allowance clock and usage. Queued work reserves
                 capacity. Successful runs count actual summarized papers; failed
                 runs release their reservation. Retrying checks the current
-                window again. Usage shown here starts when sandbox limits are
+                window again. Usage shown here starts when subscription limits are
                 enabled; earlier observation usage remains separate.
               </Typography>
             </Paper>
@@ -258,7 +258,7 @@ function AccessEditor() {
                 )}
                 {data.history?.map((row) => (
                   <Typography key={row.version}>
-                    Revision {row.version} · {row.mode} · {date(row.created_at)}{" "}
+                    Revision {row.version} · {row.mode === "sandbox" ? "Subscription limits" : "Complimentary"} · {date(row.created_at)}{" "}
                     — {row.change_note}
                   </Typography>
                 ))}
@@ -289,7 +289,7 @@ function AccessEditor() {
           <DialogTitle>Change research access?</DialogTitle>
           <DialogContent>
             {mode === "sandbox"
-              ? "This account will use its assigned Free tier or verified paid test subscription, with limits enforced for new digests and research. Saved results remain accessible."
+              ? "This account will use its assigned Free tier or verified paid subscription, with limits enforced for new digests and research. Saved results remain accessible."
               : "This restores complimentary development research access. Existing usage records will be retained."}
           </DialogContent>
           <DialogActions>

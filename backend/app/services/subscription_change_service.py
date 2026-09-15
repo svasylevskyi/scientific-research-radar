@@ -79,7 +79,7 @@ def options(db, settings, uid):
     if not checkout or not checkout.subscription_id or checkout.subscription_status != 'active' or checkout.cancel_at_period_end:
         result['reason'] = 'An active paid subscription with no pending cancellation is required.'
         return result
-    if not settings.stripe_sandbox_checkout_enabled or not subscribers.opted_in(db, user_id=uid):
+    if not settings.effective_stripe_checkout_enabled or not subscribers.opted_in(db, user_id=uid):
         result['reason'] = 'Subscription changes are unavailable for this account.'
         return result
     if blocking(db, user_id=uid) or upgrade_pending(db, user_id=uid):
@@ -322,7 +322,7 @@ def undo(db, settings, uid, change_id):
 
 
 def tick(factory, settings):
-    if not settings.stripe_sandbox_checkout_enabled:
+    if not settings.effective_stripe_checkout_enabled:
         return False
     with factory() as db:
         row = db.scalar(select(Change).where(Change.state.in_(WORK), Change.next_attempt_at <= now())

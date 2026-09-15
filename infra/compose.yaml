@@ -15,6 +15,10 @@ x-backend: &backend
     EMAIL_FROM: ${EMAIL_FROM:-radar@example.com}
     # Provider billing/catalogue credentials belong only in the API service.
     OPENAI_ADMIN_API_KEY: ""
+    STRIPE_MODE: ${STRIPE_MODE:-sandbox}
+    STRIPE_API_KEY: ""
+    STRIPE_WEBHOOK_SECRET: ""
+    STRIPE_PORTAL_CONFIGURATION_ID: ""
     STRIPE_SANDBOX_API_KEY: ""
     STRIPE_SANDBOX_WEBHOOK_SECRET: ""
     STRIPE_SANDBOX_CHECKOUT_ENABLED: "false"
@@ -53,6 +57,9 @@ services:
     environment:
       <<: *backend-env
       OPENAI_ADMIN_API_KEY: ${OPENAI_ADMIN_API_KEY:-}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PORTAL_CONFIGURATION_ID: ${STRIPE_PORTAL_CONFIGURATION_ID:-}
       STRIPE_SANDBOX_API_KEY: ${STRIPE_SANDBOX_API_KEY:-}
       STRIPE_SANDBOX_WEBHOOK_SECRET: ${STRIPE_SANDBOX_WEBHOOK_SECRET:-}
       STRIPE_SANDBOX_CHECKOUT_ENABLED: ${STRIPE_SANDBOX_CHECKOUT_ENABLED:-false}
@@ -68,6 +75,9 @@ services:
       start_period: 30s
   ops:
     <<: *backend
+    environment:
+      <<: *backend-env
+      STRIPE_CHECKOUT_ENABLED: "false"
     profiles: [ops]
     restart: 'no'
     command: [python, -m, app.ops, configuration, base]
@@ -76,6 +86,7 @@ services:
     profiles: [research]
     environment:
       <<: *backend-env
+      STRIPE_CHECKOUT_ENABLED: "false"
       RADAR_HEARTBEAT_FILE: /tmp/research-heartbeat
     command: [python, -m, app.radar.worker]
     stop_grace_period: 30s
@@ -90,6 +101,7 @@ services:
     profiles: [scheduled]
     environment:
       <<: *backend-env
+      STRIPE_CHECKOUT_ENABLED: "false"
       RADAR_HEARTBEAT_FILE: /tmp/scheduler-heartbeat
     command: [python, -m, app.scheduler.worker]
     stop_grace_period: 30s

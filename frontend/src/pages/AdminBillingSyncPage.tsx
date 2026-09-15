@@ -90,10 +90,10 @@ export function AdminBillingSyncPage() {
           Billing synchronization
         </Typography>
         <Alert severity="info" sx={{ mb: 3 }}>
-          Sandbox only. Webhooks are saved before acknowledgment and processed
+          Webhooks are saved before acknowledgment and processed
           in the background. Known subscriptions are checked periodically
           against Stripe. Verified invoice settlement controls research access
-          for accounts opted into sandbox limits. Synchronization never resets
+          for accounts opted into subscription limits. Synchronization never resets
           usage allowances.
         </Alert>
         {(error || pollError) && (

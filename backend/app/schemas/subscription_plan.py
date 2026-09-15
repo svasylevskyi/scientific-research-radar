@@ -37,7 +37,7 @@ class SubscriptionPlanConfiguration(BaseModel):
         if self.billing_type == "free" and (self.monthly_price != 0 or self.annual_price is not None or self.stripe_sandbox or self.trial_days):
             raise ValueError("Free plans have zero monthly price, no annual price, no Stripe mapping and no trial")
         if self.subscriber_visible and (self.state != "reviewed" or self.tax_display != "inclusive" or (self.billing_type == "stripe" and not self.stripe_sandbox) or self.trial_days):
-            raise ValueError("Published plans must be reviewed and tax-inclusive with no trial; paid plans also require a Stripe sandbox mapping")
+            raise ValueError("Published plans must be reviewed and tax-inclusive with no trial; paid plans also require a Stripe Stripe mapping")
         if self.manual_runs_per_month > self.runs_per_month:
             raise ValueError("Manual runs cannot exceed the total monthly run allowance")
         if self.max_papers_per_run > self.papers_per_month:

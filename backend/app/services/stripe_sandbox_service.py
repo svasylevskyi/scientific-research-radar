@@ -1,4 +1,4 @@
-"""Sandbox checkout commands and canonical billing reconciliation.
+"""Checkout commands and canonical billing reconciliation.
 
 Account-row writes serialize checkout creation and provider observations on SQLite
 and PostgreSQL. An attempt and its exact parameters are committed BEFORE Stripe
@@ -50,6 +50,8 @@ from app.services.billing_upgrade_observation import observe as observe_upgrade
 from app.services.stripe_catalogue_service import StripeCatalogueError
 from app.services.subscription_access_service import resolve
 
+from app.services.stripe_environment import ensure_database_mode, matches_metadata
+
 Error = StripeCatalogueError
 EVENTS = {"checkout.session.completed", "checkout.session.expired", "customer.subscription.created",
           "customer.subscription.updated", "customer.subscription.deleted",
@@ -84,10 +86,10 @@ def overview(db, settings, user_id):
     plan = explorer(db)
     rows = list(db.scalars(select(SandboxCheckout).where(SandboxCheckout.user_id == user_id)
         .order_by(SandboxCheckout.created_at.desc(), SandboxCheckout.id.desc()).limit(20)))
-    return {"enabled": settings.stripe_sandbox_checkout_enabled,
+    return {"mode": settings.stripe_mode, "enabled": settings.effective_stripe_checkout_enabled,
         "plan": {"revision": plan.revision, "configuration": plan.configuration} if plan else None,
         "attempts": [{**serialized(row), "revision": db.get(SubscriptionPlanRevision, row.plan_revision_id).revision} for row in rows],
-        "portal_available": bool(rows and rows[0].customer_id and settings.stripe_sandbox_portal_configuration_id)}
+        "portal_available": bool(rows and rows[0].customer_id and settings.effective_stripe_portal_configuration_id)}
 
 
 def observe_subscription(db, client, row, subscription_id):
@@ -142,7 +144,7 @@ def observe_subscription(db, client, row, subscription_id):
 
 def observe_checkout(db, client, row, value):
     tagged(value, row)
-    session_id = identifier(value.get("id"), "cs_test_")
+    session_id = identifier(value.get("id"), "cs_live_" if row.livemode else "cs_test_")
     if (row.checkout_id and row.checkout_id != session_id) or value.get("mode") != "subscription" or value.get("client_reference_id") != str(row.id):
         raise Error("Stripe returned an unexpected checkout.")
     if value.get("status") not in {"open", "complete", "expired"}:
@@ -158,8 +160,10 @@ def observe_checkout(db, client, row, value):
 
 
 def sync_attempt(db, client, row):
+    if hasattr(client, "settings") and row.livemode != client.settings.stripe_livemode:
+        raise Error("Saved checkout belongs to a different Stripe mode.", 409)
     if row.checkout_id:
-        value = client.request("GET", f"checkout/sessions/{identifier(row.checkout_id, 'cs_test_')}")
+        value = client.request("GET", f"checkout/sessions/{identifier(row.checkout_id, 'cs_live_' if row.livemode else 'cs_test_')}")
         observe_checkout(db, client, row, value)
         # A subscription event can arrive before checkout completion.
         if row.subscription_id and not value.get("subscription"):
@@ -171,6 +175,7 @@ def sync_attempt(db, client, row):
 
 
 def start_checkout(db, settings, user_id, revision, interval, *, client=None, code="explorer", subscriber=False):
+    ensure_database_mode(db, settings)
     enabled(settings)
     client = client or StripeSandboxClient(settings)
     lock_account(db, user_id)
@@ -183,7 +188,7 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None, co
         value = sync_attempt(db, client, row)
         if row.subscription_id and row.subscription_status not in TERMINAL:
             db.commit()  # Preserve this verified observation even when creation is blocked.
-            raise Error("You already have a sandbox subscription. Manage it in the billing portal before starting another.", 409)
+            raise Error("You already have a subscription. Manage it in the billing portal before starting another.", 409)
         if row.checkout_status in {"creating", "open"}:
             saved_plan = db.get(SubscriptionPlanRevision, row.plan_revision_id)
             if saved_plan.code != code or saved_plan.revision != revision or row.interval != interval:
@@ -213,7 +218,7 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None, co
             raise Error("Archived plans cannot be tested.", 422)
         # Trial/quota settings remain catalogue-only in this initial paid test.
         if plan.configuration.get("trial_days", 0):
-            raise Error("Sandbox checkout requires a plan revision with no trial.", 422)
+            raise Error("Checkout requires a plan revision with no trial.", 422)
         report = client.mapping(plan.configuration)
         if not report["matches"]:
             raise Error("The saved plan revision no longer matches Stripe: " + "; ".join(report["issues"]), 422)
@@ -229,6 +234,11 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None, co
             "subscription_data[metadata][radar_sandbox]": "1", "automatic_tax[enabled]": "false",
             "success_url": base + "?stripe_return=checkout", "cancel_url": base + "?stripe_return=cancel",
             "expires_at": str(int(time.time()) + 3600)}
+        params["metadata[radar_mode]"] = settings.stripe_mode
+        params["subscription_data[metadata][radar_mode]"] = settings.stripe_mode
+        if settings.stripe_livemode:
+            del params["metadata[radar_sandbox]"]
+            del params["subscription_data[metadata][radar_sandbox]"]
         row = SandboxCheckout(id=attempt_id, user_id=user_id, plan_revision_id=plan.id,
                               interval=interval, price_id=price, parameters=params)
         db.add(row)
@@ -261,16 +271,17 @@ def refresh(db, settings, user_id, *, client=None):
 
 
 def portal(db, settings, user_id, *, client=None, subscriber=False, cancel=False):
+    ensure_database_mode(db, settings)
     enabled(settings)
     client = client or StripeSandboxClient(settings)
-    config_id = settings.stripe_sandbox_portal_configuration_id
+    config_id = settings.effective_stripe_portal_configuration_id
     if not config_id:
-        raise Error("Configure a sandbox customer portal first. See the setup guide.", 503)
+        raise Error("Configure a Stripe customer portal first. See the setup guide.", 503)
     config_id = identifier(config_id, "bpc_")
     lock_account(db, user_id)
     row = latest(db, user_id)
     if not row or not row.customer_id:
-        raise Error("Complete a sandbox checkout before opening the portal.", 409)
+        raise Error("Complete a checkout before opening the portal.", 409)
     change_pending = blocking(db, user_id=user_id) is not None or upgrade_pending(db, user_id=user_id) is not None
     if change_pending and cancel:
         raise Error("Resolve the pending subscription change before cancelling renewal.", 409)
@@ -280,7 +291,7 @@ def portal(db, settings, user_id, *, client=None, subscriber=False, cancel=False
         or (features.get("subscription_update") or {}).get("enabled") is not False
         or (features.get("subscription_cancel") or {}).get("enabled") is not True
         or (features.get("subscription_cancel") or {}).get("mode") != "at_period_end"):
-        raise Error("The sandbox portal must be active, allow cancellation at period end, and disable subscription plan updates.", 422)
+        raise Error("The Stripe portal must be active, allow cancellation at period end, and disable subscription plan updates.", 422)
     data = {"customer": row.customer_id, "configuration": config_id,
         "return_url": settings.frontend_base_url + ("/subscription?stripe_return=portal" if subscriber else "/admin/subscription-testing?stripe_return=portal")}
     if change_pending:
@@ -299,9 +310,9 @@ def portal(db, settings, user_id, *, client=None, subscriber=False, cancel=False
 
 
 def verify_event(body, signature, settings, *, now=None):
-    secret = settings.stripe_sandbox_webhook_secret
+    secret = settings.effective_stripe_webhook_secret
     if not secret or not secret.get_secret_value().startswith("whsec_"):
-        raise Error("Sandbox webhook is not configured.", 503)
+        raise Error("Stripe webhook is not configured.", 503)
     try:
         parts = [item.split("=", 1) for item in signature.split(",")]
         timestamps = [value for key, value in parts if key == "t"]
@@ -311,13 +322,13 @@ def verify_event(body, signature, settings, *, now=None):
         if not any(hmac.compare_digest(digest, value) for key, value in parts if key == "v1"):
             raise ValueError()
         event = json.loads(body)
-        if (not isinstance(event, dict) or event.get("livemode") is not False
+        if (not isinstance(event, dict) or event.get("livemode") is not settings.stripe_livemode
             or event.get("object") != "event" or not isinstance(event.get("type"), str)):
             raise ValueError()
         identifier(event.get("id"), "evt_")
         return event
     except (ValueError, TypeError, Error):
-        raise Error("Invalid sandbox webhook signature or payload.", 400) from None
+        raise Error("Invalid Stripe webhook signature or payload.", 400) from None
 
 
 def handle_event(db, settings, event, *, client=None, commit=True):
@@ -327,7 +338,7 @@ def handle_event(db, settings, event, *, client=None, commit=True):
     if not isinstance(obj, dict):
         raise Error("Invalid sandbox event object.", 400)
     metadata = obj.get("metadata") or {}
-    if metadata.get("radar_sandbox") != "1":
+    if not matches_metadata(metadata, settings.stripe_mode):
         return {"received": True}
     try:
         attempt_id = UUID(metadata.get("radar_attempt_id", ""))
@@ -336,6 +347,8 @@ def handle_event(db, settings, event, *, client=None, commit=True):
     row = db.get(SandboxCheckout, attempt_id)
     if not row:
         return {"received": True}
+    if row.livemode != settings.stripe_livemode:
+        raise Error("Saved checkout belongs to a different Stripe mode.", 409)
     lock_account(db, row.user_id)
     db.refresh(row)
     if db.get(SandboxStripeEvent, event["id"]):
@@ -352,7 +365,7 @@ def handle_event(db, settings, event, *, client=None, commit=True):
     elif event["type"].startswith("customer.subscription."):
         observe_subscription(db, client, row, obj.get("id"))
     else:
-        session_id = identifier(obj.get("id"), "cs_test_")
+        session_id = identifier(obj.get("id"), "cs_live_" if row.livemode else "cs_test_")
         value = client.request("GET", f"checkout/sessions/{session_id}")
         observe_checkout(db, client, row, value)
     db.add(SandboxStripeEvent(id=event["id"], checkout_id=row.id, event_type=event["type"]))

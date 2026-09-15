@@ -1,4 +1,4 @@
-"""Canonical, read-only sandbox invoice reconciliation. Caller owns the transaction."""
+"""Canonical, read-only expected-mode invoice reconciliation. Caller owns the transaction."""
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -30,10 +30,10 @@ def utc(value):
 
 def observe(db, checkout, value):
     invoice_id = identifier(value.get('id'), 'in_')
-    if value.get('object') != 'invoice' or value.get('livemode') is not False:
-        raise Error('Stripe did not return a sandbox invoice.')
+    if value.get('object') != 'invoice' or value.get('livemode') is not checkout.livemode:
+        raise Error('Stripe did not return a expected-mode invoice.')
     if subscription_id(value) != checkout.subscription_id or ref(value.get('customer')) != checkout.customer_id:
-        raise Error('Invoice ownership does not match the sandbox subscription.')
+        raise Error('Invoice ownership does not match the subscription.')
     row = db.get(BillingInvoice, invoice_id)
     if row and row.checkout_id != checkout.id:
         raise Error('Invoice is already associated with a different checkout.')

@@ -1,6 +1,6 @@
 """Stripe transport and object guards; no checkout, entitlement, or transition orchestration.
 
-This boundary intentionally remains sandbox-only. Moving it does not enable live payments.
+The deployment selects the provider mode; object and saved-attempt modes must agree.
 """
 
 import re
@@ -61,13 +61,13 @@ class StripeSandboxClient:
     ) -> None:
         self.settings, self.transport = settings, transport
         self.key = (
-            settings.stripe_sandbox_api_key.get_secret_value()
-            if settings.stripe_sandbox_api_key
+            settings.effective_stripe_api_key.get_secret_value()
+            if settings.effective_stripe_api_key
             else ""
         )
-        if not self.key.startswith(("rk_test_", "sk_test_")):
+        if not self.key.startswith(("rk_live_", "sk_live_") if settings.stripe_livemode else ("rk_test_", "sk_test_")):
             raise Error(
-                "Configure a Stripe sandbox API key on the API server. Live keys are not accepted.",
+                f"Configure a Stripe {settings.stripe_mode} API key on the API server. The key must match STRIPE_MODE.",
                 503,
             )
 
@@ -97,7 +97,7 @@ class StripeSandboxClient:
                 )
                 if response.status_code in (401, 403):
                     raise Error(
-                        "Stripe rejected access. Check the sandbox key permissions in the setup guide.",
+                        "Stripe rejected access. Check the Stripe key permissions in the setup guide.",
                         503,
                     )
                 if response.status_code != 200:
@@ -108,17 +108,17 @@ class StripeSandboxClient:
                 result = response.json()
                 if not isinstance(result, dict):
                     raise ValueError()
-                # Portal sessions do not expose livemode; their configuration is
-                # checked independently and only test-key requests are permitted.
-                if result.get("livemode") is True or (
+                # Portal sessions do not expose livemode; verify their configuration
+                # separately. Invoice lists have no mode; every invoice is checked.
+                if ("livemode" in result and result["livemode"] is not self.settings.stripe_livemode) or (
                     path != "billing_portal/sessions"
                     and not (
                         path.split("?")[0] == "invoices"
                         and result.get("object") == "list"
                     )
-                    and result.get("livemode") is not False
+                    and result.get("livemode") is not self.settings.stripe_livemode
                 ):
-                    raise Error("Stripe did not return a sandbox object.")
+                    raise Error(f"Stripe did not return a {self.settings.stripe_mode} object.")
                 return result
         except Error:
             raise
@@ -136,21 +136,23 @@ def tagged(obj: ProviderObject, row: SandboxCheckout) -> None:
     metadata = obj.get("metadata") or {}
     if (
         metadata.get("radar_attempt_id") != str(row.id)
-        or metadata.get("radar_sandbox") != "1"
+        or (metadata.get("radar_mode") != "live" if row.livemode else
+            metadata.get("radar_mode", "sandbox") != "sandbox" or metadata.get("radar_sandbox") != "1")
+        or obj.get("livemode") is not row.livemode
     ):
-        raise Error("Stripe object does not match this sandbox checkout.")
+        raise Error("Stripe object does not match this checkout.")
 
 
 def enabled(settings: Settings) -> None:
-    if not settings.stripe_sandbox_checkout_enabled:
-        raise Error("Sandbox checkout is disabled on this server.", 503)
+    if not settings.effective_stripe_checkout_enabled:
+        raise Error("Checkout is disabled on this server.", 503)
     if (
-        not settings.stripe_sandbox_webhook_secret
-        or not settings.stripe_sandbox_webhook_secret.get_secret_value().startswith(
+        not settings.effective_stripe_webhook_secret
+        or not settings.effective_stripe_webhook_secret.get_secret_value().startswith(
             "whsec_"
         )
     ):
         raise Error(
-            "Configure the sandbox webhook signing secret before enabling checkout.",
+            "Configure the Stripe webhook signing secret before enabling checkout.",
             503,
         )

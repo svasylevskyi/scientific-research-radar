@@ -396,3 +396,10 @@ Before paid launch, add independent backup storage/alerts, restore drills,
 production monitoring, provider budget controls, safe database upgrades and
 retention policies. Configure separate credentials and integration accounts.
 This development setup does not provide database failover or zero-downtime updates.
+
+## Stripe sandbox and live deployments
+
+Follow [the Stripe deployment guide](../docs/stripe-deployment.md) for mode selection,
+credentials, live catalogue mapping, webhook events, and acceptance checks.
+Migration `20260915_0026` binds each database to one Stripe mode. Production requires
+its own database; existing sandbox checkout records cannot be promoted to live.

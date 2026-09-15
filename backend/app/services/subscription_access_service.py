@@ -1,4 +1,4 @@
-"""Opt-in sandbox entitlements. All mutations share the observation account lock.
+"""Subscription entitlements. All mutations share the observation account lock.
 
 No Stripe calls in request admission. Accepted work keeps its reservation when
 billing changes; retries are new admissions. Old observation rows are never moved.
@@ -57,7 +57,7 @@ def _resolve_billing(db, user_id, settings=None):
         return result
     row = db.scalar(select(SandboxCheckout).where(SandboxCheckout.user_id == user_id,
         SandboxCheckout.subscription_id.is_not(None)).order_by(SandboxCheckout.created_at.desc(), SandboxCheckout.id.desc()).limit(1))
-    result.update(allowed=False, status='unavailable', reason='No verified sandbox subscription. Review Subscription and usage.')
+    result.update(allowed=False, status='unavailable', reason='No verified subscription. Review Subscription and usage.')
     if not row:
         from app.models.subscription_access import FreeSubscription
         free = db.get(FreeSubscription, user_id)

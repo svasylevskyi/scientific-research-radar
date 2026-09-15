@@ -75,7 +75,12 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    RadarWorker(get_settings()).run_forever()
+    settings = get_settings()
+    from app.services.stripe_environment import ensure_database_mode
+    with SessionLocal() as db:
+        ensure_database_mode(db, settings)
+        db.commit()
+    RadarWorker(settings).run_forever()
 
 
 if __name__ == "__main__":

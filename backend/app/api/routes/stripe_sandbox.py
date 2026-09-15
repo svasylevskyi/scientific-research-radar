@@ -1,4 +1,4 @@
-"""Admin-only test billing plus a separate signed, public webhook endpoint."""
+"""Admin-only billing tools plus a separate signed, public webhook endpoint."""
 from app.schemas.admin_billing_responses import (SandboxOverviewRead)
 from app.schemas.api_common import RedirectRead, WebhookReceiptRead
 from typing import Literal
@@ -12,6 +12,16 @@ from app.services.rate_limit_service import enforce, POLICIES
 
 router = APIRouter()
 webhook_router = APIRouter()
+
+
+class StripeModeRead(BaseModel):
+    mode: Literal["sandbox", "live"]
+    checkout_enabled: bool
+
+
+@router.get("/mode", response_model=StripeModeRead, response_model_exclude_unset=True)
+def mode(actor: CurrentAdmin, settings: AppSettings):
+    return {"mode": settings.stripe_mode, "checkout_enabled": settings.effective_stripe_checkout_enabled}
 
 
 class CheckoutRequest(BaseModel):
@@ -55,6 +65,7 @@ def portal(actor: CurrentAdmin, db: DbSession, settings: AppSettings):
     return call(db, service.portal, settings, actor.id)
 
 
+@webhook_router.post("/stripe", response_model=WebhookReceiptRead, response_model_exclude_unset=True)
 @webhook_router.post("/stripe-sandbox", response_model=WebhookReceiptRead, response_model_exclude_unset=True)
 async def webhook(request: Request, db: DbSession, settings: AppSettings):
     # Exempt only this signed endpoint from browser/auth request guards. Bound

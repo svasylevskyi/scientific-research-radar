@@ -108,7 +108,7 @@ function PlansContent({ enrolment }: { enrolment: boolean }) {
       <MarketingHeader />
       <Container component="main" maxWidth="lg" sx={{ py: 6 }}>
         <Chip
-          label="Sandbox subscriptions"
+          label={catalogue.data?.sandbox ? "Sandbox subscriptions" : "Subscriptions"}
           color="primary"
           variant="outlined"
         />
@@ -122,9 +122,8 @@ function PlansContent({ enrolment }: { enrolment: boolean }) {
           </Typography>
         )}
         <Alert severity="info" sx={{ mb: 3 }}>
-          Free is managed by Radar and assigned after registration. Paid
-          subscriptions are still in sandbox testing: use Stripe test payment
-          details only. Prices include tax; no real payment is collected.
+          Free is managed by Radar and assigned after registration. Prices include tax.
+          {catalogue.data?.sandbox && " Paid subscriptions are in sandbox testing: use Stripe test payment details only. No real payment is collected."}
         </Alert>
         {error && (
           <Alert severity="error" action={
@@ -329,16 +328,16 @@ function PlansContent({ enrolment }: { enrolment: boolean }) {
             if (!busy) setSelection(null);
           }}
         >
-          <DialogTitle>Continue to sandbox checkout?</DialogTitle>
+          <DialogTitle>Continue to {catalogue.data?.sandbox ? "sandbox " : ""}checkout?</DialogTitle>
           <DialogContent>
             {selection && (
               <Typography>
                 {selection.plan.name}:{" "}
                 {money(selection.plan, selection.interval)} per{" "}
                 {selection.interval === "annual" ? "year" : "month"}, tax
-                included. This test subscription renews until canceled. Access
-                starts after invoice verification. Use test payment details
-                only.
+                included. This subscription renews until canceled. Access
+                starts after invoice verification.
+                {catalogue.data?.sandbox && " Use test payment details only."}
               </Typography>
             )}
           </DialogContent>

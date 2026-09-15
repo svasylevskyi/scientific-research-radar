@@ -1,4 +1,4 @@
-"""Owner-scoped subscriber sandbox flow; never changes the opt-in policy."""
+"""Owner-scoped subscriber billing flow; never changes the opt-in policy."""
 
 from sqlalchemy import func, select
 
@@ -15,21 +15,21 @@ PUBLIC_FIELDS = ('name', 'description', 'currency', 'monthly_price', 'annual_pri
     'schedule_frequencies', 'email_delivery')
 
 
-def catalogue(db):
+def catalogue(db, settings=None):
     latest = select(Plan.code, func.max(Plan.revision).label('revision')).group_by(Plan.code).subquery()
     rows = db.scalars(select(Plan).join(latest, (Plan.code == latest.c.code) & (Plan.revision == latest.c.revision))
         .order_by(func.coalesce(Plan.configuration['display_order'].as_integer(), 0), Plan.code))
     return {'items': [{'code': p.code, 'revision': p.revision, 'billing_type': p.configuration.get('billing_type', 'stripe'), **{k: p.configuration[k] for k in PUBLIC_FIELDS}}
-        for p in rows if available(p)], 'sandbox': True}
+        for p in rows if available(p)], 'sandbox': not settings.stripe_livemode if settings else True}
 
 
-def enrolment_catalogue(db, user_id):
+def enrolment_catalogue(db, user_id, settings=None):
     """Show the account's actual Free revision, even if no longer advertised.
 
     Registration already assigned it transactionally. Selecting paid checkout
     must not change that assignment before payment evidence grants paid access.
     """
-    result = catalogue(db)
+    result = catalogue(db, settings)
     result['items'] = [item for item in result['items'] if item['billing_type'] != 'free']
     assigned = db.get(FreeSubscription, user_id)
     if assigned:
@@ -45,9 +45,9 @@ def status(db, settings, uid):
     pending = bool(row and row.checkout_status in ('creating', 'open'))
     subscribed = bool(row and row.subscription_id and row.subscription_status not in billing.TERMINAL)
     eligible = opted_in(db, user_id=uid)
-    enabled = settings.stripe_sandbox_checkout_enabled
-    reason = ('Sandbox checkout is disabled.' if not enabled else
-        'Contact the administrator to enroll this account in sandbox subscription testing.' if not eligible else
+    enabled = settings.effective_stripe_checkout_enabled
+    reason = ('Checkout is disabled.' if not enabled else
+        'Contact the administrator to enroll this account in subscription testing.' if not eligible else
         'You already have a subscription. Review scheduled changes below, or use Manage billing for payment details.' if subscribed else
         'Resume the pending checkout before selecting another plan.' if pending else '')
     attempt = None
@@ -55,10 +55,10 @@ def status(db, settings, uid):
         plan = db.get(Plan, row.plan_revision_id)
         attempt = {'plan_name': plan.configuration['name'], 'code': plan.code, 'revision': plan.revision,
             'interval': row.interval, 'checkout_status': row.checkout_status, 'subscription_status': row.subscription_status}
-    return {'sandbox': True, 'checkout_allowed': enabled and eligible and not subscribed and not pending,
+    return {'sandbox': not settings.stripe_livemode, 'checkout_allowed': enabled and eligible and not subscribed and not pending,
         'resume_allowed': enabled and eligible and pending and not subscribed,
-        'portal_allowed': bool(enabled and row and row.customer_id and settings.stripe_sandbox_portal_configuration_id),
-        'cancel_allowed': bool(enabled and subscribed and not change_pending and not row.cancel_at_period_end and settings.stripe_sandbox_portal_configuration_id),
+        'portal_allowed': bool(enabled and row and row.customer_id and settings.effective_stripe_portal_configuration_id),
+        'cancel_allowed': bool(enabled and subscribed and not change_pending and not row.cancel_at_period_end and settings.effective_stripe_portal_configuration_id),
         'cancel_at_period_end': bool(row and row.cancel_at_period_end),
         'period_end': billing.utc(row.period_end) if row and row.period_end else None,
         'reason': reason, 'attempt': attempt}
