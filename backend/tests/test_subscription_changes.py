@@ -342,7 +342,7 @@ def test_undo_stops_at_boundary_and_terminal_subscription_clears_pending(changin
     assert client.post(URL + '/refresh', headers=changing[1]).status_code == 200
     with db_session_factory() as db:
         assert db.get(Change, UUID(change['id'])).state == 'stopped'
-        assert changes.blocking(db, changing[0]) is None
+        assert changes.blocking(db, user_id=changing[0]) is None
 
 
 def test_changed_price_cancellation_notifications_do_not_claim_withdrawal(changing, client, db_session_factory):

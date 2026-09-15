@@ -4,11 +4,15 @@ This boundary intentionally remains sandbox-only. Moving it does not enable live
 """
 
 import re
-from datetime import timezone
+from datetime import datetime, timezone
+from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
 
+from app.core.config import Settings
+from app.models.stripe_sandbox import SandboxCheckout
+from app.services.billing_types import ProviderObject
 from app.services.stripe_catalogue_service import StripeCatalogueError as Error
 from app.services.stripe_catalogue_service import check_mapping
 
@@ -25,11 +29,11 @@ STATUSES = {
 }
 
 
-def utc(value):
+def utc(value: datetime) -> datetime:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
-def identifier(value, prefix):
+def identifier(value: object, prefix: str) -> str:
     if not isinstance(value, str) or not re.fullmatch(
         re.escape(prefix) + r"[A-Za-z0-9_]{1,240}", value
     ):
@@ -37,7 +41,7 @@ def identifier(value, prefix):
     return value
 
 
-def redirect_url(value, host):
+def redirect_url(value: object, host: str) -> str:
     if not isinstance(value, str):
         raise Error("Stripe did not provide a hosted page.")
     parsed = urlsplit(value)
@@ -52,7 +56,9 @@ def redirect_url(value, host):
 
 
 class StripeSandboxClient:
-    def __init__(self, settings, *, transport=None):
+    def __init__(
+        self, settings: Settings, *, transport: httpx.BaseTransport | None = None
+    ) -> None:
         self.settings, self.transport = settings, transport
         self.key = (
             settings.stripe_sandbox_api_key.get_secret_value()
@@ -65,7 +71,14 @@ class StripeSandboxClient:
                 503,
             )
 
-    def request(self, method, path, *, data=None, idempotency_key=None):
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        data: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> ProviderObject:
         try:
             with httpx.Client(
                 base_url="https://api.stripe.com/v1/",
@@ -115,11 +128,11 @@ class StripeSandboxClient:
                 503,
             ) from None
 
-    def mapping(self, configuration):
+    def mapping(self, configuration: dict[str, Any]) -> ProviderObject:
         return check_mapping(configuration, self.settings, transport=self.transport)
 
 
-def tagged(obj, row):
+def tagged(obj: ProviderObject, row: SandboxCheckout) -> None:
     metadata = obj.get("metadata") or {}
     if (
         metadata.get("radar_attempt_id") != str(row.id)
@@ -128,7 +141,7 @@ def tagged(obj, row):
         raise Error("Stripe object does not match this sandbox checkout.")
 
 
-def enabled(settings):
+def enabled(settings: Settings) -> None:
     if not settings.stripe_sandbox_checkout_enabled:
         raise Error("Sandbox checkout is disabled on this server.", 503)
     if (
