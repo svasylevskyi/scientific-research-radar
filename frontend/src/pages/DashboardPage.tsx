@@ -71,6 +71,7 @@ export function DashboardPage() {
           component={RouterLink}
           to="/digests/new"
           disabled={!access.data?.create_allowed || !!access.error}
+          aria-describedby={!access.data?.create_allowed || access.error ? "create-allowance-notice" : undefined}
           variant="contained"
           size="large"
           startIcon={<TravelExploreRoundedIcon />}
@@ -79,7 +80,7 @@ export function DashboardPage() {
           Create research digest
         </Button>
 
-        <AllowanceNotice {...access} reasons={access.data?.create_reasons} showResearchWarning />
+        <AllowanceNotice {...access} context="create" id="create-allowance-notice" />
 
         <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mt: 6, mb: 2.5 }}>
           <LibraryBooksRoundedIcon color="primary" />

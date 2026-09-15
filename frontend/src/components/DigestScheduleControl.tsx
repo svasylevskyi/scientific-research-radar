@@ -1,7 +1,5 @@
 import type { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
-import { AllowanceNotice } from "./AllowanceNotice";
 type AccessState = ReturnType<typeof useSubscriptionAccess>;
-import { Link } from "react-router-dom";
 import { ScheduleOutlook } from "./ScheduleOutlook";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import { Alert, Box, Button, Checkbox, FormControlLabel, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Stack, TextField, Typography } from "@mui/material";
@@ -36,6 +34,7 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel, access }: {
   const [startsAt, setStartsAt] = useState(() => localInput(schedule ? new Date(schedule.starts_at) : new Date(Date.now() + 86400000)));
   const [endsAt, setEndsAt] = useState(() => schedule?.ends_at ? localInput(new Date(schedule.ends_at)) : "");
   const [error, setError] = useState<string | null>(null);
+  const [dateErrors, setDateErrors] = useState<{ start?: string; end?: string }>({});
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -45,15 +44,18 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel, access }: {
     event.preventDefault();
     if (busy || unavailable || !allowedFrequencies.includes(frequency) || (sendEmail && !emailAllowed)) return;
     setError(null);
+    setDateErrors({});
     const start = new Date(startsAt);
     const end = endsAt ? new Date(endsAt) : null;
     // Date can silently normalize a nonexistent local time during a DST change.
-    if (!Number.isFinite(start.getTime()) || localInput(start) !== startsAt ||
-        (end && (!Number.isFinite(end.getTime()) || localInput(end) !== endsAt))) {
-      setError("Choose valid dates and times in your time zone."); return;
+    const invalidStart = !Number.isFinite(start.getTime()) || localInput(start) !== startsAt;
+    const invalidEnd = end && (!Number.isFinite(end.getTime()) || localInput(end) !== endsAt);
+    if (invalidStart || invalidEnd) {
+      setDateErrors({ start: invalidStart ? "Choose a valid date and time in your time zone." : undefined,
+        end: invalidEnd ? "Choose a valid date and time in your time zone." : undefined }); return;
     }
     if (end && end <= start) {
-      setError("Schedule end must be after the first digest date and time."); return;
+      setDateErrors({ end: "Schedule end must be after the first digest date and time." }); return;
     }
     setBusy(true);
     try {
@@ -88,16 +90,16 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel, access }: {
       <Stack spacing={2}>
         <Typography variant="body2" color="text.secondary">All dates and times below use {timeZone}. Scheduled runs use a rolling reporting period with the same length as your digest. Saving enables future automatic runs while the scheduler is running.</Typography>
         {error && <Alert severity="error">{error}</Alert>}
-        <TextField select label="Digest frequency" value={frequency} onChange={(event) => setFrequency(event.target.value as DigestFrequency)} required disabled={busy || unavailable} fullWidth>
-          {frequencies.map((value) => <MenuItem key={value} value={value} disabled={!allowedFrequencies.includes(value)}>{label(value)}{!allowedFrequencies.includes(value) ? " — upgrade required" : ""}</MenuItem>)}
+        <TextField select label="Digest frequency" value={frequency} onChange={(event) => setFrequency(event.target.value as DigestFrequency)} required disabled={busy || unavailable} fullWidth
+          error={!allowedFrequencies.includes(frequency)} helperText={!allowedFrequencies.includes(frequency) ? "Choose an included frequency before saving." : undefined}>
+          {frequencies.map((value) => <MenuItem key={value} value={value} disabled={!allowedFrequencies.includes(value)}>{label(value)}{!allowedFrequencies.includes(value) ? " — not included" : ""}</MenuItem>)}
         </TextField>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-          <TextField label="First digest date and time" type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} required disabled={busy || unavailable} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-          <TextField label="End date and time (optional)" type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} disabled={busy || unavailable} fullWidth helperText="Exclusive cutoff. Leave empty for no end date." slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField label="First digest date and time" type="datetime-local" value={startsAt} onChange={(event) => { setStartsAt(event.target.value); setDateErrors({}); }} error={!!dateErrors.start} helperText={dateErrors.start} required disabled={busy || unavailable} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField label="End date and time (optional)" type="datetime-local" value={endsAt} onChange={(event) => { setEndsAt(event.target.value); setDateErrors({}); }} error={!!dateErrors.end} disabled={busy || unavailable} fullWidth helperText={dateErrors.end ?? "Exclusive cutoff. Leave empty for no end date."} slotProps={{ inputLabel: { shrink: true } }} />
         </Stack>
         <FormControlLabel control={<Checkbox checked={sendEmail} onChange={(event) => setSendEmail(event.target.checked)} disabled={busy || unavailable || (!emailAllowed && !sendEmail)} />} label={`Email completed briefings to ${user?.email ?? "the email in your profile"}`} />
-        {!emailAllowed && <Typography variant="body2">Email delivery is not included in this plan. Upgrade to include emailed briefings, or keep email disabled.</Typography>}
-        {!allowedFrequencies.includes(frequency) && <Typography color="warning.main">Choose an included frequency or review upgrade options before saving.</Typography>}
+        {!emailAllowed && <Typography variant="body2">Email delivery is not included in this plan. Keep email disabled to save this schedule.</Typography>}
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
           <Button type="submit" variant="contained" disabled={busy || unavailable || !allowedFrequencies.includes(frequency) || (sendEmail && !emailAllowed)}>{busy && !deleting ? "Saving…" : "Save schedule"}</Button>
           {schedule && <Button type="button" color="error" onClick={() => setConfirmDelete(true)} disabled={busy}>Delete schedule</Button>}
@@ -130,14 +132,13 @@ export function DigestScheduleControl({ digestId, schedule, exhausted, onSaved, 
       <Stack direction="row" spacing={1.5} alignItems="stretch">
         {runButton}
         <Button variant="outlined" startIcon={<ScheduleRoundedIcon />} onClick={() => setEditing(true)} disabled={editing || (!schedule && (!access.data?.schedule_allowed || !!access.error))}
+          aria-describedby={!access.data?.schedule_allowed || access.error ? "digest-allowance-notice" : undefined}
           aria-expanded={editing} aria-controls={editing ? `schedule-form-${digestId}` : undefined}>
           {schedule ? "Update schedule" : "Schedule runs"}
         </Button>
       </Stack>
-      <AllowanceNotice data={access.data} reasons={access.data?.schedule_reasons} showResearchWarning={editing} />
       {access.data?.plan && <Typography variant="body2" sx={{ mt: 1 }}>Included schedules: {access.data.plan.configuration.schedule_frequencies.join(", ") || "none"}.
         Email delivery: {access.data.plan.configuration.email_delivery ? "included" : "not included"}.
-        <Button component={Link} to="/subscription#upgrade" size="small">Upgrade options</Button>
       </Typography>}
       {!editing && schedule && (
         <Box sx={{ mt: 2 }}>

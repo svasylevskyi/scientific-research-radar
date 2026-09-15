@@ -125,12 +125,18 @@ function SubscriberSections() {
                       a paid plan moves it to Free after verified paid access
                       ends.
                     </Typography>
-                    <Button component={Link} to="/plans">
+                    {(access.billing_type === "stripe" || upgrades.upgrade) && <Button component={Link} to="/plans">
                       Compare available plans
-                    </Button>
+                    </Button>}
                   </Paper>
-                  {(access.billing_type === "stripe" || upgrades.upgrade) && (
+                  {(access.billing_type === "stripe" || upgrades.upgrade) ? (
                     <SubscriptionUpgrades />
+                  ) : (
+                    <Paper id="upgrade" tabIndex={-1} variant="outlined" sx={{ p: 3, scrollMarginTop: 100 }}>
+                      <Typography variant="h6">Upgrade options</Typography>
+                      <Typography>Compare paid plans and their included allowances.</Typography>
+                      <Button component={Link} to="/plans">Compare paid plans</Button>
+                    </Paper>
                   )}
                   <Box id="changes" tabIndex={-1} sx={{ scrollMarginTop: 100 }}>
                     {(access.billing_type === "stripe" || changes.change) && (
