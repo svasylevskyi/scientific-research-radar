@@ -46,6 +46,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/plans" element={<PlansPage />} />
+          <Route path="/register/plan" element={<RequireAuth><PlansPage enrolment /></RequireAuth>} />
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
           <Route path="/terms" element={<LegalPage kind="terms" />} />
           <Route

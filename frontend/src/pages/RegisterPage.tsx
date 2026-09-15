@@ -12,7 +12,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link as RouterLink, Navigate, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../api/client";
@@ -34,6 +34,8 @@ export function RegisterPage() {
     else sessionStorage.removeItem("registrationVerification");
   }
   const navigate = useNavigate();
+  // Auth state can render before the confirmation callback navigates.
+  const confirmingRegistration = useRef(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,7 +45,9 @@ export function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!isInitializing && user) return <Navigate to="/radar" replace />;
+  if (!isInitializing && user) {
+    return <Navigate to={confirmingRegistration.current ? "/register/plan" : "/radar"} replace />;
+  }
 
   const passwordIsValid = isValidNewPassword(password);
   const passwordsMatch = password === passwordConfirmation;
@@ -89,9 +93,15 @@ export function RegisterPage() {
 
       {challenge ? <EmailVerificationForm challenge={challenge} registration
         onConfirm={async (code) => {
-          await confirmRegistration(challenge.id, code);
-          rememberChallenge(null);
-          navigate("/radar", { replace: true });
+          confirmingRegistration.current = true;
+          try {
+            await confirmRegistration(challenge.id, code);
+            rememberChallenge(null);
+            navigate("/register/plan", { replace: true });
+          } catch (error) {
+            confirmingRegistration.current = false;
+            throw error;
+          }
         }}
         onResend={async () => rememberChallenge(await authApi.resendRegistration(challenge.id))}
         onCancel={() => rememberChallenge(null)} /> : (

@@ -136,3 +136,28 @@ def test_non_explorer_selection_uses_exact_code_and_display_order(client, subscr
     # Same revision number on another plan cannot resume/change this intent.
     result = client.post(URL + '/billing/checkout', headers=auth, json={'code': 'explorer', 'revision': 1, 'interval': 'monthly'})
     assert result.status_code == 409
+
+
+@pytest.mark.parametrize('interval', ['monthly', 'annual'])
+def test_new_account_can_choose_paid_checkout_while_retaining_free(client, subscriber, db_session_factory, interval):
+    from app.models.subscription_access import FreeSubscription
+    from test_free_subscriptions import register
+    user_id, auth = register(client, 'new-enrolment@example.com')
+    choices = client.get(URL + '/enrolment-plans', headers=auth)
+    assert choices.status_code == 200, choices.text
+    assert [plan['code'] for plan in choices.json()['items']] == ['free', 'explorer']
+    with db_session_factory() as db:
+        assigned_id = db.get(FreeSubscription, user_id).plan_revision_id
+    response = client.post(URL + '/billing/checkout', headers=auth,
+        json={'code': 'explorer', 'revision': 1, 'interval': interval})
+    assert response.status_code == 200, response.text
+    assert response.json()['url'].startswith('https://checkout.stripe.com/')
+    # Starting checkout and a forged success return URL are not payment evidence.
+    data = client.get(URL + '?stripe_return=checkout', headers=auth).json()
+    assert data['allowed'] and data['billing_type'] == 'free'
+    assert data['remaining']['digests'] == 1
+    assert client.get(URL + '/billing', headers=auth).json()['resume_allowed']
+    with db_session_factory() as db:
+        assert db.get(FreeSubscription, user_id).plan_revision_id == assigned_id
+        assert billing.latest(db, user_id).interval == interval
+        assert db.scalar(select(func.count()).select_from(Policy).where(Policy.user_id == user_id)) == 1

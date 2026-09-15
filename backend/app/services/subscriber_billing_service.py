@@ -3,6 +3,7 @@
 from sqlalchemy import func, select
 
 from app.models.subscription_plan import SubscriptionPlanRevision as Plan
+from app.models.subscription_access import FreeSubscription
 from app.services import stripe_sandbox_service as billing
 from app.services.billing_policy import available, opted_in
 from app.services.billing_policy import blocking_change as blocking
@@ -20,6 +21,22 @@ def catalogue(db):
         .order_by(func.coalesce(Plan.configuration['display_order'].as_integer(), 0), Plan.code))
     return {'items': [{'code': p.code, 'revision': p.revision, 'billing_type': p.configuration.get('billing_type', 'stripe'), **{k: p.configuration[k] for k in PUBLIC_FIELDS}}
         for p in rows if available(p)], 'sandbox': True}
+
+
+def enrolment_catalogue(db, user_id):
+    """Show the account's actual Free revision, even if no longer advertised.
+
+    Registration already assigned it transactionally. Selecting paid checkout
+    must not change that assignment before payment evidence grants paid access.
+    """
+    result = catalogue(db)
+    result['items'] = [item for item in result['items'] if item['billing_type'] != 'free']
+    assigned = db.get(FreeSubscription, user_id)
+    if assigned:
+        plan = db.get(Plan, assigned.plan_revision_id)
+        result['items'].insert(0, {'code': plan.code, 'revision': plan.revision,
+            'billing_type': 'free', **{key: plan.configuration[key] for key in PUBLIC_FIELDS}})
+    return result
 
 
 def status(db, settings, uid):

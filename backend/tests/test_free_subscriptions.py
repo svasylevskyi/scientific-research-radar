@@ -109,3 +109,38 @@ def test_legacy_account_unchanged_and_admin_can_enforce_free(client, db_session_
     assert client.post(url, headers=auth, json={'mode': 'sandbox', 'expected_version': 0, 'change_note': 'Self'}).status_code == 403
     assert client.post(url, headers=admin, json={'mode': 'sandbox', 'expected_version': 0, 'change_note': 'Enforce'}).status_code == 201
     assert client.get('/api/v1/subscription', headers=auth).json()['billing_type'] == 'free'
+
+
+def test_enrolment_catalogue_uses_assigned_free_revision_and_requires_auth(client, db_session_factory):
+    first, first_auth = register(client)
+    with db_session_factory() as db:
+        assigned_id = db.get(FreeSubscription, first).plan_revision_id
+        original = db.get(Plan, assigned_id)
+        db.add(Plan(code='free', revision=2, configuration={**original.configuration,
+            'name': 'New Free', 'max_digests': 2, 'subscriber_visible': False}, change_note='New registration terms'))
+        db.commit()
+    _, second_auth = register(client, 'second-enrolment@example.com')
+    url = '/api/v1/subscription/enrolment-plans'
+    assert client.get(url).status_code == 401
+    response = client.get(url, headers=first_auth)
+    assert response.status_code == 200, response.text
+    assert response.headers['cache-control'] == 'no-store'
+    first_plan = response.json()['items'][0]
+    second_plan = client.get(url, headers=second_auth).json()['items'][0]
+    assert (first_plan['code'], first_plan['revision'], first_plan['max_digests']) == ('free', 1, 1)
+    assert (second_plan['code'], second_plan['revision'], second_plan['max_digests']) == ('free', 2, 2)
+    assert 'stripe_sandbox' not in first_plan and 'change_note' not in first_plan
+    with db_session_factory() as db:
+        assert db.get(FreeSubscription, first).plan_revision_id == assigned_id
+
+
+def test_enrolment_catalogue_does_not_enroll_legacy_accounts(client, db_session_factory):
+    response = client.register_verified(json={'email': 'legacy-enrolment@example.com', 'full_name': 'Legacy',
+        'password': PASSWORD, 'password_confirmation': PASSWORD})
+    auth = _authorization(response)
+    user_id = UUID(response.json()['user']['id'])
+    assert client.get('/api/v1/subscription/enrolment-plans', headers=auth).json()['items'] == []
+    assert client.get('/api/v1/subscription', headers=auth).json()['mode'] == 'complimentary'
+    with db_session_factory() as db:
+        assert db.get(FreeSubscription, user_id) is None
+        assert db.scalar(select(Policy.id).where(Policy.user_id == user_id)) is None
