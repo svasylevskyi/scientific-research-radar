@@ -1,87 +1,59 @@
-"""Isolated admin sandbox billing. No entitlements or radar mutations.
+"""Sandbox checkout commands and canonical billing reconciliation.
 
 Account-row writes serialize checkout creation and provider observations on SQLite
 and PostgreSQL. An attempt and its exact parameters are committed BEFORE Stripe
 is called so that ambiguous failures can only resume the same idempotent request.
 """
-from datetime import datetime, timezone
+
 import hashlib
 import hmac
 import json
-import re
 import time
-from urllib.parse import urlsplit
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-import httpx
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from app.models.stripe_sandbox import SandboxBillingAccount, SandboxCheckout, SandboxStripeEvent
+from app.models.stripe_sandbox import (
+    SandboxBillingAccount,
+    SandboxCheckout,
+    SandboxStripeEvent,
+)
 from app.models.subscription_plan import SubscriptionPlanRevision
-from app.services.billing_invoice_service import INVOICE_EVENTS
-from app.services.stripe_catalogue_service import StripeCatalogueError, check_mapping
+from app.services.billing_change_observation import observe as observe_change
+from app.services.billing_change_observation import paid
+from app.services.billing_invoice_service import (
+    INVOICE_EVENTS,
+    assessment,
+    observe,
+    reconcile,
+    retrieve,
+    subscription_id,
+)
+from app.services.billing_notification_service import capture
+from app.services.billing_policy import available, require_opt_in
+from app.services.billing_policy import blocking_change as blocking
+from app.services.billing_policy import blocking_upgrade as upgrade_pending
+from app.services.billing_provider import (
+    STATUSES,
+    TERMINAL,
+    StripeSandboxClient,
+    enabled,
+    identifier,
+    redirect_url,
+    tagged,
+    utc,
+)
+from app.services.billing_upgrade_observation import observe as observe_upgrade
+from app.services.stripe_catalogue_service import StripeCatalogueError
+from app.services.subscription_access_service import resolve
 
 Error = StripeCatalogueError
-TERMINAL = {"canceled", "incomplete_expired"}
-STATUSES = {"incomplete", "incomplete_expired", "trialing", "active", "past_due", "canceled", "unpaid", "paused"}
 EVENTS = {"checkout.session.completed", "checkout.session.expired", "customer.subscription.created",
           "customer.subscription.updated", "customer.subscription.deleted",
           "customer.subscription.pending_update_applied", "customer.subscription.pending_update_expired"} | INVOICE_EVENTS
-
-
-def utc(value):
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
-
-
-def identifier(value, prefix):
-    if not isinstance(value, str) or not re.fullmatch(re.escape(prefix) + r"[A-Za-z0-9_]{1,240}", value):
-        raise Error("Stripe returned an unexpected identifier.")
-    return value
-
-
-def redirect_url(value, host):
-    if not isinstance(value, str):
-        raise Error("Stripe did not provide a hosted page.")
-    parsed = urlsplit(value)
-    if parsed.scheme != "https" or parsed.netloc != host or parsed.username or parsed.password:
-        raise Error("Stripe returned an unexpected hosted page.")
-    return value
-
-
-class StripeSandboxClient:
-    def __init__(self, settings, *, transport=None):
-        self.settings, self.transport = settings, transport
-        self.key = settings.stripe_sandbox_api_key.get_secret_value() if settings.stripe_sandbox_api_key else ""
-        if not self.key.startswith(("rk_test_", "sk_test_")):
-            raise Error("Configure a Stripe sandbox API key on the API server. Live keys are not accepted.", 503)
-
-    def request(self, method, path, *, data=None, idempotency_key=None):
-        try:
-            with httpx.Client(base_url="https://api.stripe.com/v1/", auth=(self.key, ""), timeout=8,
-                              follow_redirects=False, transport=self.transport) as client:
-                response = client.request(method, path, data=data,
-                    headers={"Idempotency-Key": idempotency_key} if idempotency_key else {})
-                if response.status_code in (401, 403):
-                    raise Error("Stripe rejected access. Check the sandbox key permissions in the setup guide.", 503)
-                if response.status_code != 200:
-                    raise Error("Stripe could not complete this operation. Retry the same action; no new checkout will be created for an unresolved attempt.", 503)
-                result = response.json()
-                if not isinstance(result, dict):
-                    raise ValueError()
-                # Portal sessions do not expose livemode; their configuration is
-                # checked independently and only test-key requests are permitted.
-                if result.get("livemode") is True or (path != "billing_portal/sessions" and not (path.split("?")[0] == "invoices" and result.get("object") == "list") and result.get("livemode") is not False):
-                    raise Error("Stripe did not return a sandbox object.")
-                return result
-        except Error:
-            raise
-        except (httpx.HTTPError, ValueError, TypeError):
-            raise Error("Stripe is unavailable or returned an unexpected response. Retry the same action to resume safely.", 503) from None
-
-    def mapping(self, configuration):
-        return check_mapping(configuration, self.settings, transport=self.transport)
 
 
 def lock_account(db, user_id):
@@ -118,14 +90,7 @@ def overview(db, settings, user_id):
         "portal_available": bool(rows and rows[0].customer_id and settings.stripe_sandbox_portal_configuration_id)}
 
 
-def tagged(obj, row):
-    metadata = obj.get("metadata") or {}
-    if metadata.get("radar_attempt_id") != str(row.id) or metadata.get("radar_sandbox") != "1":
-        raise Error("Stripe object does not match this sandbox checkout.")
-
-
 def observe_subscription(db, client, row, subscription_id):
-    from app.services.subscription_access_service import resolve
     # Materialize an elapsed fallback before recovery can replace the old observation.
     resolve(db, row.user_id, client.settings if hasattr(client, 'settings') else None)
     subscription_id = identifier(subscription_id, "sub_")
@@ -139,9 +104,7 @@ def observe_subscription(db, client, row, subscription_id):
     status = value.get("status")
     if status not in STATUSES:
         raise Error("Stripe returned an unknown subscription status.")
-    from app.services.subscription_change_service import observe as observe_change
     observe_change(db, client, row, value)
-    from app.services.subscription_upgrade_service import observe as observe_upgrade
     observe_upgrade(db, client, row, value)
     items = (value.get("items") or {}).get("data") or []
     row.price_matches = (len(items) == 1 and (items[0].get("price") or {}).get("id") == row.price_id
@@ -167,12 +130,8 @@ def observe_subscription(db, client, row, subscription_id):
         row.delinquent_since = min(stamp, utc(row.period_start)) if row.period_start else stamp
     row.subscription_id, row.customer_id, row.subscription_status = subscription_id, customer, status
     row.cancel_at_period_end = value.get("cancel_at_period_end") is True
-    from app.services.billing_invoice_service import reconcile
     reconcile(db, client, row, value.get('latest_invoice'))
     row.observed_at = datetime.now(timezone.utc)
-    from app.services.subscription_change_service import paid
-    from app.services.billing_notification_service import capture
-    from app.services.billing_invoice_service import assessment
     from app.core.config import get_settings
     settings = client.settings if hasattr(client, 'settings') else get_settings()
     paid(db, row, settings)
@@ -211,22 +170,13 @@ def sync_attempt(db, client, row):
     return None
 
 
-def enabled(settings):
-    if not settings.stripe_sandbox_checkout_enabled:
-        raise Error("Sandbox checkout is disabled on this server.", 503)
-    if not settings.stripe_sandbox_webhook_secret or not settings.stripe_sandbox_webhook_secret.get_secret_value().startswith("whsec_"):
-        raise Error("Configure the sandbox webhook signing secret before enabling checkout.", 503)
-
-
 def start_checkout(db, settings, user_id, revision, interval, *, client=None, code="explorer", subscriber=False):
     enabled(settings)
     client = client or StripeSandboxClient(settings)
     lock_account(db, user_id)
-    from app.services.subscription_upgrade_service import blocking as upgrade_pending
     if upgrade_pending(db, user_id):
         raise Error('Resolve the pending upgrade before starting another checkout.', 409)
     if subscriber:
-        from app.services.subscriber_billing_service import require_opt_in
         require_opt_in(db, user_id)
     row = latest(db, user_id)
     if row:
@@ -255,7 +205,6 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None, co
         if not plan or plan.revision != revision:
             raise Error("The plan changed. Reload and review its latest revision.", 409)
         if subscriber:
-            from app.services.subscriber_billing_service import available
             if not available(plan):
                 raise Error("This plan is not available for subscriber checkout. Review the current plans.", 409)
         if plan.configuration.get("billing_type") == "free":
@@ -322,8 +271,6 @@ def portal(db, settings, user_id, *, client=None, subscriber=False, cancel=False
     row = latest(db, user_id)
     if not row or not row.customer_id:
         raise Error("Complete a sandbox checkout before opening the portal.", 409)
-    from app.services.subscription_change_service import blocking
-    from app.services.subscription_upgrade_service import blocking as upgrade_pending
     change_pending = blocking(db, user_id) is not None or upgrade_pending(db, user_id) is not None
     if change_pending and cancel:
         raise Error("Resolve the pending subscription change before cancelling renewal.", 409)
@@ -399,7 +346,6 @@ def handle_event(db, settings, event, *, client=None, commit=True):
     # Fetch canonical state while holding the account lock. Out-of-order event
     # snapshots can never regress status or the current billing period.
     if event['type'] in INVOICE_EVENTS:
-        from app.services.billing_invoice_service import subscription_id, observe, retrieve
         invoice = retrieve(client, obj.get('id'))
         observe_subscription(db, client, row, subscription_id(invoice))
         observe(db, row, retrieve(client, invoice["id"]))

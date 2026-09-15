@@ -1,11 +1,23 @@
 """Canonical, read-only sandbox invoice reconciliation. Caller owns the transaction."""
+
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 from urllib.parse import urlencode
-from sqlalchemy import func, select
+
+from sqlalchemy import select
+
 from app.models.billing_invoice import BillingInvoice
 from app.models.subscription_plan import SubscriptionPlanRevision
+from app.services.billing_payment_rules import (
+    expected_invoice_price,
+    invoice_issue,
+    ref,
+    stamp,
+    subscription_id,
+)
+from app.services.billing_payment_rules import metadata as metadata
+from app.services.billing_provider import identifier
 from app.services.stripe_catalogue_service import StripeCatalogueError as Error
 
 INVOICE_EVENTS = {'invoice.paid', 'invoice.payment_failed', 'invoice.payment_action_required',
@@ -16,32 +28,7 @@ def utc(value):
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
-def ref(value):
-    return value.get('id') if isinstance(value, dict) else value
-
-
-def subscription_id(value):
-    parent = value.get('parent') or {}
-    return ref((parent.get('subscription_details') or {}).get('subscription') or value.get('subscription'))
-
-
-def metadata(value):
-    return ((value.get('parent') or {}).get('subscription_details') or value.get('subscription_details') or {}).get('metadata') or {}
-
-
-def stamp(value, *, optional=True):
-    if value is None and optional:
-        return None
-    if type(value) is not int or value < 0:
-        raise Error('Stripe returned an invalid invoice timestamp.')
-    try:
-        return datetime.fromtimestamp(value, timezone.utc)
-    except (ValueError, OverflowError, OSError):
-        raise Error('Stripe returned an invalid invoice timestamp.') from None
-
-
 def observe(db, checkout, value):
-    from app.services.stripe_sandbox_service import identifier
     invoice_id = identifier(value.get('id'), 'in_')
     if value.get('object') != 'invoice' or value.get('livemode') is not False:
         raise Error('Stripe did not return a sandbox invoice.')
@@ -77,7 +64,6 @@ def observe(db, checkout, value):
             quantity = Decimal(str(line.get('quantity_decimal') if line.get('quantity_decimal') is not None else line.get('quantity')))
         except InvalidOperation:
             quantity = Decimal(0)
-        from app.services.subscription_change_service import expected_invoice_price
         if linked != checkout.subscription_id or price != expected_invoice_price(db, checkout, start) or quantity != 1:
             issue = 'Invoice line does not match the subscription, quantity or saved price.'
         elif details.get('proration', line.get('proration')) is not False or not start or not end or start >= end:
@@ -87,7 +73,6 @@ def observe(db, checkout, value):
     transition_invoice = reason == 'subscription_update' and start and db.scalar(select(SubscriptionChange.id).where(SubscriptionChange.checkout_id == checkout.id, SubscriptionChange.applied_at.is_not(None), SubscriptionChange.effective_at == start))
     if reason not in {'subscription_create', 'subscription_cycle'} and not transition_invoice:
         issue = 'This invoice is not a supported initial or renewal invoice.'
-    from app.services.subscription_upgrade_service import invoice_issue
     upgrade_check = invoice_issue(db, checkout, value)
     if upgrade_check is not None:
         issue, start, end = upgrade_check['issue'], upgrade_check['start'], upgrade_check['end']
@@ -112,7 +97,6 @@ def observe(db, checkout, value):
 
 
 def retrieve(client, invoice_id):
-    from app.services.stripe_sandbox_service import identifier
     invoice_id = identifier(invoice_id, "in_")
     value = client.request("GET", "invoices/" + invoice_id)
     if value.get("id") != invoice_id:
@@ -121,7 +105,6 @@ def retrieve(client, invoice_id):
 
 
 def reconcile(db, client, checkout, latest_id):
-    from app.services.stripe_sandbox_service import identifier
     latest_id = identifier(ref(latest_id), 'in_') if latest_id else None
     checkout.latest_invoice_id = latest_id
     # Always retrieve latest explicitly: a page of historical invoices cannot hide it.

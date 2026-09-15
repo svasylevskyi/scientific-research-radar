@@ -1,18 +1,17 @@
 """Owner-scoped subscriber sandbox flow; never changes the opt-in policy."""
+
 from sqlalchemy import func, select
+
 from app.models.subscription_plan import SubscriptionPlanRevision as Plan
-from app.models.subscription_access import SubscriptionAccessPolicy as Policy
 from app.services import stripe_sandbox_service as billing
+from app.services.billing_policy import available, opted_in
+from app.services.billing_policy import blocking_change as blocking
+from app.services.billing_policy import blocking_upgrade as upgrade_pending
+from app.services.billing_policy import require_opt_in as require_opt_in
 
 PUBLIC_FIELDS = ('name', 'description', 'currency', 'monthly_price', 'annual_price', 'tax_display',
     'max_digests', 'max_papers_per_run', 'papers_per_month', 'runs_per_month', 'manual_runs_per_month',
     'schedule_frequencies', 'email_delivery')
-
-
-def available(plan):
-    c = plan.configuration
-    return (c.get('subscriber_visible') is True and c['state'] == 'reviewed' and c['tax_display'] == 'inclusive'
-        and (c.get('billing_type') == 'free' or bool(c.get('stripe_sandbox'))) and not c.get('trial_days', 0))
 
 
 def catalogue(db):
@@ -23,18 +22,7 @@ def catalogue(db):
         for p in rows if available(p)], 'sandbox': True}
 
 
-def opted_in(db, uid):
-    return db.scalar(select(Policy.mode).where(Policy.user_id == uid).order_by(Policy.version.desc()).limit(1)) == 'sandbox'
-
-
-def require_opt_in(db, uid):
-    if not opted_in(db, uid):
-        raise billing.Error('Subscriber checkout is available to accounts enrolled in sandbox testing. Contact the administrator to join.', 403)
-
-
 def status(db, settings, uid):
-    from app.services.subscription_change_service import blocking
-    from app.services.subscription_upgrade_service import blocking as upgrade_pending
     change_pending = blocking(db, uid) is not None or upgrade_pending(db, uid) is not None
     row = billing.latest(db, uid)
     pending = bool(row and row.checkout_status in ('creating', 'open'))
