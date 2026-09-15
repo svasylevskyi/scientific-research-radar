@@ -1,17 +1,22 @@
-import { Alert, Button, Stack } from "@mui/material";
+import { Alert, Button, Box } from "@mui/material";
 import { Link } from "react-router-dom";
 import type { SubscriptionAccess } from "../hooks/useSubscriptionAccess";
-export function AllowanceNotice({ data, error, loading, reasons = [], showResearchWarning = false, admin = false }: {
-  data: SubscriptionAccess | null; error?: string | null; loading?: boolean; reasons?: string[]; showResearchWarning?: boolean; admin?: boolean;
+import { allowanceMessage, type AllowanceContext } from "../allowancePresentation";
+
+/** One page-owned notice; loading and errors take precedence over stale quotas. */
+export function AllowanceNotice({ data, error, loading, context, id }: {
+  data: SubscriptionAccess | null; error?: string | null; loading?: boolean;
+  context: AllowanceContext; id?: string;
 }) {
-  return <Stack spacing={1} sx={{ my: 2 }}>
-    {loading && <Alert severity="info" role="status">Checking subscription allowances…</Alert>}
-    {error && <Alert severity="warning">Could not refresh subscription allowances. {error} Allowance-dependent actions are paused until the check succeeds.</Alert>}
-    {reasons.length > 0 && <Alert severity="warning">{reasons.join(" ")}
-      {!admin && <Button component={Link} to="/subscription#upgrade" size="small">{data?.allowed ? "Upgrade options" : "Review subscription"}</Button>}
-    </Alert>}
-    {showResearchWarning && data?.research_warning && <Alert severity="info">{data.research_warning}
-      {!admin && <Button component={Link} to="/subscription#upgrade" size="small">Upgrade options</Button>}
-    </Alert>}
-  </Stack>;
+  const message = allowanceMessage(data, context);
+  if (error) return <Alert id={id} severity="warning" sx={{ my: 2 }}>Could not refresh subscription allowances. Allowance-dependent actions are paused while we retry.</Alert>;
+  if (loading) return <Alert id={id} severity="info" role="status" sx={{ my: 2 }}>Checking subscription allowances…</Alert>;
+  if (!message) return null;
+  return <Alert id={id} severity="info" sx={{ my: 2 }}>
+    {message}
+    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 0.5 }}>
+      <Button component={Link} to="/subscription" size="small">Subscription and usage</Button>
+      <Button component={Link} to="/subscription#upgrade" size="small">Upgrade options</Button>
+    </Box>
+  </Alert>;
 }

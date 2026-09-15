@@ -9,9 +9,10 @@ import {
 } from "@mui/material";
 import { Link } from "react-router-dom";
 import { useSubscription } from "./SubscriptionData";
+import { allowanceDate, allowanceText } from "../allowancePresentation";
 import { subscriptionAction } from "../subscriptionPresentation";
 export const subscriptionDate = (value?: string | null) =>
-  value ? new Date(value).toLocaleString() : "Not available";
+  value ? allowanceDate(value) : "Not available";
 export function SubscriptionOverview() {
   const { access, billing, changes, upgrades } = useSubscription();
   const action = subscriptionAction(access, billing, changes, upgrades);
@@ -32,7 +33,7 @@ export function SubscriptionOverview() {
                   : "Access not verified")}
             </Typography>
             <Typography variant="body2" sx={{ mt: 1 }}>
-              {access.reason}
+              {action?.text !== access.reason && allowanceText(access.reason)}
             </Typography>
           </Box>
           <Chip
@@ -113,7 +114,7 @@ export function SubscriptionOverview() {
             </Button>
           }
         >
-          {action.text}
+          {allowanceText(action.text)}
         </Alert>
       )}
       <Paper variant="outlined" sx={{ p: 3 }}>

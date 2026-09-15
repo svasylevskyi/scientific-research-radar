@@ -272,13 +272,11 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
 
   const digestDetails = digest ? (
     <>
-      <AllowanceNotice {...subscription} reasons={access && !access.allowed ? [access.reason + ' You can still edit existing details and reduce the paper count.'] : []} showResearchWarning admin={admin} />
-      {!admin && access?.plan && <Button component={RouterLink} to="/subscription#upgrade">Review limits and upgrade options</Button>}
       <DigestForm
         key={digest.updated_at}
         initialValues={digestToFormValues(digest)}
         paperLimit={Math.max(digest.maximum_papers, access?.paper_limit ?? digest.maximum_papers)}
-        paperHint={access?.plan ? `Plan limit: ${access.plan.configuration.max_papers_per_run} papers per run. Reduce an oversized saved setting before running, or review upgrade options.` : undefined}
+        paperHint={access?.plan ? `Plan limit: ${access.plan.configuration.max_papers_per_run} papers per run. Reduce an oversized saved setting before running.` : undefined}
         submitDisabled={!access || !!subscription.error}
         submitLabel="Save changes"
         isSubmitting={isSaving}
@@ -338,6 +336,8 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                 <Typography color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{digest.owner.email}</Typography>
               </Paper>
             )}
+            {admin && subscription.error && <Alert severity="warning" sx={{ mb: 2.5 }}>Could not check the owner's subscription allowances. Saving is paused while we retry.</Alert>}
+            {admin && subscription.loading && <Typography role="status" sx={{ mb: 2.5 }}>Checking the owner's subscription allowances…</Typography>}
             {error && <Alert severity="error" sx={{ mb: 2.5 }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 2.5 }}>{success}</Alert>}
 
@@ -347,6 +347,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                 <Typography color="text.secondary" sx={{ mb: 2 }}>
                   Run research now, schedule recurring runs with optional email delivery, and review past results.
                 </Typography>
+                <AllowanceNotice {...subscription} context="digest" id="digest-allowance-notice" />
                 <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule} exhausted={digest.schedule_exhausted} access={subscription}
                   onSaved={(saved) => {
                     scheduleRevision.current += 1;
@@ -359,6 +360,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                     variant="contained"
                     startIcon={isStartingRun ? <CircularProgress size={18} color="inherit" /> : <PlayArrowRoundedIcon />}
                     disabled={isStartingRun || isSaving || runBlocked || !access?.run_allowed || !!subscription.error}
+                    aria-describedby={!access?.run_allowed || subscription.error ? "digest-allowance-notice" : undefined}
                     onClick={() => setConfirmRun(true)}
                   >
                     {isStartingRun
@@ -372,7 +374,6 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                   }
                 />
 
-                <AllowanceNotice {...subscription} reasons={access?.run_reasons} />
                 {activeRun && (
                   <Alert severity="info" sx={{ mt: 2 }}>
                     {currentDigestIsRunning

@@ -65,8 +65,7 @@ export function NewDigestPage() {
         </Typography>
         {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
-        <AllowanceNotice {...access} reasons={access.data?.create_reasons} showResearchWarning />
-        {access.data?.plan && <Button component={RouterLink} to="/subscription#upgrade" sx={{ mb: 2 }}>Review limits and upgrade options</Button>}
+        <AllowanceNotice {...access} context="create" />
         {initialValues && <DigestForm
           initialValues={initialValues}
           paperLimit={access.data?.paper_limit || Number(initialValues.maximumPapers)}

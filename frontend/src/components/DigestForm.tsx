@@ -320,7 +320,7 @@ export function DigestForm({
               value={values.maximumPapers}
               onChange={(event) => setValue("maximumPapers", event.target.value)}
               error={overPaperLimit || Boolean(errors.maximumPapers)}
-              helperText={overPaperLimit ? `Your current limit is ${paperLimit} papers per run. Reduce this value or review upgrade options.` : errors.maximumPapers ?? paperHint ?? `Maximum ${paperLimit} papers per run.`}
+              helperText={overPaperLimit ? `Your current limit is ${paperLimit} papers per run. Reduce this value before saving.` : errors.maximumPapers ?? paperHint ?? `Maximum ${paperLimit} papers per run.`}
               required
               fullWidth
               slotProps={{
