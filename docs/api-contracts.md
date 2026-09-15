@@ -2,7 +2,7 @@
 
 FastAPI response schemas are the source of truth for subscription billing,
 access, observation, synchronization, sandbox tools, plan administration,
-pricing, and spending. All 45 success responses in these eight route modules
+pricing, and spending. All 46 success responses in these eight route modules
 now declare a `response_model`. Authentication and error handling remain in the
 existing dependencies and exception handlers.
 

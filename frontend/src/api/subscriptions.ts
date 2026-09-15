@@ -1,3 +1,4 @@
+import type { ApiResponse } from "../types/api-contracts";
 import type { components } from "../types/api.generated";
 import { apiRequest } from "./client";
 import type {
@@ -30,6 +31,10 @@ export const subscriptionsApi = {
     apiRequest<Schemas["PublicPlansRead"]>(root + "/plans", {
       authenticate: false,
     }),
+  enrolmentPlans: () =>
+    apiRequest<ApiResponse<"/api/v1/subscription/enrolment-plans", "get">>(
+      root + "/enrolment-plans",
+    ),
   access: () => apiRequest<Access>(root),
   billing: () => apiRequest<BillingStatus>(root + "/billing"),
   changes: () => apiRequest<ChangeData>(root + "/billing/changes"),

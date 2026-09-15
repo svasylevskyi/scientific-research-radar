@@ -15,7 +15,7 @@ def test_all_eight_route_modules_declare_success_models():
     assert {
         route.endpoint.__module__.split(".")[-1] for route in routes
     } == CONTRACT_MODULES
-    assert len(routes) == 45
+    assert len(routes) == 46
     for route in routes:
         assert route.response_model is not None, route.path
         assert route.response_model_exclude_unset, route.path

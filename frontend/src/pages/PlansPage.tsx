@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useState, type ChangeEvent } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -11,6 +11,9 @@ import {
   DialogContent,
   DialogTitle,
   MenuItem,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
   Stack,
   TextField,
   Typography,
@@ -22,13 +25,19 @@ import { usePollingResource } from "../hooks/usePollingResource";
 import { subscriptionsApi } from "../api/subscriptions";
 import { isCurrentPlan } from "../subscriptionPresentation";
 import type { PublicPlan as Plan } from "../types/subscription";
-export function PlansPage() {
+export function PlansPage({ enrolment = false }: { enrolment?: boolean }) {
   const { user } = useAuth();
-  return <PlansContent key={user?.id ?? "public"} />;
+  return (
+    <PlansContent key={`${user?.id ?? "public"}:${enrolment}`} enrolment={enrolment} />
+  );
 }
-function PlansContent() {
+function PlansContent({ enrolment }: { enrolment: boolean }) {
+  const navigate = useNavigate();
+  const [selectedCode, setSelectedCode] = useState("free");
   const { user, isInitializing } = useAuth();
-  const catalogue = usePollingResource(subscriptionsApi.plans);
+  const catalogue = usePollingResource(
+    enrolment ? subscriptionsApi.enrolmentPlans : subscriptionsApi.plans,
+  );
   const loadAccount = useCallback(async () => {
     if (!user) return null;
     const [billing, access] = await Promise.all([
@@ -83,6 +92,17 @@ function PlansContent() {
       setBusy(false);
     }
   }
+  const selectedPlan = plans?.find((plan) => plan.code === selectedCode);
+  const canChoosePaidPlan = (plan: Plan) =>
+    !isInitializing && !busy && !!billing?.checkout_allowed &&
+    !billingError && !error &&
+    (interval !== "annual" || plan.annual_price !== null);
+  const canContinue = !!selectedPlan && !busy &&
+    (selectedPlan.billing_type === "free" || canChoosePaidPlan(selectedPlan));
+  if (enrolment && access &&
+      (access.billing_type === "stripe" || access.mode === "complimentary")) {
+    return <Navigate to="/subscription" replace />;
+  }
   return (
     <Box>
       <MarketingHeader />
@@ -93,19 +113,38 @@ function PlansContent() {
           variant="outlined"
         />
         <Typography component="h1" variant="h3" sx={{ my: 2 }}>
-          Choose your research plan
+          {enrolment ? "Choose your first research plan" : "Choose your research plan"}
         </Typography>
+        {enrolment && (
+          <Typography sx={{ mb: 2 }}>
+            Your account is ready. Free is preselected and needs no payment details.
+            You can choose a paid plan now or upgrade later.
+          </Typography>
+        )}
         <Alert severity="info" sx={{ mb: 3 }}>
           Free is managed by Radar and assigned after registration. Paid
           subscriptions are still in sandbox testing: use Stripe test payment
           details only. Prices include tax; no real payment is collected.
         </Alert>
-        {error && <Alert severity="error">{error}</Alert>}
+        {error && (
+          <Alert severity="error" action={
+            <Button onClick={() => void catalogue.refresh()}>Retry</Button>
+          }>
+            {error}
+          </Alert>
+        )}
         {billingError && (
           <Alert severity="error">
             {billingError}{" "}
             <Button component={Link} to="/subscription">
               Review billing
+            </Button>
+            <Button onClick={() => {
+              setActionError("");
+              void account.refresh();
+              void catalogue.refresh();
+            }}>
+              Retry
             </Button>
           </Alert>
         )}
@@ -136,6 +175,15 @@ function PlansContent() {
           </Typography>
         )}
         <Box
+          component={enrolment ? RadioGroup : "div"}
+          {...(enrolment ? {
+            "aria-label": "Registration plan",
+            value: selectedCode,
+            onChange: (event: ChangeEvent<HTMLInputElement>) => {
+              setSelectedCode(event.target.value);
+              setActionError("");
+            },
+          } : {})}
           sx={{
             display: "grid",
             gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
@@ -146,7 +194,11 @@ function PlansContent() {
             <Box
               component="section"
               key={plan.code}
-              sx={{ p: 3, border: 1, borderColor: "divider", borderRadius: 3 }}
+              sx={{
+                p: 3, border: 1, borderRadius: 3,
+                borderColor: enrolment && selectedCode === plan.code
+                  ? "primary.main" : "divider",
+              }}
             >
               <Stack spacing={2}>
                 <Typography component="h2" variant="h5">
@@ -188,7 +240,14 @@ function PlansContent() {
                   Email delivery:{" "}
                   {plan.email_delivery ? "included" : "not included"}.
                 </Typography>
-                {plan.billing_type === "free" ? (
+                {enrolment ? (
+                  <FormControlLabel
+                    value={plan.code}
+                    control={<Radio />}
+                    label={`Select ${plan.name}`}
+                    disabled={busy || (plan.billing_type !== "free" && !canChoosePaidPlan(plan))}
+                  />
+                ) : plan.billing_type === "free" ? (
                   <Button
                     component={Link}
                     to={user ? "/subscription" : "/register"}
@@ -224,14 +283,7 @@ function PlansContent() {
                 ) : (
                   <Button
                     variant="contained"
-                    disabled={
-                      isInitializing ||
-                      !billing?.checkout_allowed ||
-                      !!billingError ||
-                      !!error ||
-                      busy ||
-                      (interval === "annual" && plan.annual_price === null)
-                    }
+                    disabled={!canChoosePaidPlan(plan)}
                     onClick={() => setSelection({ plan, interval })}
                   >
                     Choose {plan.name}
@@ -241,6 +293,27 @@ function PlansContent() {
             </Box>
           ))}
         </Box>
+        {enrolment && (
+          <Stack spacing={1} sx={{ mt: 3 }}>
+            <Button
+              variant="contained" size="large" disabled={!canContinue}
+              onClick={() => {
+                if (!selectedPlan || !canContinue) return;
+                if (selectedPlan.billing_type === "free") {
+                  navigate("/radar", { replace: true });
+                } else {
+                  setSelection({ plan: selectedPlan, interval });
+                }
+              }}
+            >
+              {selectedPlan?.billing_type === "free" ? "Continue with Free" : "Continue to checkout"}
+            </Button>
+            <Typography variant="body2" color="text.secondary">
+              Choosing a paid plan opens checkout. Your Free access remains until payment is verified.
+              If you cancel checkout, you can continue using Free from Subscription and usage.
+            </Typography>
+          </Stack>
+        )}
         <Typography sx={{ mt: 3 }}>
           Research allowances reset on your account’s monthly anniversary,
           including annual subscriptions. Plan changes preserve that date and

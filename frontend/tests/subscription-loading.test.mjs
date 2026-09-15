@@ -84,6 +84,9 @@ test('billing API methods preserve structured request bodies, IDs, and read-only
   await api.subscriptionsApi.upgradeAction('quote-1', 'confirm');
   assert.equal(api.requests.at(-1).path, '/subscription/billing/upgrades/quote-1/confirm');
   await api.subscriptionsApi.plans(); assert.equal(api.requests.at(-1).authenticate, false);
+  await api.subscriptionsApi.enrolmentPlans();
+  assert.equal(api.requests.at(-1).path, '/subscription/enrolment-plans');
+  assert.notEqual(api.requests.at(-1).authenticate, false);
 });
 test('subscription refresh includes all sections and fails rather than publishing a partial result', async () => {
   api.requests.length = 0;
