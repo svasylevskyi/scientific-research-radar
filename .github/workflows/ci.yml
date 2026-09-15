@@ -41,7 +41,7 @@ jobs:
           cache: pip
           cache-dependency-path: backend/pyproject.toml
       - run: pip install -e '.[dev,postgres]'
-      - name: Type-check billing boundaries
+      - name: Type-check billing and research boundaries
         run: python -m mypy
       - name: Configure database
         env:

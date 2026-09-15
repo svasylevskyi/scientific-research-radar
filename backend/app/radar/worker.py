@@ -14,7 +14,7 @@ from app.models.digest_run import DigestRunStageType
 from app.radar.client import build_radar_client
 from app.radar.prompt_builder import RadarPromptBuilder
 from app.radar.runner import RadarRunner
-from app.repositories.digest_run_repository import DigestRunRepository
+from app.repositories.run_state_repository import RunStateRepository
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class RadarWorker:
 
     def run_once(self) -> bool:
         with self.session_factory() as db:
-            repository = DigestRunRepository(db)
+            repository = RunStateRepository(db)
             run = repository.claim_next(
                 worker_id=self.worker_id,
                 lease_expires_at=datetime.now(timezone.utc)

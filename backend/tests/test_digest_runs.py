@@ -1,3 +1,4 @@
+from app.repositories.run_state_repository import RunStateRepository
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Annotated
@@ -321,7 +322,7 @@ def _runner(db: Session, radar_client, *, worker_id: str | None = None) -> Radar
 def _execute_next(db_session_factory, radar_client) -> None:
     with db_session_factory() as db:
         worker_id = "test-worker"
-        run = DigestRunRepository(db).claim_next(
+        run = RunStateRepository(db).claim_next(
             worker_id=worker_id,
             lease_expires_at=datetime.now(timezone.utc) + timedelta(minutes=1),
         )
@@ -569,7 +570,7 @@ def test_expired_worker_lease_is_reclaimed_without_allowing_stale_renewal(
     assert queued.status_code == 202
 
     with db_session_factory() as first_db:
-        first_repository = DigestRunRepository(first_db)
+        first_repository = RunStateRepository(first_db)
         claimed = first_repository.claim_next(
             worker_id="expired-worker",
             lease_expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
@@ -577,7 +578,7 @@ def test_expired_worker_lease_is_reclaimed_without_allowing_stale_renewal(
         assert claimed is not None
 
     with db_session_factory() as second_db:
-        replacement = DigestRunRepository(second_db).claim_next(
+        replacement = RunStateRepository(second_db).claim_next(
             worker_id="replacement-worker",
             lease_expires_at=datetime.now(timezone.utc) + timedelta(minutes=1),
         )
@@ -585,7 +586,7 @@ def test_expired_worker_lease_is_reclaimed_without_allowing_stale_renewal(
         assert str(replacement.id) == queued.json()["id"]
 
     with db_session_factory() as stale_db:
-        assert not DigestRunRepository(stale_db).renew_lease(
+        assert not RunStateRepository(stale_db).renew_lease(
             run_id=UUID(queued.json()["id"]),
             worker_id="expired-worker",
             lease_expires_at=datetime.now(timezone.utc) + timedelta(minutes=1),
@@ -966,6 +967,6 @@ def test_requeue_preserves_response_after_poll_timeout():
         error_message="Trend analysis failed: OpenAI trend_analysis exceeded the background time limit",
     )
     run = DigestRun(status=DigestRunStatus.FAILED, stages=[stage])
-    DigestRunRepository(None).requeue_failed(run=run)
+    RunStateRepository(None).requeue_failed(run=run)
     assert stage.active_response_id == "still-running-job"
     assert stage.status == DigestRunStageStatus.PENDING

@@ -49,6 +49,19 @@ files = [
   "app/services/billing_policy.py",
   "app/services/billing_change_observation.py",
   "app/services/billing_upgrade_observation.py",
+  "app/radar/runner.py",
+  "app/radar/submission.py",
+  "app/radar/request_execution.py",
+  "app/radar/request_accounting.py",
+  "app/radar/lifecycle.py",
+  "app/radar/stage_inputs.py",
+  "app/radar/validation.py",
+  "app/radar/lease.py",
+  "app/radar/errors.py",
+  "app/repositories/digest_run_repository.py",
+  "app/repositories/run_state_repository.py",
+  "app/repositories/run_result_repository.py",
+  "app/repositories/radar_request_repository.py",
 ]
 follow_imports = "silent"
 disallow_untyped_defs = true

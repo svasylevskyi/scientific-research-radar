@@ -1,3 +1,4 @@
+from app.repositories.run_state_repository import RunStateRepository
 import copy
 import pytest
 from pydantic import ValidationError
@@ -49,7 +50,7 @@ def test_legacy_failure_retry_discards_rejected_response():
         status=DigestRunStageStatus.FAILED, active_response_id="rejected-job",
         error_message="Discovery relevance failed: The OpenAI discovery_relevance request failed: 1 validation error for DiscoveryRelevanceOutput Value error, Every searched paper must have one relevance assessment")
     run = DigestRun(status=DigestRunStatus.FAILED, stages=[stage])
-    DigestRunRepository(None).requeue_failed(run=run)
+    RunStateRepository(None).requeue_failed(run=run)
     assert stage.active_response_id is None
     assert stage.status == DigestRunStageStatus.PENDING
 
