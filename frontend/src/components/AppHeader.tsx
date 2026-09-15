@@ -60,6 +60,12 @@ export function AppHeader() {
       to: "/subscription",
       icon: <SubscriptionsRoundedIcon />,
     },
+    {
+      label: "Contact",
+      short: "Contact",
+      to: "/contact",
+      icon: <MailOutlineRoundedIcon />,
+    },
   ];
   const adminLinks = [
     ...(user?.role === "admin"
