@@ -24,9 +24,12 @@ import {
   grid,
   type Configuration,
   type Plan,
+  type SavedPlan,
   type PlanList,
   type StripeCheck,
 } from "../admin/plans";
+
+type PriceWarnings = import("../types/api.generated").components["schemas"]["PriceWarningsRead"];
 
 export function AdminSubscriptionPlanEditPage() {
   const { code: routeCode } = useParams();
@@ -107,7 +110,7 @@ function PlanEditor({ routeCode }: { routeCode?: string }) {
     setWarnings([]);
     setWarningStatus("Checking similar prices…");
     const timer = window.setTimeout(() => {
-      apiRequest<{ warnings: string[] }>(
+      apiRequest<PriceWarnings>(
         "/admin/subscription-plans/price-warnings",
         {
           method: "POST",
@@ -183,7 +186,7 @@ function PlanEditor({ routeCode }: { routeCode?: string }) {
     setSaving(true);
     setError("");
     try {
-      const saved = await apiRequest<Plan>("/admin/subscription-plans", {
+      const saved = await apiRequest<SavedPlan>("/admin/subscription-plans", {
         method: "POST",
         body: {
           code,
@@ -282,8 +285,8 @@ function PlanEditor({ routeCode }: { routeCode?: string }) {
                                   display="block"
                                 >
                                   {title(price.interval)}:{" "}
-                                  {price.currency.toUpperCase()}{" "}
-                                  {(price.unit_amount / 100).toFixed(2)} · Tax
+                                  {price.currency?.toUpperCase() ?? "Missing currency"}{" "}
+                                  {price.unit_amount === null ? "Missing amount" : (price.unit_amount / 100).toFixed(2)} · Tax
                                   behavior: {price.tax_behavior ?? "Missing"}
                                 </Typography>
                               ))}

@@ -2,12 +2,7 @@ import { useEffect, useState } from "react";
 import { Alert, Box, Button, Stack, Typography } from "@mui/material";
 import { apiRequest, ApiError } from "../api/client";
 import { startPagePolling } from "../pagePolling";
-type Invoice = { id: string; status: string; currency: string; amount_due: number; amount_paid: number;
-  amount_remaining: number; attempt_count: number; billing_reason: string; period_start: string | null; period_end: string | null;
-  paid_at: string | null; next_payment_attempt: string | null; issue: string | null; observed_at: string };
-type Review = { items: Invoice[]; total: number; checked_at: string | null; history_complete: boolean;
-  latest_invoice_id: string | null; discrepancies: string[];
-  account_access: { mode: string; allowed: boolean; reason: string } };
+type Review = import("../types/api-contracts").ApiResponse<"/api/v1/admin/billing-sync/checkouts/{checkout_id}/invoices", "get">;
 const date = (s: string | null) => s ? new Date(s).toLocaleString() : "Not verified";
 export function AdminInvoiceReview({ checkoutId }: { checkoutId: string }) {
   const [open, setOpen] = useState(false);

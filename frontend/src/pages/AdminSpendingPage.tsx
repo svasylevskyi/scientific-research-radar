@@ -26,24 +26,7 @@ import {
 import { AppHeader } from "../components/AppHeader";
 import { ApiError, apiRequest } from "../api/client";
 
-type Report = {
-  from_date: string;
-  to_date: string;
-  project_id: string;
-  fetched_at: string;
-  reported_usd: string;
-  known_estimated_usd: string;
-  unknown_requests: number;
-  legacy_runs: number;
-  daily: {
-    date: string;
-    reported_usd: string | null;
-    known_estimated_usd: string;
-    requests: number;
-    unknown_requests: number;
-  }[];
-  charges: { line_item: string; reported_usd: string }[];
-};
+type Report = import("../types/api-contracts").ApiResponse<"/api/v1/admin/spending", "get">;
 const money = (value: string | null) =>
   value === null
     ? "Not reported"

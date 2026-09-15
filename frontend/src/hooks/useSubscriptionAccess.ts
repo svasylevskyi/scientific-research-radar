@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiRequest, ApiError } from "../api/client";
 import { startPagePolling } from "../pagePolling";
-import type { DigestFrequency } from "../types/digest";
-export type SubscriptionAccess = {
-  mode: string; allowed: boolean; reason: string; create_allowed: boolean; create_reasons: string[];
-  schedule_allowed: boolean; schedule_reasons: string[]; paper_limit: number; research_warning: string | null;
-  run_allowed?: boolean; run_reasons?: string[]; retry_allowed?: boolean; retry_reasons?: string[];
-  plan: { configuration: { max_papers_per_run: number; schedule_frequencies: DigestFrequency[]; email_delivery: boolean } } | null;
-};
+export type SubscriptionAccess = import("../types/api.generated").components["schemas"]["AccessRead"];
 export function useSubscriptionAccess(digestId?: string, runId?: string, adminOwner?: string, enabled = true, refreshKey?: string) {
   const query = new URLSearchParams();
   if (digestId) query.set("digest_id", digestId);

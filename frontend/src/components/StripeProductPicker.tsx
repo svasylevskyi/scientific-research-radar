@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { apiRequest, ApiError } from '../api/client';
 
-type Price = { id: string; currency: string; amount: string; interval: 'month' | 'year' };
-type Product = { id: string; name: string; prices: Price[]; mapped_plan_codes: string[] };
-type Mapping = { product_id: string; monthly_price_id: string; annual_price_id: string | null };
+type Schemas = import("../types/api.generated").components["schemas"];
+type Price = Schemas["StripePriceRead"];
+type Product = Schemas["StripeProductRead"];
+type Mapping = Schemas["StripeMappingRead"];
 type Value = { stripe_sandbox?: Mapping | null; currency: string; monthly_price: string; annual_price: string | null; tax_display: string };
 const label = (p: Price) => `${p.currency} ${p.amount} / ${p.interval === 'month' ? 'month' : 'year'}`;
 
@@ -17,7 +18,7 @@ export function StripeProductPicker({ code, value, onChange, onValidityChange, r
   const [reload, setReload] = useState(0);
   useEffect(() => {
     let active = true; setLoading(true); setError('');
-    apiRequest<{ items: Product[] }>('/admin/subscription-plans/stripe-products')
+    apiRequest<Schemas["StripeProductsRead"]>('/admin/subscription-plans/stripe-products')
       .then(data => { if (active) setItems(data.items); })
       .catch(e => { if (active) setError(e instanceof ApiError ? e.message : 'Could not load Stripe products.'); })
       .finally(() => { if (active) setLoading(false); });

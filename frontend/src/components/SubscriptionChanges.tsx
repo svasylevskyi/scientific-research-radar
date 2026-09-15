@@ -57,7 +57,7 @@ export function SubscriptionChanges() {
             code: selected.code,
             revision: selected.revision,
             interval: selected.interval,
-            expected_period_end: data.effective_at,
+            expected_period_end: data.effective_at ?? undefined,
             digest_ids: ids,
           }),
         );

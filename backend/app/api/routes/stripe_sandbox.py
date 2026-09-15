@@ -1,4 +1,6 @@
 """Admin-only test billing plus a separate signed, public webhook endpoint."""
+from app.schemas.admin_billing_responses import (SandboxOverviewRead)
+from app.schemas.api_common import RedirectRead, WebhookReceiptRead
 from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
@@ -30,30 +32,30 @@ def limit(db, settings, actor):
     enforce(db, settings, "sandbox-billing-user", str(actor.id), *POLICIES["sandbox-billing-user"])
 
 
-@router.get("")
+@router.get("", response_model=SandboxOverviewRead, response_model_exclude_unset=True)
 def status(actor: CurrentAdmin, db: DbSession, settings: AppSettings):
     return service.overview(db, settings, actor.id)
 
 
-@router.post("/checkout")
+@router.post("/checkout", response_model=RedirectRead, response_model_exclude_unset=True)
 def checkout(payload: CheckoutRequest, actor: CurrentAdmin, db: DbSession, settings: AppSettings):
     limit(db, settings, actor)
     return call(db, service.start_checkout, settings, actor.id, payload.revision, payload.interval)
 
 
-@router.post("/refresh")
+@router.post("/refresh", response_model=SandboxOverviewRead, response_model_exclude_unset=True)
 def refresh(actor: CurrentAdmin, db: DbSession, settings: AppSettings):
     limit(db, settings, actor)
     return call(db, service.refresh, settings, actor.id)
 
 
-@router.post("/portal")
+@router.post("/portal", response_model=RedirectRead, response_model_exclude_unset=True)
 def portal(actor: CurrentAdmin, db: DbSession, settings: AppSettings):
     limit(db, settings, actor)
     return call(db, service.portal, settings, actor.id)
 
 
-@webhook_router.post("/stripe-sandbox")
+@webhook_router.post("/stripe-sandbox", response_model=WebhookReceiptRead, response_model_exclude_unset=True)
 async def webhook(request: Request, db: DbSession, settings: AppSettings):
     # Exempt only this signed endpoint from browser/auth request guards. Bound
     # raw input before decoding; the signature must cover the original bytes.

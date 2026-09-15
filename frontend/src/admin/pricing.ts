@@ -1,3 +1,4 @@
+import type { ApiResponse } from "../types/api-contracts";
 export type PriceInput = {
   model_name: string;
   version: string;
@@ -8,17 +9,8 @@ export type PriceInput = {
   web_search_per_call: string;
   max_input_tokens: string;
 };
-export type Price = Omit<
-  PriceInput,
-  "max_input_tokens" | "cache_write_per_million"
-> & {
-  cache_write_per_million?: string | null;
-  max_input_tokens: number;
-  id: number;
-  created_at: string;
-  is_current: boolean;
-};
-export type PriceList = { items: Price[]; total: number };
+export type Price = ApiResponse<"/api/v1/admin/pricing/{price_id}", "get">;
+export type PriceList = ApiResponse<"/api/v1/admin/pricing", "get">;
 export const blank: PriceInput = {
   model_name: "",
   version: "",

@@ -1,4 +1,11 @@
 """Internal plan catalogue only: no checkout, assignment or quota enforcement."""
+from app.schemas.admin_billing_responses import (
+    PlanListRead,
+    PriceWarningsRead,
+    SavedPlanRead,
+    StripeMappingCheckRead,
+    StripeProductsRead,
+)
 from datetime import timezone
 from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import func, select
@@ -18,12 +25,12 @@ class PricePreview(BaseModel):
     configuration: SubscriptionPlanConfiguration
 
 
-@router.post("/price-warnings")
+@router.post("/price-warnings", response_model=PriceWarningsRead, response_model_exclude_unset=True)
 def preview_prices(payload: PricePreview, actor: CurrentAdmin, db: DbSession):
     return {"warnings": price_warnings(db, payload.code, payload.configuration)}
 
 
-@router.get("/stripe-products")
+@router.get("/stripe-products", response_model=StripeProductsRead, response_model_exclude_unset=True)
 def stripe_products(actor: CurrentAdmin, db: DbSession, settings: AppSettings, response: Response):
     from app.services.stripe_catalogue_service import list_products, StripeCatalogueError
     response.headers["Cache-Control"] = "no-store"
@@ -41,7 +48,7 @@ def serialize(row):
             "created_by": row.created_by, "created_at": row.created_at.replace(tzinfo=timezone.utc) if row.created_at.tzinfo is None else row.created_at}
 
 
-@router.get("")
+@router.get("", response_model=PlanListRead, response_model_exclude_unset=True)
 def list_plans(actor: CurrentAdmin, db: DbSession,
                offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
     latest = select(func.max(SubscriptionPlanRevision.revision).label("revision"),
@@ -54,7 +61,7 @@ def list_plans(actor: CurrentAdmin, db: DbSession,
             "total": db.scalar(select(func.count()).select_from(latest))}
 
 
-@router.get("/{code}/revisions")
+@router.get("/{code}/revisions", response_model=PlanListRead, response_model_exclude_unset=True)
 def history(code: str, actor: CurrentAdmin, db: DbSession,
             offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
     statement = select(SubscriptionPlanRevision).where(SubscriptionPlanRevision.code == code)
@@ -62,7 +69,7 @@ def history(code: str, actor: CurrentAdmin, db: DbSession,
             "total": db.scalar(select(func.count()).select_from(SubscriptionPlanRevision).where(SubscriptionPlanRevision.code == code))}
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=SavedPlanRead, response_model_exclude_unset=True)
 def save_plan(payload: SubscriptionPlanSave, actor: CurrentAdmin, db: DbSession):
     current = db.scalar(select(func.max(SubscriptionPlanRevision.revision)).where(SubscriptionPlanRevision.code == payload.code)) or 0
     if current != payload.expected_revision:
@@ -80,7 +87,7 @@ def save_plan(payload: SubscriptionPlanSave, actor: CurrentAdmin, db: DbSession)
     return {**serialize(row), "warnings": price_warnings(db, payload.code, payload.configuration)}
 
 
-@router.post("/{code}/revisions/{revision}/check-stripe")
+@router.post("/{code}/revisions/{revision}/check-stripe", response_model=StripeMappingCheckRead, response_model_exclude_unset=True)
 def verify_stripe_mapping(code: str, revision: int, actor: CurrentAdmin, db: DbSession,
                           settings: AppSettings, response: Response):
     from app.services.stripe_catalogue_service import check_mapping, StripeCatalogueError

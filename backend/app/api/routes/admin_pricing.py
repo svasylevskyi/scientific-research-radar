@@ -1,3 +1,8 @@
+from app.schemas.spending_responses import (
+    RadarPriceDetailRead,
+    RadarPriceRead,
+    RadarPricesRead,
+)
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -9,7 +14,7 @@ from app.services.radar_pricing_service import publish_price, serialize_price
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", response_model=RadarPricesRead, response_model_exclude_unset=True)
 def list_prices(actor: CurrentSuperAdmin, db: DbSession,
                 offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)):
     rows = db.scalars(select(RadarPrice).order_by(RadarPrice.id.desc()).offset(offset).limit(limit))
@@ -19,7 +24,7 @@ def list_prices(actor: CurrentSuperAdmin, db: DbSession,
             "total": db.scalar(select(func.count()).select_from(RadarPrice)), "offset": offset, "limit": limit}
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=RadarPriceRead, response_model_exclude_unset=True)
 def create_price(payload: RadarPriceCreate, actor: CurrentSuperAdmin, db: DbSession):
     try:
         row = publish_price(db, payload, actor.id)
@@ -30,7 +35,7 @@ def create_price(payload: RadarPriceCreate, actor: CurrentSuperAdmin, db: DbSess
         raise HTTPException(status_code=409, detail="This model already has that pricing version. Choose a new version label.") from exc
 
 
-@router.get("/{price_id}")
+@router.get("/{price_id}", response_model=RadarPriceDetailRead, response_model_exclude_unset=True)
 def get_price(price_id: int, actor: CurrentSuperAdmin, db: DbSession):
     row = db.get(RadarPrice, price_id)
     if row is None:

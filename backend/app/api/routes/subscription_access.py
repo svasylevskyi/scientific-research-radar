@@ -1,3 +1,9 @@
+from app.schemas.subscriber_responses import (
+    AccessPolicyRead,
+    AccessRead,
+    AdminAccessRead,
+    FreeDigestsRead,
+)
 from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Query
@@ -19,7 +25,7 @@ class AccessPolicyRequest(BaseModel):
     change_note: str = Field(min_length=1, max_length=500)
 
 
-@router.get('')
+@router.get('', response_model=AccessRead, response_model_exclude_unset=True)
 def mine(actor: CurrentUser, db: DbSession, settings: AppSettings, digest_id: UUID | None = None, run_id: UUID | None = None):
     data = service.overview(db, actor.id, settings)
     if run_id and not digest_id:
@@ -47,7 +53,7 @@ def mine(actor: CurrentUser, db: DbSession, settings: AppSettings, digest_id: UU
     return data
 
 
-@admin_router.get('/{user_id}')
+@admin_router.get('/{user_id}', response_model=AdminAccessRead, response_model_exclude_unset=True)
 def overview(user_id: UUID, actor: CurrentAdmin, db: DbSession, settings: AppSettings,
              offset: int = Query(0, ge=0)):
     user = authorize(db, actor, user_id)
@@ -60,7 +66,7 @@ def overview(user_id: UUID, actor: CurrentAdmin, db: DbSession, settings: AppSet
     return data
 
 
-@admin_router.post('/{user_id}/policy', status_code=201)
+@admin_router.post('/{user_id}/policy', status_code=201, response_model=AccessPolicyRead, response_model_exclude_unset=True)
 def change(user_id: UUID, payload: AccessPolicyRequest, actor: CurrentAdmin, db: DbSession):
     authorize(db, actor, user_id)
     row = service.change_policy(db, user_id, actor.id, payload.mode, payload.expected_version, payload.change_note)
@@ -73,7 +79,7 @@ class FreeDigestSelection(BaseModel):
     digest_ids: list[UUID] = Field(max_length=10000)
 
 
-@router.get('/free-digests')
+@router.get('/free-digests', response_model=FreeDigestsRead, response_model_exclude_unset=True)
 def free_digests(actor: CurrentUser, db: DbSession, settings: AppSettings):
     from app.services.subscription_transition_service import free_choices
     data = free_choices(db, actor.id, settings)
@@ -81,7 +87,7 @@ def free_digests(actor: CurrentUser, db: DbSession, settings: AppSettings):
     return data
 
 
-@router.put('/free-digests')
+@router.put('/free-digests', response_model=FreeDigestsRead, response_model_exclude_unset=True)
 def select_free_digests(payload: FreeDigestSelection, actor: CurrentUser, db: DbSession, settings: AppSettings):
     from app.services.subscription_transition_service import choose_free_digests
     data = choose_free_digests(db, actor.id, payload.digest_ids, settings)
