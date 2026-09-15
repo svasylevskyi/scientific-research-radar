@@ -21,9 +21,9 @@ export function SiteFooter() {
               {user && <Link component={RouterLink} to="/radar" color="inherit" underline="hover">Your radar</Link>}
             </Stack>
             <Stack spacing={1}>
-              <Typography color="white" fontWeight={700}>More to come</Typography>
+              <Typography color="white" fontWeight={700}>About Radar</Typography>
               {["About", "Contact"].map((label) => (
-                <Typography key={label} component="span" aria-disabled="true" variant="body2" sx={{ color: "#a5b6c3" }}>{label}</Typography>
+                <Link key={label} component={RouterLink} to={`/${label.toLowerCase()}`} color="inherit" underline="hover">{label}</Link>
               ))}
             </Stack>
             <Stack spacing={1}>

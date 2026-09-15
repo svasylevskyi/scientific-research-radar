@@ -1,10 +1,12 @@
-from app.api.routes import admin_subscriptions
+from app.api.routes import admin_subscriptions, contact
 from fastapi import APIRouter, Depends
 from app.api.security import guard_request
 
 from app.api.routes import admin_spending, admin_pricing, admin_digests, admin_users, auth, digest_runs, digests, users
 
 api_router = APIRouter(dependencies=[Depends(guard_request)])
+api_router.include_router(contact.router, prefix="/contact", tags=["contact"])
+api_router.include_router(contact.admin_router, prefix="/admin/messages", tags=["administration", "contact"])
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(digests.router, prefix="/digests", tags=["digests"])

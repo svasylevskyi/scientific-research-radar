@@ -1,3 +1,6 @@
+import { AboutPage } from "./pages/AboutPage";
+import { ContactPage } from "./pages/ContactPage";
+import { AdminMessagesPage } from "./pages/AdminMessagesPage";
 import { AdminSubscriptionPlanEditPage } from "./pages/AdminSubscriptionPlanEditPage";
 import { AdminPricingEditPage } from "./pages/AdminPricingEditPage";
 import { SubscriptionAccessPage } from "./pages/SubscriptionAccessPage";
@@ -45,6 +48,9 @@ export default function App() {
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", "& > *": { flex: 1 } }}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/admin/messages" element={<RequireAuth><RequireAdmin><AdminMessagesPage /></RequireAdmin></RequireAuth>} />
           <Route path="/plans" element={<PlansPage />} />
           <Route path="/register/plan" element={<RequireAuth><PlansPage enrolment /></RequireAuth>} />
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />

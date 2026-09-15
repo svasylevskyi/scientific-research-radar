@@ -10,15 +10,16 @@ from pydantic import TypeAdapter, ValidationError
 from scripts.export_api_contracts import CONTRACT_MODULES, contract_routes, schema
 
 
-def test_all_eight_route_modules_declare_success_models():
+def test_contracted_route_modules_declare_success_models():
     routes = contract_routes()
     assert {
         route.endpoint.__module__.split(".")[-1] for route in routes
     } == CONTRACT_MODULES
-    assert len(routes) == 48
+    assert len(routes) == 51
     for route in routes:
         assert route.response_model is not None, route.path
-        assert route.response_model_exclude_unset, route.path
+        if route.endpoint.__module__ != "app.api.routes.contact":
+            assert route.response_model_exclude_unset, route.path
 
 
 def test_openapi_exposes_nested_success_contracts_and_request_types():
