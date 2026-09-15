@@ -1,3 +1,8 @@
+from app.schemas.admin_billing_responses import (
+    AssignmentListRead,
+    AssignmentRead,
+    ObservationOverviewRead,
+)
 from datetime import date
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
@@ -27,7 +32,7 @@ def authorize(db, actor, user_id):
         raise HTTPException(404, str(exc)) from None
 
 
-@router.get('/{user_id}')
+@router.get('/{user_id}', response_model=ObservationOverviewRead, response_model_exclude_unset=True)
 def overview(user_id: UUID, actor: CurrentAdmin, db: DbSession,
              period: date | None = None, offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
     user = authorize(db, actor, user_id)
@@ -35,7 +40,7 @@ def overview(user_id: UUID, actor: CurrentAdmin, db: DbSession,
             **service.overview(db, user_id, period.replace(day=1) if period else None, offset, limit)}
 
 
-@router.post('/{user_id}/assignments', status_code=201)
+@router.post('/{user_id}/assignments', status_code=201, response_model=AssignmentRead, response_model_exclude_unset=True)
 def assign(user_id: UUID, payload: AssignmentRequest, actor: CurrentAdmin, db: DbSession):
     authorize(db, actor, user_id)
     try:
@@ -47,7 +52,7 @@ def assign(user_id: UUID, payload: AssignmentRequest, actor: CurrentAdmin, db: D
         raise HTTPException(exc.status, str(exc)) from None
 
 
-@router.get('/{user_id}/assignments')
+@router.get('/{user_id}/assignments', response_model=AssignmentListRead, response_model_exclude_unset=True)
 def history(user_id: UUID, actor: CurrentAdmin, db: DbSession,
             offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
     authorize(db, actor, user_id)

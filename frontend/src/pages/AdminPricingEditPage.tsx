@@ -14,6 +14,8 @@ import { AppHeader } from "../components/AppHeader";
 import { apiRequest, ApiError } from "../api/client";
 import { blank, rates, type PriceInput, type Price } from "../admin/pricing";
 
+type CreatedPrice = import("../types/api-contracts").ApiResponse<"/api/v1/admin/pricing", "post">;
+
 export function AdminPricingEditPage() {
   const { priceId } = useParams();
   return <PricingEditor key={priceId ?? "new"} priceId={priceId} />;
@@ -69,7 +71,7 @@ function PricingEditor({ priceId }: { priceId?: string }) {
     setSaving(true);
     setError("");
     try {
-      await apiRequest("/admin/pricing", {
+      await apiRequest<CreatedPrice>("/admin/pricing", {
         method: "POST",
         body: {
           ...form,

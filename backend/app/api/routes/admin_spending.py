@@ -1,3 +1,4 @@
+from app.schemas.spending_responses import (SpendingReportRead)
 from datetime import date
 from fastapi import APIRouter, HTTPException, Response
 from app.api.dependencies import AppSettings, CurrentSuperAdmin, DbSession
@@ -6,7 +7,7 @@ from app.services.openai_spending_service import SpendingError, spending_report
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", response_model=SpendingReportRead, response_model_exclude_unset=True)
 def get_spending(from_date: date, to_date: date, actor: CurrentSuperAdmin,
                  db: DbSession, settings: AppSettings, response: Response):
     response.headers["Cache-Control"] = "no-store"

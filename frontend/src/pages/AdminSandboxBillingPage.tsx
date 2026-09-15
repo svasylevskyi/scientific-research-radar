@@ -4,15 +4,12 @@ import { Alert, Box, Button, Chip, Container, Paper, Stack, Typography } from "@
 import { AppHeader } from "../components/AppHeader";
 import { apiRequest, ApiError } from "../api/client";
 
-type Attempt = { id: string; plan_revision_id: number; revision: number; interval: string; checkout_status: string;
-  subscription_status: string | null; cancel_at_period_end: boolean; price_matches: boolean;
-  period_end: string | null; observed_at: string | null; created_at: string };
-type Overview = { enabled: boolean; portal_available: boolean; attempts: Attempt[];
-  plan: { revision: number; configuration: { name: string; state: string; currency: string;
-    monthly_price: string; annual_price: string | null; stripe_sandbox?: unknown } } | null };
+type Overview = import("../types/api-contracts").ApiResponse<"/api/v1/admin/subscription-testing", "get">;
 const path = "/admin/subscription-testing";
 const date = (value: string | null) => value ? new Date(value).toLocaleString() : "Not available yet";
 const label = (value: string) => value.replaceAll("_", " ");
+
+type BillingRedirect = import("../types/api.generated").components["schemas"]["RedirectRead"];
 
 export function AdminSandboxBillingPage() {
   const [data, setData] = useState<Overview | null>(null);
@@ -38,7 +35,7 @@ export function AdminSandboxBillingPage() {
     try {
       if (kind === "refresh") setData(await apiRequest<Overview>(path + "/refresh", { method: "POST" }));
       else {
-        const result = await apiRequest<{ url: string }>(path + "/" + kind, { method: "POST",
+        const result = await apiRequest<BillingRedirect>(path + "/" + kind, { method: "POST",
           ...(kind === "checkout" ? { body: { interval, revision: revision ?? data?.plan?.revision } } : {}) });
         window.location.assign(result.url);
       }

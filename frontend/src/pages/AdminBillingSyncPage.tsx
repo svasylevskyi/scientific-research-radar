@@ -28,38 +28,13 @@ import {
 import { AppHeader } from "../components/AppHeader";
 import { apiRequest, ApiError } from "../api/client";
 
-type Job = {
-  id: string;
-  checkout_id: string;
-  user_id: string;
-  email: string;
-  kind: string;
-  event_type: string | null;
-  subscription_status: string | null;
-  price_matches: boolean;
-  state: string;
-  attempts: number;
-  failures: number;
-  manual_retries: number;
-  retried_by: string | null;
-  retried_at: string | null;
-  next_attempt_at: string | null;
-  lease_expires_at: string | null;
-  last_error: string | null;
-  last_attempt_at: string | null;
-  last_success_at: string | null;
-  provider_observed_at: string | null;
-};
-type Status = {
-  counts: Record<string, number>;
-  worker_healthy: boolean;
-  worker_last_seen_at: string | null;
-  items: Job[];
-  total: number;
-};
+type Job = import("../types/api.generated").components["schemas"]["BillingJobRead"];
+type Status = import("../types/api-contracts").ApiResponse<"/api/v1/admin/billing-sync", "get">;
 const date = (value: string | null) =>
   value ? new Date(value).toLocaleString() : "Not recorded";
 const states = ["pending", "processing", "retry", "failed", "processed"];
+
+type RetryReceipt = import("../types/api-contracts").ApiResponse<"/api/v1/admin/billing-sync/{job_id}/retry", "post">;
 
 export function AdminBillingSyncPage() {
   const [params, setParams] = useSearchParams();
@@ -83,7 +58,7 @@ export function AdminBillingSyncPage() {
     setBusy(job.id);
     setError("");
     try {
-      await apiRequest(
+      await apiRequest<RetryReceipt>(
         `/admin/billing-sync/${encodeURIComponent(job.id)}/retry`,
         { method: "POST" },
       );

@@ -76,3 +76,27 @@ def client(db_session_factory: sessionmaker[Session], monkeypatch) -> TestClient
         test_client.outbox = outbox
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def preserve_contracted_response_payloads(monkeypatch):
+    """Catch dropped fields and changed wire values in real lifecycle responses."""
+    import json
+    import fastapi.routing
+    from fastapi.encoders import jsonable_encoder
+
+    serialize = fastapi.routing.serialize_response
+    modules = {
+        'app.schemas.api_common', 'app.schemas.subscriber_responses',
+        'app.schemas.admin_billing_responses', 'app.schemas.spending_responses',
+    }
+
+    async def checked(**kwargs):
+        result = await serialize(**kwargs)
+        field = kwargs.get('field')
+        if field and getattr(field.field_info.annotation, '__module__', '') in modules:
+            wire = json.loads(result) if isinstance(result, (bytes, str)) else result
+            assert wire == jsonable_encoder(kwargs['response_content'])
+        return result
+
+    monkeypatch.setattr(fastapi.routing, 'serialize_response', checked)

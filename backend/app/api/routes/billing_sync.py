@@ -1,3 +1,5 @@
+from app.schemas.admin_billing_responses import (BillingSyncRead, InvoiceReviewRead)
+from app.schemas.api_common import QueuedRead
 from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Query
@@ -8,20 +10,20 @@ from app.services import billing_sync_service as sync
 router = APIRouter()
 
 
-@router.get('')
+@router.get('', response_model=BillingSyncRead, response_model_exclude_unset=True)
 def overview(actor: CurrentAdmin, db: DbSession, user_id: UUID | None = None,
              state: Literal['pending', 'processing', 'retry', 'failed', 'processed'] | None = None,
              offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
     return sync.overview(db, actor, user_id=user_id, state=state, offset=offset, limit=limit)
 
 
-@router.post('/{job_id}/retry', status_code=202)
+@router.post('/{job_id}/retry', status_code=202, response_model=QueuedRead, response_model_exclude_unset=True)
 def retry(job_id: str, actor: CurrentAdmin, db: DbSession, settings: AppSettings):
     rate_limit(db, settings, actor)
     return call(db, sync.retry, actor, job_id)
 
 
-@router.get('/checkouts/{checkout_id}/invoices')
+@router.get('/checkouts/{checkout_id}/invoices', response_model=InvoiceReviewRead, response_model_exclude_unset=True)
 def invoices(checkout_id: UUID, actor: CurrentAdmin, db: DbSession, settings: AppSettings,
              offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
     from sqlalchemy import func, select

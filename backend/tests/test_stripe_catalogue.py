@@ -95,7 +95,8 @@ def test_saved_revision_check_is_admin_only_and_explicit(client, db_session_fact
     calls = []
     def fake(config, settings):
         calls.append(config)
-        return {'matches': True, 'issues': [], 'prices': []}
+        return {'matches': True, 'issues': [], 'prices': [],
+                'checked_at': '2026-01-01T00:00:00+00:00', 'environment': 'sandbox'}
     monkeypatch.setattr('app.services.stripe_catalogue_service.check_mapping', fake)
     path = URL + '/explorer/revisions/1/check-stripe'
     assert client.get(URL, headers=admin).status_code == 200

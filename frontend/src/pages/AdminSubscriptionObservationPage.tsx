@@ -5,16 +5,10 @@ import { Alert, Box, Button, Container, MenuItem, Paper, Stack, TextField, Typog
 import { AppHeader } from "../components/AppHeader";
 import { apiRequest, ApiError } from "../api/client";
 
-type Plan = { id: number; code: string; revision: number; configuration: { name: string; state: string } };
-type Assignment = { id: number | null; version: number; mode: string; plan: Plan | null; change_note: string; created_at: string | null; created_by: string | null };
-type Entry = { run_key: string; run_id: string | null; digest_id: string | null; topic: string; state: string; trigger: string;
-  requested_papers: number; actual_papers: number; attempts: number; assignment_id: number | null;
-  assessments: { at: string; reasons: string[]; would_block: boolean }[] };
-type Overview = { user: { id: string; email: string }; tracking_since: string | null; assignment: Assignment;
-  period_start: string; period_end: string; digest_count: number;
-  usage: { completed_runs: number; reserved_runs: number; manual_runs: number; completed_papers: number; reserved_papers: number; released_runs: number };
-  remaining: { runs: number | null; manual_runs: number | null; papers: number | null; digests: number | null };
-  items: Entry[]; total: number };
+type Schemas = import("../types/api.generated").components["schemas"];
+type Plan = Schemas["ObservationPlanRead"];
+type Assignment = Schemas["AssignmentRead"];
+type Overview = import("../types/api-contracts").ApiResponse<"/api/v1/admin/subscription-observation/{user_id}", "get">;
 type Users = { items: { id: string; email: string; full_name: string }[]; total: number };
 const root = "/admin/subscription-observation";
 const displayDate = (value: string | null) => value ? new Date(value).toLocaleString() : "Not yet recorded";
@@ -51,7 +45,7 @@ export function AdminSubscriptionObservationPage() {
   }, [query, userOffset]);
   useEffect(() => {
     let active = true;
-    apiRequest<{ items: Plan[]; total: number }>(`/admin/subscription-plans?offset=${planOffset}&limit=100`)
+    apiRequest<Schemas["PlanListRead"]>(`/admin/subscription-plans?offset=${planOffset}&limit=100`)
       .then(result => { if (active) { setPlans(result.items); setPlanTotal(result.total); } })
       .catch(() => { if (active) setError("Could not load plans."); });
     return () => { active = false; };
@@ -73,7 +67,7 @@ export function AdminSubscriptionObservationPage() {
   useEffect(() => {
     let active = true; setHistory({ items: [], total: 0 });
     if (!userId) return;
-    apiRequest<{ items: Assignment[]; total: number }>(`${root}/${userId}/assignments?offset=${historyOffset}&limit=10`)
+    apiRequest<Schemas["AssignmentListRead"]>(`${root}/${userId}/assignments?offset=${historyOffset}&limit=10`)
       .then(result => { if (active) setHistory(result); })
       .catch(() => { if (active) setError("Could not load assignment history."); });
     return () => { active = false; };
@@ -82,7 +76,7 @@ export function AdminSubscriptionObservationPage() {
     event.preventDefault(); if (!data) return;
     setBusy(true); setError(""); setSuccess("");
     try {
-      await apiRequest(`${root}/${userId}/assignments`, { method: "POST", body: {
+      await apiRequest<Assignment>(`${root}/${userId}/assignments`, { method: "POST", body: {
         expected_version: data.assignment.version, plan_revision_id: selectedPlan ? Number(selectedPlan) : null, change_note: note } });
       setNote(""); setHistoryOffset(0); setRefresh(value => value + 1);
       setSuccess("Observation assignment saved. User access and Stripe billing are unchanged.");

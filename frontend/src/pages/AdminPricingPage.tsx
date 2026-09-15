@@ -38,7 +38,7 @@ function Copy({ row }: { row: Price }) {
 }
 export function AdminPricingPage() {
   const location = useLocation();
-  const [list, setList] = useState<PriceList>({ items: [], total: 0 });
+  const [list, setList] = useState<PriceList>({ items: [], total: 0, offset: 0, limit: PAGE_SIZE });
   const [page, setPage] = useState(1);
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
