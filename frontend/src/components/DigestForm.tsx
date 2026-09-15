@@ -1,5 +1,6 @@
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import {
+  Alert,
   Box,
   Button,
   Checkbox,
@@ -61,6 +62,8 @@ interface DigestFormProps {
   paperLimit?: number;
   submitDisabled?: boolean;
   paperHint?: string;
+  submitNotice?: { severity: "success" | "error"; message: string } | null;
+  onEdit?: () => void;
   onSubmit: (input: DigestInput) => Promise<void>;
   onCancel?: () => void;
 }
@@ -109,6 +112,8 @@ export function DigestForm({
   paperLimit = MAXIMUM_PAPERS_LIMIT,
   submitDisabled = false,
   paperHint,
+  submitNotice,
+  onEdit,
   onSubmit,
   onCancel,
 }: DigestFormProps) {
@@ -121,6 +126,7 @@ export function DigestForm({
     field: TKey,
     value: DigestFormValues[TKey],
   ) {
+    onEdit?.();
     setValues((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
   }
@@ -170,6 +176,7 @@ export function DigestForm({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitDisabled) return;
+    onEdit?.();
     const nextErrors = validate();
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
@@ -336,6 +343,11 @@ export function DigestForm({
         </Stack>
       </Paper>
 
+      {submitNotice && !isSubmitting && (
+        <Alert severity={submitNotice.severity} role={submitNotice.severity === "success" ? "status" : "alert"}>
+          {submitNotice.message}
+        </Alert>
+      )}
       <Stack
         direction={{ xs: "column-reverse", sm: "row" }}
         spacing={1.5}

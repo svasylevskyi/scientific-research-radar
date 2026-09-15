@@ -77,6 +77,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   }
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(routeState?.success ?? null);
+  const [saveNotice, setSaveNotice] = useState<{ severity: "success" | "error"; message: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmRun, setConfirmRun] = useState(false);
   const scheduleRevision = useRef(0);
@@ -84,6 +85,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   useEffect(() => {
     let active = true;
     setIsLoading(true);
+    setSaveNotice(null);
     setError(null);
     setRuns([]); setLatestRun(null); setActiveRun(null); setRunTab(0);
     setConfirmRun(false);
@@ -218,6 +220,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   }
 
   async function updateDigest(input: DigestInput) {
+    setSaveNotice(null);
     setIsSaving(true);
     setError(null);
     setSuccess(null);
@@ -226,9 +229,13 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
         ? await adminDigestsApi.update(digestId, input)
         : await digestsApi.update(digestId, input);
       setDigest(updated);
-      setSuccess("Digest details updated.");
+      const message = "Digest details updated.";
+      setSuccess(message);
+      setSaveNotice({ severity: "success", message });
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not update this digest.");
+      const message = caught instanceof ApiError ? caught.message : "Could not update this digest.";
+      setError(message);
+      setSaveNotice({ severity: "error", message });
     } finally {
       setIsSaving(false);
     }
@@ -279,6 +286,8 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
         paperHint={access?.plan ? `Plan limit: ${access.plan.configuration.max_papers_per_run} papers per run. Reduce an oversized saved setting before running.` : undefined}
         submitDisabled={!access || !!subscription.error}
         submitLabel="Save changes"
+        submitNotice={saveNotice}
+        onEdit={() => setSaveNotice(null)}
         isSubmitting={isSaving}
         onSubmit={updateDigest}
       />
