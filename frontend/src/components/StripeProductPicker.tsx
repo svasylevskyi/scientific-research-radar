@@ -44,10 +44,10 @@ export function StripeProductPicker({ code, value, onChange, onValidityChange, r
         product_id: product.id, monthly_price_id: month?.id ?? '', annual_price_id: year?.id ?? null } });
   }
   return <Stack spacing={2} sx={{ my: 2 }}>
-    <Typography color="text.secondary">Choose a sandbox product and its prices. Each product belongs to one Radar tier, including its historical revisions. Only supported flat monthly/yearly prices with inclusive tax are offered.</Typography>
+    <Typography color="text.secondary">Choose a Stripe product and its prices. Each product belongs to one Radar tier, including its historical revisions. Only supported flat monthly/yearly prices with inclusive tax are offered.</Typography>
     <Button sx={{ alignSelf: 'flex-start' }} disabled={loading} onClick={() => setReload(n => n + 1)}>{loading ? 'Loading Stripe products…' : 'Reload Stripe products'}</Button>
     {error && <Alert severity="error">{error}</Alert>}
-    {!loading && !error && !items.length && <Alert severity="info">No active products found in this Stripe sandbox.</Alert>}
+    {!loading && !error && !items.length && <Alert severity="info">No active products found in the configured Stripe environment.</Alert>}
     <TextField select required fullWidth label="Stripe product" value={selected?.id ?? ''} disabled={loading || !!error}
       onChange={e => { const product = items.find(p => p.id === e.target.value); if (product) choose(product); }}>
       {items.map(p => <MenuItem key={p.id} value={p.id} disabled={ownedElsewhere(p) || !p.prices.some(price => price.interval === 'month')} sx={{ whiteSpace: 'normal' }}>

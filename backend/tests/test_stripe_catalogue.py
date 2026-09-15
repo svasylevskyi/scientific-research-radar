@@ -1,4 +1,4 @@
-from types import SimpleNamespace
+from app.core.config import Settings
 import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
@@ -33,7 +33,7 @@ def transport(changes=None, *, status=200):
     return httpx.MockTransport(handler), calls
 
 
-SETTINGS = SimpleNamespace(stripe_sandbox_api_key=SecretStr('rk_test_fake'))
+SETTINGS = Settings(stripe_sandbox_api_key=SecretStr('rk_test_fake'))
 
 
 def test_read_only_verification_matches_and_uses_no_automatic_requests():
@@ -57,7 +57,7 @@ def test_price_mismatches_are_reported(change):
 def test_missing_or_live_keys_cannot_make_a_request(key):
     mock, calls = transport()
     with pytest.raises(StripeCatalogueError) as error:
-        check_mapping(configuration(), SimpleNamespace(stripe_sandbox_api_key=key), transport=mock)
+        check_mapping(configuration(), Settings.model_construct(stripe_sandbox_api_key=key), transport=mock)
     assert error.value.status_code == 503 and not calls
 
 
@@ -71,7 +71,7 @@ def test_provider_errors_are_sanitized(status):
 
 def test_live_response_is_rejected_even_with_test_key():
     mock, _ = transport({'livemode': True})
-    with pytest.raises(StripeCatalogueError, match='sandbox object'):
+    with pytest.raises(StripeCatalogueError, match='expected-mode object'):
         check_mapping(configuration(), SETTINGS, transport=mock)
 
 

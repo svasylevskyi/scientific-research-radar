@@ -271,8 +271,8 @@ function PlanEditor({ routeCode }: { routeCode?: string }) {
                               }
                             >
                               {check.result.matches
-                                ? "Sandbox prices match this revision, including explicit inclusive tax behavior."
-                                : "Sandbox mapping needs attention."}
+                                ? "Stripe prices match this revision, including explicit inclusive tax behavior."
+                                : "Stripe mapping needs attention."}
                               {check.result.issues.map((issue) => (
                                 <Typography key={issue} variant="body2">
                                   {issue}
@@ -371,7 +371,7 @@ function PlanEditor({ routeCode }: { routeCode?: string }) {
                               <Typography>
                                 Subscriber publication:{" "}
                                 {row.configuration.subscriber_visible
-                                  ? "Published for sandbox checkout"
+                                  ? "Published for checkout"
                                   : "Hidden"}
                               </Typography>
                               <Typography>
@@ -396,7 +396,7 @@ function PlanEditor({ routeCode }: { routeCode?: string }) {
                                   : "Not included"}
                               </Typography>
                               <Typography sx={{ overflowWrap: "anywhere" }}>
-                                Stripe sandbox:{" "}
+                                Stripe mapping:{" "}
                                 {row.configuration.stripe_sandbox
                                   ? `${row.configuration.stripe_sandbox.product_id} · Monthly ${row.configuration.stripe_sandbox.monthly_price_id} · Annual ${row.configuration.stripe_sandbox.annual_price_id ?? "Not mapped"}`
                                   : "Not mapped"}

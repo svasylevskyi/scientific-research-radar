@@ -106,7 +106,7 @@ def require_invoice_identity(
 ) -> None:
     if (
         invoice.get("object") != "invoice"
-        or invoice.get("livemode") is not False
+        or invoice.get("livemode") is not checkout.livemode
         or ref(invoice.get("customer")) != checkout.customer_id
         or subscription_id(invoice) != checkout.subscription_id
     ):

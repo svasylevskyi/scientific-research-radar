@@ -43,10 +43,10 @@ export function SubscriberBilling() {
         <Typography>
           Open Manage billing to view invoices and update payment details.
         </Typography>
-        <Alert severity="info">
+        {data?.sandbox && <Alert severity="info">
           Sandbox testing only. Use Stripe test payment details; no real payment
           is collected.
-        </Alert>
+        </Alert>}
         {params.has("stripe_return") && (
           <Alert severity="info">
             You have returned from Stripe. Your access updates after payment

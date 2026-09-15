@@ -1,4 +1,4 @@
-"""Read-only sandbox checks. Never creates products, prices, sessions or charges."""
+"""Read-only Stripe catalogue checks. Never creates products, prices, sessions or charges."""
 from datetime import datetime, timezone
 from decimal import Decimal
 import httpx
@@ -15,10 +15,10 @@ def check_mapping(configuration, settings, *, transport=None):
     config = SubscriptionPlanConfiguration.model_validate(configuration)
     mapping = config.stripe_sandbox
     if not mapping:
-        raise StripeCatalogueError("Save a sandbox mapping for this plan first.", 422)
-    secret = settings.stripe_sandbox_api_key.get_secret_value() if settings.stripe_sandbox_api_key else ""
-    if not secret.startswith(("rk_test_", "sk_test_")):
-        raise StripeCatalogueError("Configure STRIPE_SANDBOX_API_KEY with a restricted sandbox key on the API server. Live keys are not accepted.", 503)
+        raise StripeCatalogueError("Save a Stripe mapping for this plan first.", 422)
+    secret = settings.effective_stripe_api_key.get_secret_value() if settings.effective_stripe_api_key else ""
+    if not secret.startswith(("rk_live_", "sk_live_") if settings.stripe_livemode else ("rk_test_", "sk_test_")):
+        raise StripeCatalogueError("Configure STRIPE_API_KEY with a key matching STRIPE_MODE on the API server.", 503)
     issues = []
     if config.tax_display != "inclusive":
         issues.append("The Radar plan tax-display policy must be Inclusive for this integration.")
@@ -29,14 +29,14 @@ def check_mapping(configuration, settings, *, transport=None):
             def fetch(path):
                 response = client.get(path)
                 if response.status_code in (401, 403):
-                    raise StripeCatalogueError("Stripe rejected access. Check the sandbox key and read permissions for Products and Prices.", 503)
+                    raise StripeCatalogueError("Stripe rejected access. Check the Stripe key and read permissions for Products and Prices.", 503)
                 if response.status_code == 404:
-                    raise StripeCatalogueError("A mapped product or price was not found in this sandbox. Check the IDs and sandbox key.", 422)
+                    raise StripeCatalogueError("A mapped product or price was not found in the configured Stripe environment. Check the IDs and Stripe key.", 422)
                 if response.status_code != 200:
                     raise StripeCatalogueError("Stripe could not complete the check. Please try again later.")
                 value = response.json()
-                if not isinstance(value, dict) or value.get("livemode") is not False:
-                    raise StripeCatalogueError("Stripe did not return a sandbox object. Verification stopped.")
+                if not isinstance(value, dict) or value.get("livemode") is not settings.stripe_livemode:
+                    raise StripeCatalogueError("Stripe did not return a expected-mode object. Verification stopped.")
                 return value
             product = fetch(f"products/{mapping.product_id}")
             if product.get("id") != mapping.product_id or product.get("object") != "product" or product.get("active") is not True:
@@ -68,14 +68,14 @@ def check_mapping(configuration, settings, *, transport=None):
     except (httpx.HTTPError, ValueError, TypeError, AttributeError):
         raise StripeCatalogueError("Stripe verification failed or returned an unexpected response. Please try again.") from None
     return {"matches": not issues, "issues": issues, "prices": observations,
-            "checked_at": datetime.now(timezone.utc), "environment": "sandbox"}
+            "checked_at": datetime.now(timezone.utc), "environment": settings.stripe_mode}
 
 
 def list_products(settings, *, transport=None):
     """Read the complete bounded catalogue. Never return a silently partial picker."""
-    secret = settings.stripe_sandbox_api_key.get_secret_value() if settings.stripe_sandbox_api_key else ''
-    if not secret.startswith(('rk_test_', 'sk_test_')):
-        raise StripeCatalogueError('Configure STRIPE_SANDBOX_API_KEY with a sandbox key. Live keys are not accepted.', 503)
+    secret = settings.effective_stripe_api_key.get_secret_value() if settings.effective_stripe_api_key else ''
+    if not secret.startswith(('rk_live_', 'sk_live_') if settings.stripe_livemode else ('rk_test_', 'sk_test_')):
+        raise StripeCatalogueError('Configure STRIPE_API_KEY with a key matching STRIPE_MODE.', 503)
     try:
         with httpx.Client(base_url='https://api.stripe.com/v1/', auth=(secret, ''), timeout=10,
                           follow_redirects=False, transport=transport) as client:
@@ -87,15 +87,15 @@ def list_products(settings, *, transport=None):
                 for _ in range(20):
                     response = client.get(path, params=params)
                     if response.status_code in (401, 403):
-                        raise StripeCatalogueError('Stripe rejected access. Check the sandbox key and read permissions for Products and Prices.', 503)
+                        raise StripeCatalogueError('Stripe rejected access. Check the Stripe key and read permissions for Products and Prices.', 503)
                     if response.status_code != 200:
                         raise StripeCatalogueError('Stripe catalogue is unavailable. Please retry later.')
                     page = response.json()
                     if not isinstance(page, dict) or page.get('object') != 'list' or not isinstance(page.get('data'), list) or type(page.get('has_more')) is not bool:
                         raise StripeCatalogueError('Stripe returned an unexpected catalogue response.')
                     for item in page['data']:
-                        if not isinstance(item, dict) or item.get('object') != object_type or item.get('livemode') is not False or not isinstance(item.get('id'), str) or item['id'] in seen:
-                            raise StripeCatalogueError('Stripe returned an unexpected or non-sandbox catalogue object.')
+                        if not isinstance(item, dict) or item.get('object') != object_type or item.get('livemode') is not settings.stripe_livemode or not isinstance(item.get('id'), str) or item['id'] in seen:
+                            raise StripeCatalogueError('Stripe returned an unexpected or wrong-mode catalogue object.')
                         seen.add(item['id'])
                         result.append(item)
                     if not page['has_more']:

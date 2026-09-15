@@ -49,7 +49,7 @@ def verified_schedule(
     if (
         value.get("id") != change.schedule_id
         or value.get("object") != "subscription_schedule"
-        or value.get("livemode") is not False
+        or value.get("livemode") is not checkout.livemode
         or ref(value.get("customer")) != checkout.customer_id
         or ref(value.get("subscription") or value.get("released_subscription"))
         != checkout.subscription_id

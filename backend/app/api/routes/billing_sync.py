@@ -11,10 +11,10 @@ router = APIRouter()
 
 
 @router.get('', response_model=BillingSyncRead, response_model_exclude_unset=True)
-def overview(actor: CurrentAdmin, db: DbSession, user_id: UUID | None = None,
+def overview(actor: CurrentAdmin, db: DbSession, settings: AppSettings, user_id: UUID | None = None,
              state: Literal['pending', 'processing', 'retry', 'failed', 'processed'] | None = None,
              offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100)):
-    return sync.overview(db, actor, user_id=user_id, state=state, offset=offset, limit=limit)
+    return {**sync.overview(db, actor, user_id=user_id, state=state, offset=offset, limit=limit), "mode": settings.stripe_mode}
 
 
 @router.post('/{job_id}/retry', status_code=202, response_model=QueuedRead, response_model_exclude_unset=True)

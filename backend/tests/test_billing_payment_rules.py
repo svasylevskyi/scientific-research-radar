@@ -13,12 +13,13 @@ from app.services.billing_provider import Error
 from app.services.billing_types import PlanEntitlements
 
 
-@pytest.fixture
-def payment_evidence():
+@pytest.fixture(params=["sandbox", "live"])
+def payment_evidence(request):
     start = datetime(2026, 9, 15, tzinfo=timezone.utc)
     end = start + timedelta(days=10)
     checkout = SandboxCheckout(
-        id=uuid4(), customer_id="cus_owner", subscription_id="sub_owner"
+        id=uuid4(), customer_id="cus_owner", subscription_id="sub_owner",
+        parameters={"metadata[radar_mode]": request.param}
     )
     upgrade = SubscriptionUpgrade(
         source_price_id="price_old",
@@ -43,7 +44,7 @@ def payment_evidence():
 
     invoice = {
         "object": "invoice",
-        "livemode": False,
+        "livemode": request.param == "live",
         "customer": "cus_owner",
         "subscription": "sub_owner",
         "currency": "eur",

@@ -69,7 +69,7 @@ def eligible(*, source: Plan, target: Plan, interval: str) -> bool:
 def options(db, settings, uid):
     row = billing.latest(db, uid)
     result = {'items': [], 'upgrade': serialized(db, latest(db, uid)), 'reason': ''}
-    if not settings.stripe_sandbox_checkout_enabled or not subscribers.opted_in(db, user_id=uid):
+    if not settings.effective_stripe_checkout_enabled or not subscribers.opted_in(db, user_id=uid):
         result['reason'] = 'Paid upgrades are unavailable for this account.'
     elif not row or row.subscription_status != 'active' or row.cancel_at_period_end:
         result['reason'] = 'An active paid subscription without cancellation is required.'
@@ -252,7 +252,7 @@ def payment(db, settings, uid, quote_id):
 
 
 def tick(factory, settings):
-    if not settings.stripe_sandbox_checkout_enabled:
+    if not settings.effective_stripe_checkout_enabled:
         return False
     with factory() as db:
         row = db.scalar(select(Upgrade).where(Upgrade.state.in_(['submitting', 'pending_payment']), Upgrade.next_attempt_at <= now())

@@ -41,6 +41,9 @@ async def lifespan(_app: FastAPI):
     if settings.environment != "test":
         try:
             with SessionLocal() as db:
+                from app.services.stripe_environment import ensure_database_mode
+                ensure_database_mode(db, settings)
+                db.commit()
                 ensure_super_admin(db, settings)
         except OperationalError as exc:
             raise RuntimeError(
@@ -82,7 +85,7 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 
 from app.api.routes.stripe_sandbox import webhook_router
-app.include_router(webhook_router, prefix="/api/v1/webhooks", tags=["sandbox billing"])
+app.include_router(webhook_router, prefix="/api/v1/webhooks", tags=["billing webhooks"])
 
 
 @app.exception_handler(RequestValidationError)

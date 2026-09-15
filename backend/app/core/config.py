@@ -54,6 +54,12 @@ class Settings(BaseSettings):
 
     openai_admin_api_key: SecretStr | None = None
     openai_costs_project_id: str | None = Field(default=None, min_length=1, max_length=200)
+    stripe_mode: Literal["sandbox", "live"] = "sandbox"
+    stripe_api_key: SecretStr | None = None
+    stripe_webhook_secret: SecretStr | None = None
+    stripe_portal_configuration_id: str | None = None
+    stripe_checkout_enabled: bool | None = None
+    # Compatibility with existing deployments. Never used in live mode.
     stripe_sandbox_api_key: SecretStr | None = None
     subscription_grace_days: int = Field(default=3, ge=0, le=14)
     subscription_sync_max_age_seconds: int = Field(default=86400, ge=900, le=172800)
@@ -84,8 +90,38 @@ class Settings(BaseSettings):
     super_admin_full_name: str = Field(default="System Administrator", min_length=2, max_length=120)
     super_admin_password: str = Field(default="change-me-before-production", min_length=12, max_length=128)
 
+    @property
+    def stripe_livemode(self) -> bool:
+        return self.stripe_mode == "live"
+
+    @property
+    def effective_stripe_api_key(self) -> SecretStr | None:
+        return self.stripe_api_key or (self.stripe_sandbox_api_key if not self.stripe_livemode else None)
+
+    @property
+    def effective_stripe_webhook_secret(self) -> SecretStr | None:
+        return self.stripe_webhook_secret or (self.stripe_sandbox_webhook_secret if not self.stripe_livemode else None)
+
+    @property
+    def effective_stripe_portal_configuration_id(self) -> str | None:
+        return self.stripe_portal_configuration_id or (self.stripe_sandbox_portal_configuration_id if not self.stripe_livemode else None)
+
+    @property
+    def effective_stripe_checkout_enabled(self) -> bool:
+        if self.stripe_checkout_enabled is not None:
+            return self.stripe_checkout_enabled
+        return self.stripe_sandbox_checkout_enabled if not self.stripe_livemode else False
+
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
+        key = self.effective_stripe_api_key
+        if key and not key.get_secret_value().startswith(("sk_live_", "rk_live_") if self.stripe_livemode else ("sk_test_", "rk_test_")):
+            raise ValueError("Stripe API key does not match STRIPE_MODE")
+        if self.stripe_livemode and self.effective_stripe_checkout_enabled:
+            if not key or not self.effective_stripe_webhook_secret:
+                raise ValueError("Live checkout requires STRIPE_API_KEY and STRIPE_WEBHOOK_SECRET")
+            if not self.frontend_base_url.startswith("https://"):
+                raise ValueError("Live checkout requires an HTTPS FRONTEND_BASE_URL")
         if self.refresh_cookie_samesite == "none" and not self.refresh_cookie_secure:
             raise ValueError("SameSite=None refresh cookies must also be Secure")
         if self.environment == "production":

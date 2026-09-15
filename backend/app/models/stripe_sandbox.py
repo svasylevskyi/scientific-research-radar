@@ -1,3 +1,8 @@
+"""Billing records shared by the two separately deployed modes.
+
+Legacy table/class names remain compatible with existing foreign keys. The
+stripe_environment binding and saved checkout metadata define the actual mode.
+"""
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from sqlalchemy import DateTime, ForeignKey, JSON, String
@@ -13,6 +18,11 @@ class SandboxBillingAccount(Base):
 
 class SandboxCheckout(Base):
     __tablename__ = "sandbox_checkouts"
+    @property
+    def livemode(self) -> bool:
+        # Legacy attempts predate radar_mode and are always sandbox attempts.
+        return (self.parameters or {}).get("metadata[radar_mode]") == "live"
+
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     plan_revision_id: Mapped[int] = mapped_column(ForeignKey("subscription_plan_revisions.id", ondelete="RESTRICT"))
@@ -46,3 +56,9 @@ class SandboxStripeEvent(Base):
     checkout_id: Mapped[UUID] = mapped_column(ForeignKey("sandbox_checkouts.id", ondelete="CASCADE"))
     event_type: Mapped[str] = mapped_column(String(100))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class StripeEnvironment(Base):
+    __tablename__ = "stripe_environment"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mode: Mapped[str] = mapped_column(String(10))

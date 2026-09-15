@@ -92,6 +92,7 @@ class SandboxAttemptRead(BaseModel):
 
 
 class SandboxOverviewRead(BaseModel):
+    mode: str
     enabled: bool
     plan: SandboxPlanRead | None
     attempts: list[SandboxAttemptRead]

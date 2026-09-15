@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 def main():
     logging.basicConfig(level=logging.INFO)
     settings = get_settings()
+    from app.services.stripe_environment import ensure_database_mode
+    with SessionLocal() as db:
+        ensure_database_mode(db, settings)
+        db.commit()
     public_url = urlsplit(settings.frontend_base_url)
     if settings.environment == "production" and (
         public_url.scheme != "https" or public_url.hostname in ("localhost", "127.0.0.1", "::1")

@@ -27,15 +27,15 @@ class Selection(BaseModel):
 
 
 @router.get('/plans', response_model=PublicPlansRead, response_model_exclude_unset=True)
-def plans(db: DbSession, response: Response):
+def plans(db: DbSession, response: Response, settings: AppSettings):
     response.headers['Cache-Control'] = 'no-store'
-    return service.catalogue(db)
+    return service.catalogue(db, settings)
 
 
 @router.get('/enrolment-plans', response_model=PublicPlansRead, response_model_exclude_unset=True)
-def enrolment_plans(actor: CurrentUser, db: DbSession, response: Response):
+def enrolment_plans(actor: CurrentUser, db: DbSession, response: Response, settings: AppSettings):
     response.headers['Cache-Control'] = 'no-store'
-    return service.enrolment_catalogue(db, actor.id)
+    return service.enrolment_catalogue(db, actor.id, settings)
 
 
 @router.get('/billing', response_model=BillingStatusRead, response_model_exclude_unset=True)

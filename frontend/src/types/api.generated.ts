@@ -396,6 +396,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/subscription-testing/mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mode */
+        get: operations["mode_api_v1_admin_subscription_testing_mode_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/subscription-testing/portal": {
         parameters: {
             query?: never;
@@ -1204,6 +1221,23 @@ export interface paths {
         /** Update My Password */
         put: operations["update_my_password_api_v1_users_me_password_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/stripe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Webhook */
+        post: operations["webhook_api_v1_webhooks_stripe_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2866,6 +2900,8 @@ export interface components {
             attempts: components["schemas"]["SandboxAttemptRead"][];
             /** Enabled */
             enabled: boolean;
+            /** Mode */
+            mode: string;
             plan: components["schemas"]["SandboxPlanRead"] | null;
             /** Portal Available */
             portal_available: boolean;
@@ -3022,6 +3058,16 @@ export interface components {
             monthly_price_id: string;
             /** Product Id */
             product_id: string;
+        };
+        /** StripeModeRead */
+        StripeModeRead: {
+            /** Checkout Enabled */
+            checkout_enabled: boolean;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "sandbox" | "live";
         };
         /** StripePriceCheckRead */
         StripePriceCheckRead: {
@@ -4259,6 +4305,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mode_api_v1_admin_subscription_testing_mode_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StripeModeRead"];
                 };
             };
         };
@@ -5937,6 +6003,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    webhook_api_v1_webhooks_stripe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookReceiptRead"];
                 };
             };
         };
