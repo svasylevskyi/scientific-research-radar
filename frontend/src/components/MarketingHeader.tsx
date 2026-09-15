@@ -20,8 +20,10 @@ export function MarketingHeader() {
     <Box component="header" sx={{ bgcolor: "#fff", borderBottom: "1px solid", borderColor: "divider" }}>
       <Container maxWidth="lg" sx={{ py: 2.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
         <Box component={RouterLink} to="/" aria-label="Scientific Research Radar home" sx={{ textDecoration: "none" }}><Brand compact /></Box>
-        <Stack component="nav" aria-label="Main navigation" direction="row" alignItems="center" spacing={2}>
+        <Stack component="nav" aria-label="Main navigation" direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
           <Button component={RouterLink} to="/plans" color="inherit">Plans</Button>
+          <Button component={RouterLink} to="/about" color="inherit">About</Button>
+          <Button component={RouterLink} to="/contact" color="inherit">Contact</Button>
           <RadarLink />
         </Stack>
       </Container>

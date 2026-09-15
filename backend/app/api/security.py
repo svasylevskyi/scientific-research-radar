@@ -57,6 +57,8 @@ async def guard_request(request: Request, db: DbSession, settings: AppSettings):
         rules.append(("email-change-user", subject))
     if subject and path == "/api/v1/users/me/password" and request.method == "PUT":
         rules.append(("password-change-user", subject))
+    if request.method == "POST" and path == "/api/v1/contact":
+        rules.append(("contact-ip", peer))
     if path == "/api/v1/auth/refresh":
         rules.append(("refresh-ip", peer))
 

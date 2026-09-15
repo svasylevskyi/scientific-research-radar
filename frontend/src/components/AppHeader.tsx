@@ -1,3 +1,4 @@
+import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
 import AdminPanelSettingsRoundedIcon from "@mui/icons-material/AdminPanelSettingsRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
@@ -94,6 +95,7 @@ export function AppHeader() {
         ]
       : []),
   ];
+  if (user?.role === "admin") adminLinks.push({ label: "Messages", short: "Messages", to: "/admin/messages", icon: <MailOutlineRoundedIcon /> });
   // Profile and sign-out are menu items too; collapse the entire menu, not overflow only.
   const collapsed = mobile && links.length + 2 > 3;
   const avatar = (
