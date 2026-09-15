@@ -73,7 +73,7 @@ def observe(db, checkout, value):
     transition_invoice = reason == 'subscription_update' and start and db.scalar(select(SubscriptionChange.id).where(SubscriptionChange.checkout_id == checkout.id, SubscriptionChange.applied_at.is_not(None), SubscriptionChange.effective_at == start))
     if reason not in {'subscription_create', 'subscription_cycle'} and not transition_invoice:
         issue = 'This invoice is not a supported initial or renewal invoice.'
-    upgrade_check = invoice_issue(db, checkout, value)
+    upgrade_check = invoice_issue(db=db, checkout=checkout, invoice=value)
     if upgrade_check is not None:
         issue, start, end = upgrade_check['issue'], upgrade_check['start'], upgrade_check['end']
     if currency.upper() != config['currency'] or value.get('collection_method') != 'charge_automatically':

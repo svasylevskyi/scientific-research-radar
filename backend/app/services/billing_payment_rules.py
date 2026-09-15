@@ -5,20 +5,31 @@ No Stripe writes, transaction commits, or transition command dependencies.
 
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+from typing import Any, Literal, cast, overload
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.models.stripe_sandbox import SandboxCheckout
 from app.models.subscription_change import SubscriptionChange as Change
 from app.models.subscription_upgrade import SubscriptionUpgrade as Upgrade
 from app.services import billing_provider as billing
 from app.services.billing_provider import Error
+from app.services.billing_types import (
+    InvoiceReview,
+    PriceBinding,
+    ProrationLine,
+    ProviderObject,
+    UpgradeQuoteRecord,
+    VerifiedUpgradeInvoice,
+)
 
 
-def ref(value):
+def ref(value: Any) -> Any:
     return value.get("id") if isinstance(value, dict) else value
 
 
-def subscription_id(value):
+def subscription_id(value: ProviderObject) -> Any:
     parent = value.get("parent") or {}
     return ref(
         (parent.get("subscription_details") or {}).get("subscription")
@@ -26,7 +37,7 @@ def subscription_id(value):
     )
 
 
-def metadata(value):
+def metadata(value: ProviderObject) -> ProviderObject:
     return (
         (value.get("parent") or {}).get("subscription_details")
         or value.get("subscription_details")
@@ -34,7 +45,19 @@ def metadata(value):
     ).get("metadata") or {}
 
 
-def stamp(value, *, optional=True):
+@overload
+def stamp(value: object, *, optional: Literal[False]) -> datetime: ...
+
+
+@overload
+def stamp(value: object, *, optional: Literal[True] = True) -> datetime | None: ...
+
+
+@overload
+def stamp(value: object, *, optional: bool) -> datetime | None: ...
+
+
+def stamp(value: object, *, optional: bool = True) -> datetime | None:
     if value is None and optional:
         return None
     if type(value) is not int or value < 0:
@@ -45,12 +68,14 @@ def stamp(value, *, optional=True):
         raise Error("Stripe returned an invalid invoice timestamp.") from None
 
 
-def expected_invoice_price(db, checkout, period_start):
+def expected_invoice_price(
+    db: Session, checkout: SandboxCheckout, period_start: datetime | None
+) -> str:
     """Historical full-period invoices follow both scheduled and paid upgrade bindings."""
     from app.models.subscription_upgrade import SubscriptionUpgrade
 
     events = [
-        (billing.utc(c.effective_at), c.source_price_id, c.target_price_id)
+        PriceBinding(billing.utc(c.effective_at), c.source_price_id, c.target_price_id)
         for c in db.scalars(
             select(Change).where(
                 Change.checkout_id == checkout.id, Change.applied_at.is_not(None)
@@ -58,7 +83,7 @@ def expected_invoice_price(db, checkout, period_start):
         )
     ]
     events += [
-        (billing.utc(u.proration_at), u.source_price_id, u.target_price_id)
+        PriceBinding(billing.utc(u.proration_at), u.source_price_id, u.target_price_id)
         for u in db.scalars(
             select(SubscriptionUpgrade).where(
                 SubscriptionUpgrade.checkout_id == checkout.id,
@@ -66,158 +91,214 @@ def expected_invoice_price(db, checkout, period_start):
             )
         )
     ]
-    events.sort(key=lambda e: e[0])
+    events.sort(key=lambda event: event.effective_at)
     if not events or period_start is None:
         return checkout.price_id
-    price = events[0][1]
-    for effective, source, target in events:
-        if period_start >= effective:
-            price = target
+    price = events[0].source_price_id
+    for binding in events:
+        if period_start >= binding.effective_at:
+            price = binding.target_price_id
     return price
 
 
-def snapshot(value, checkout, row, *, preview=False):
-    """Validate the complete invoice, retaining only payment-relevant fields."""
+def require_invoice_identity(
+    *, invoice: ProviderObject, checkout: SandboxCheckout
+) -> None:
     if (
-        value.get("object") != "invoice"
-        or value.get("livemode") is not False
-        or ref(value.get("customer")) != checkout.customer_id
-        or subscription_id(value) != checkout.subscription_id
+        invoice.get("object") != "invoice"
+        or invoice.get("livemode") is not False
+        or ref(invoice.get("customer")) != checkout.customer_id
+        or subscription_id(invoice) != checkout.subscription_id
     ):
-        raise billing.Error("Upgrade invoice ownership could not be verified.", 409)
-    currency = row.quote["currency"]
+        raise Error("Upgrade invoice ownership could not be verified.", 409)
+
+
+def require_supported_invoice_setup(
+    *, invoice: ProviderObject, currency: str, preview: bool
+) -> None:
     if (
-        value.get("currency") != currency
-        or value.get("collection_method") != "charge_automatically"
+        invoice.get("currency") != currency
+        or invoice.get("collection_method") != "charge_automatically"
     ):
-        raise billing.Error(
+        raise Error(
             "Upgrade invoice currency or collection method does not match.", 409
         )
-    if not preview and value.get("billing_reason") != "subscription_update":
-        raise billing.Error(
-            "Expected an invoice generated by this subscription update.", 409
-        )
+    if not preview and invoice.get("billing_reason") != "subscription_update":
+        raise Error("Expected an invoice generated by this subscription update.", 409)
+    adjustment_fields = (
+        "discounts",
+        "total_discount_amounts",
+        "default_tax_rates",
+        "starting_balance",
+        "ending_balance",
+        "amount_shipping",
+        "paid_out_of_band",
+        "amount_paid_off_stripe",
+        "post_payment_credit_notes_amount",
+        "pre_payment_credit_notes_amount",
+        "amount_overpaid",
+    )
     if (
-        value.get("discounts")
-        or value.get("total_discount_amounts")
-        or value.get("default_tax_rates")
-        or (value.get("automatic_tax") or {}).get("enabled")
-        or value.get("starting_balance", 0)
-        or value.get("ending_balance", 0)
-        or value.get("amount_shipping", 0)
-        or value.get("paid_out_of_band")
-        or value.get("amount_paid_off_stripe", 0)
-        or value.get("post_payment_credit_notes_amount", 0)
-        or value.get("pre_payment_credit_notes_amount", 0)
-        or value.get("amount_overpaid", 0)
+        any(invoice.get(field) for field in adjustment_fields[:3])
+        or (invoice.get("automatic_tax") or {}).get("enabled")
+        or any(invoice.get(field) for field in adjustment_fields[3:])
     ):
-        raise billing.Error(
+        raise Error(
             "Discounts, balances, manual settlement, or invoice adjustments require review.",
             409,
         )
-    values = value.get("lines") or {}
-    lines = values.get("data") or []
-    if values.get("has_more") is not False or len(lines) != 2:
-        raise billing.Error(
-            "Expected exactly the complete unused-time credit and upgrade charge.", 409
-        )
-    normalized = []
-    for line in lines:
-        details = (line.get("parent") or {}).get("subscription_item_details") or {}
-        price = ref(
-            (((line.get("pricing") or {}).get("price_details") or {}).get("price"))
-            or line.get("price")
-        )
-        try:
-            quantity = Decimal(
-                str(
-                    line.get("quantity_decimal")
-                    if line.get("quantity_decimal") is not None
-                    else line.get("quantity")
-                )
+
+
+def validate_proration_line(
+    *, line: ProviderObject, checkout: SandboxCheckout, upgrade: Upgrade, currency: str
+) -> ProrationLine:
+    details = (line.get("parent") or {}).get("subscription_item_details") or {}
+    price_id = ref(
+        (((line.get("pricing") or {}).get("price_details") or {}).get("price"))
+        or line.get("price")
+    )
+    try:
+        quantity = Decimal(
+            str(
+                line.get("quantity_decimal")
+                if line.get("quantity_decimal") is not None
+                else line.get("quantity")
             )
-        except InvalidOperation:
-            quantity = Decimal(0)
-        if (
-            details.get("proration", line.get("proration")) is not True
-            or quantity != 1
-            or ref(details.get("subscription") or line.get("subscription"))
-            != checkout.subscription_id
-            or ref(details.get("subscription_item") or line.get("subscription_item"))
-            != row.item_id
-            or line.get("currency") != currency
-            or type(line.get("amount")) is not int
-        ):
-            raise billing.Error(
-                "Upgrade invoice line ownership, quantity, or proration is unverified.",
-                409,
-            )
-        start, end = (
-            (line.get("period") or {}).get("start"),
-            (line.get("period") or {}).get("end"),
         )
-        if start != int(billing.utc(row.proration_at).timestamp()) or end != int(
-            billing.utc(row.period_end).timestamp()
-        ):
-            raise billing.Error(
-                "Upgrade proration dates differ from the confirmed quote.", 409
-            )
-        normalized.append(
-            {"price": price, "amount": line["amount"], "start": start, "end": end}
+    except InvalidOperation:
+        quantity = Decimal(0)
+    if (
+        details.get("proration", line.get("proration")) is not True
+        or quantity != 1
+        or ref(details.get("subscription") or line.get("subscription"))
+        != checkout.subscription_id
+        or ref(details.get("subscription_item") or line.get("subscription_item"))
+        != upgrade.item_id
+        or line.get("currency") != currency
+        or type(line.get("amount")) is not int
+    ):
+        raise Error(
+            "Upgrade invoice line ownership, quantity, or proration is unverified.", 409
         )
-    by_price = {l["price"]: l for l in normalized}
+    period_start = (line.get("period") or {}).get("start")
+    period_end = (line.get("period") or {}).get("end")
+    if period_start != int(
+        billing.utc(upgrade.proration_at).timestamp()
+    ) or period_end != int(billing.utc(upgrade.period_end).timestamp()):
+        raise Error("Upgrade proration dates differ from the confirmed quote.", 409)
+    return ProrationLine(
+        price_id=price_id,
+        amount=line["amount"],
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+
+def require_credit_and_charge(
+    *, lines: tuple[ProrationLine, ...], upgrade: Upgrade
+) -> None:
+    by_price = {line.price_id: line for line in lines}
     if (
         len(by_price) != 2
-        or set(by_price) != {row.source_price_id, row.target_price_id}
-        or by_price[row.source_price_id]["amount"] > 0
-        or by_price[row.target_price_id]["amount"] <= 0
+        or set(by_price) != {upgrade.source_price_id, upgrade.target_price_id}
+        or by_price[upgrade.source_price_id].amount > 0
+        or by_price[upgrade.target_price_id].amount <= 0
     ):
-        raise billing.Error(
+        raise Error(
             "Upgrade invoice must credit the saved source price and charge the target price.",
             409,
         )
-    total = value.get("total")
-    due = value.get("amount_due")
+
+
+def validate_upgrade_invoice(
+    *,
+    invoice: ProviderObject,
+    checkout: SandboxCheckout,
+    upgrade: Upgrade,
+    preview: bool = False,
+) -> VerifiedUpgradeInvoice:
+    """Require owned evidence, exact periods, one credit/charge, and an unadjusted total.
+
+    Preview skips only the subscription-update reason check. Monetary booleans
+    remain invalid; no rounding, coercion or tolerance is introduced.
+    """
+    require_invoice_identity(invoice=invoice, checkout=checkout)
+    currency = upgrade.quote["currency"]
+    require_supported_invoice_setup(invoice=invoice, currency=currency, preview=preview)
+    page = invoice.get("lines") or {}
+    raw_lines = page.get("data") or []
+    if page.get("has_more") is not False or len(raw_lines) != 2:
+        raise Error(
+            "Expected exactly the complete unused-time credit and upgrade charge.", 409
+        )
+    lines = tuple(
+        validate_proration_line(
+            line=line, checkout=checkout, upgrade=upgrade, currency=currency
+        )
+        for line in raw_lines
+    )
+    require_credit_and_charge(lines=lines, upgrade=upgrade)
+    total, amount_due = invoice.get("total"), invoice.get("amount_due")
     if (
         type(total) is not int
-        or type(due) is not int
+        or type(amount_due) is not int
         or total <= 0
-        or due != total
-        or sum(l["amount"] for l in normalized) != total
+        or amount_due != total
+        or sum(line.amount for line in lines) != total
     ):
-        raise billing.Error(
+        raise Error(
             "Upgrade total must match its credit and charge without other adjustments.",
             409,
         )
-    return {
-        "currency": currency,
-        "amount_due": due,
-        "total": total,
-        "lines": sorted(normalized, key=lambda l: l["price"]),
-    }
+    return VerifiedUpgradeInvoice(
+        currency=currency, amount_due=amount_due, total=total, lines=lines
+    )
 
 
-def invoice_issue(db, checkout, value):
-    row = db.scalar(
+def snapshot(
+    *,
+    invoice: ProviderObject,
+    checkout: SandboxCheckout,
+    upgrade: Upgrade,
+    preview: bool = False,
+) -> UpgradeQuoteRecord:
+    """Serialize verified evidence using the unchanged persisted quote shape."""
+    return validate_upgrade_invoice(
+        invoice=invoice, checkout=checkout, upgrade=upgrade, preview=preview
+    ).to_record()
+
+
+def require_upgrade_settlement(
+    *, invoice: ProviderObject, quote: UpgradeQuoteRecord
+) -> None:
+    if invoice.get("status") == "paid" and (
+        invoice.get("amount_paid") != quote["amount_due"]
+        or invoice.get("amount_remaining") != 0
+        or not (invoice.get("status_transitions") or {}).get("paid_at")
+    ):
+        raise Error("Upgrade settlement is incomplete or inconsistent.", 409)
+
+
+def invoice_issue(
+    *, db: Session, checkout: SandboxCheckout, invoice: ProviderObject
+) -> InvoiceReview | None:
+    upgrade = db.scalar(
         select(Upgrade).where(
-            Upgrade.invoice_id == value.get("id"), Upgrade.checkout_id == checkout.id
+            Upgrade.invoice_id == invoice.get("id"), Upgrade.checkout_id == checkout.id
         )
     )
-    if not row:
+    if not upgrade:
         return None
+    issue = None
     try:
-        if snapshot(value, checkout, row) != row.quote:
-            raise billing.Error(
-                "The invoice differs from the confirmed upgrade quote.", 409
-            )
-        if value.get("status") == "paid" and (
-            value.get("amount_paid") != row.quote["amount_due"]
-            or value.get("amount_remaining") != 0
-            or not (value.get("status_transitions") or {}).get("paid_at")
+        if (
+            snapshot(invoice=invoice, checkout=checkout, upgrade=upgrade)
+            != upgrade.quote
         ):
-            raise billing.Error(
-                "Upgrade settlement is incomplete or inconsistent.", 409
-            )
-        return {"issue": None, "start": row.proration_at, "end": row.period_end}
-    except billing.Error as exc:
-        return {"issue": str(exc), "start": row.proration_at, "end": row.period_end}
+            raise Error("The invoice differs from the confirmed upgrade quote.", 409)
+        require_upgrade_settlement(
+            invoice=invoice, quote=cast(UpgradeQuoteRecord, upgrade.quote)
+        )
+    except Error as exc:
+        issue = str(exc)
+    return {"issue": issue, "start": upgrade.proration_at, "end": upgrade.period_end}

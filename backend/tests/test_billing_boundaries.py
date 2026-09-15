@@ -43,21 +43,24 @@ def test_service_dependencies_have_no_cycles():
 
 def test_billing_foundations_only_depend_on_lower_layers():
     allowed = {
-        "billing_provider": {"stripe_catalogue_service"},
-        "billing_payment_rules": {"billing_provider"},
-        "billing_policy": {"billing_provider", "billing_payment_rules"},
+        "billing_types": set(),
+        "billing_provider": {"stripe_catalogue_service", "billing_types"},
+        "billing_payment_rules": {"billing_provider", "billing_types"},
+        "billing_policy": {"billing_provider", "billing_payment_rules", "billing_types"},
         "billing_invoice_service": {
             "billing_provider",
             "billing_payment_rules",
             "stripe_catalogue_service",
         },
         "billing_change_observation": {
+            "billing_types",
             "billing_provider",
             "billing_policy",
             "billing_invoice_service",
             "billing_notification_service",
         },
         "billing_upgrade_observation": {
+            "billing_types",
             "billing_provider",
             "billing_payment_rules",
             "billing_invoice_service",

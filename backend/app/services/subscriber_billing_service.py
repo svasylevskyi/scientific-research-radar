@@ -23,11 +23,11 @@ def catalogue(db):
 
 
 def status(db, settings, uid):
-    change_pending = blocking(db, uid) is not None or upgrade_pending(db, uid) is not None
+    change_pending = blocking(db, user_id=uid) is not None or upgrade_pending(db, user_id=uid) is not None
     row = billing.latest(db, uid)
     pending = bool(row and row.checkout_status in ('creating', 'open'))
     subscribed = bool(row and row.subscription_id and row.subscription_status not in billing.TERMINAL)
-    eligible = opted_in(db, uid)
+    eligible = opted_in(db, user_id=uid)
     enabled = settings.stripe_sandbox_checkout_enabled
     reason = ('Sandbox checkout is disabled.' if not enabled else
         'Contact the administrator to enroll this account in sandbox subscription testing.' if not eligible else

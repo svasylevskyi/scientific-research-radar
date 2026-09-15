@@ -104,8 +104,8 @@ def observe_subscription(db, client, row, subscription_id):
     status = value.get("status")
     if status not in STATUSES:
         raise Error("Stripe returned an unknown subscription status.")
-    observe_change(db, client, row, value)
-    observe_upgrade(db, client, row, value)
+    observe_change(db, client=client, checkout=row, value=value)
+    observe_upgrade(db, client=client, checkout=row, value=value)
     items = (value.get("items") or {}).get("data") or []
     row.price_matches = (len(items) == 1 and (items[0].get("price") or {}).get("id") == row.price_id
                          and items[0].get("quantity") == 1)
@@ -134,7 +134,7 @@ def observe_subscription(db, client, row, subscription_id):
     row.observed_at = datetime.now(timezone.utc)
     from app.core.config import get_settings
     settings = client.settings if hasattr(client, 'settings') else get_settings()
-    paid(db, row, settings)
+    paid(db, checkout=row, settings=settings)
     capture(db, row, assessment(db, row, datetime.now(timezone.utc), settings.subscription_grace_days))
     db.flush()
     resolve(db, row.user_id, client.settings if hasattr(client, "settings") else None)
@@ -174,10 +174,10 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None, co
     enabled(settings)
     client = client or StripeSandboxClient(settings)
     lock_account(db, user_id)
-    if upgrade_pending(db, user_id):
+    if upgrade_pending(db, user_id=user_id):
         raise Error('Resolve the pending upgrade before starting another checkout.', 409)
     if subscriber:
-        require_opt_in(db, user_id)
+        require_opt_in(db, user_id=user_id)
     row = latest(db, user_id)
     if row:
         value = sync_attempt(db, client, row)
@@ -271,7 +271,7 @@ def portal(db, settings, user_id, *, client=None, subscriber=False, cancel=False
     row = latest(db, user_id)
     if not row or not row.customer_id:
         raise Error("Complete a sandbox checkout before opening the portal.", 409)
-    change_pending = blocking(db, user_id) is not None or upgrade_pending(db, user_id) is not None
+    change_pending = blocking(db, user_id=user_id) is not None or upgrade_pending(db, user_id=user_id) is not None
     if change_pending and cancel:
         raise Error("Resolve the pending subscription change before cancelling renewal.", 409)
     config = client.request("GET", f"billing_portal/configurations/{config_id}")

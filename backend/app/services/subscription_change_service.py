@@ -4,6 +4,7 @@ Only the canonical subscription plus our verified schedule can change the saved
 plan binding. Browser returns and webhook payloads never grant entitlements.
 """
 
+from app.services.billing_types import PlanEntitlements
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -56,13 +57,19 @@ def serialized(db, row):
         'retry_allowed': row.state in WORK or row.state == 'needs_review'}
 
 
-def is_downgrade(source, target):
-    a, b = source.configuration, target.configuration
-    return (source.code != target.code and b.get('billing_type', 'stripe') == 'stripe'
-        and b['currency'] == a['currency'] and Decimal(str(b['monthly_price'])) < Decimal(str(a['monthly_price']))
-        and all(b[k] <= a[k] for k in LIMITS)
-        and set(b['schedule_frequencies']) <= set(a['schedule_frequencies'])
-        and (not b['email_delivery'] or a['email_delivery']))
+def is_downgrade(*, source: Plan, target: Plan) -> bool:
+    """A renewal downgrade reduces price without increasing any benefit.
+
+    The caller separately checks the selected interval's normalized price.
+    """
+    source_configuration, target_configuration = source.configuration, target.configuration
+    if (source.code == target.code or target_configuration.get('billing_type', 'stripe') != 'stripe'
+        or target_configuration['currency'] != source_configuration['currency']
+        or Decimal(str(target_configuration['monthly_price'])) >= Decimal(str(source_configuration['monthly_price']))):
+        return False
+    source_entitlements = PlanEntitlements.from_configuration(source_configuration)
+    target_entitlements = PlanEntitlements.from_configuration(target_configuration)
+    return source_entitlements.includes(other=target_entitlements)
 
 
 def options(db, settings, uid):
@@ -72,17 +79,17 @@ def options(db, settings, uid):
     if not checkout or not checkout.subscription_id or checkout.subscription_status != 'active' or checkout.cancel_at_period_end:
         result['reason'] = 'An active paid subscription with no pending cancellation is required.'
         return result
-    if not settings.stripe_sandbox_checkout_enabled or not subscribers.opted_in(db, uid):
+    if not settings.stripe_sandbox_checkout_enabled or not subscribers.opted_in(db, user_id=uid):
         result['reason'] = 'Subscription changes are unavailable for this account.'
         return result
-    if blocking(db, uid) or upgrade_pending(db, uid):
+    if blocking(db, user_id=uid) or upgrade_pending(db, user_id=uid):
         result['reason'] = 'Complete or undo the existing change before choosing another.'
         return result
     source = db.get(Plan, checkout.plan_revision_id)
     versions = select(Plan.code, func.max(Plan.revision).label('revision')).group_by(Plan.code).subquery()
     plans = list(db.scalars(select(Plan).join(versions, (Plan.code == versions.c.code) & (Plan.revision == versions.c.revision))))
     # Interval-only changes retain the subscriber's immutable purchased revision.
-    plans = [source] + [p for p in plans if subscribers.available(p) and is_downgrade(source, p)]
+    plans = [source] + [p for p in plans if subscribers.available(p) and is_downgrade(source=source, target=p)]
     for p in plans:
         c = p.configuration
         for interval in ('monthly', 'annual'):
@@ -115,10 +122,10 @@ def schedule(db, settings, uid, code, revision, interval, expected_end, digest_i
     billing.enabled(settings)
     client = billing.StripeSandboxClient(settings)
     billing.lock_account(db, uid)
-    subscribers.require_opt_in(db, uid)
-    if upgrade_pending(db, uid):
+    subscribers.require_opt_in(db, user_id=uid)
+    if upgrade_pending(db, user_id=uid):
         raise billing.Error('Resolve the pending upgrade before scheduling another change.', 409)
-    existing = blocking(db, uid)
+    existing = blocking(db, user_id=uid)
     if existing:
         target = db.get(Plan, existing.target_revision_id)
         if (target.code, target.revision, existing.target_interval) == (code, revision, interval):
@@ -139,8 +146,8 @@ def schedule(db, settings, uid, code, revision, interval, expected_end, digest_i
     payment = assessment(db, checkout, now(), settings.subscription_grace_days)
     if not checkout.price_matches or not payment['covered'] or payment['issue']:
         raise billing.Error('Resolve payment and verify current paid coverage before changing a subscription.', 409)
-    value = subscription(client, checkout)
-    simple_subscription(value)
+    value = subscription(client=client, checkout=checkout)
+    simple_subscription(value=value)
     if value.get('schedule') or value.get('cancel_at_period_end') or value.get('status') != 'active':
         raise billing.Error('Stripe already has a schedule or cancellation, or payment is not active. Refresh billing.', 409)
     target = db.scalar(select(Plan).where(Plan.code == code, Plan.revision == revision))
@@ -161,17 +168,17 @@ def advance(db, client, change):
     checkout = db.get(SandboxCheckout, change.checkout_id)
     if change.state == 'needs_review':
         # Read-only recovery after an operator releases a stranded schedule in Stripe.
-        value = subscription(client, checkout)
+        value = subscription(client=client, checkout=checkout)
         if change.schedule_id:
-            observe(db, client, checkout, value)
+            observe(db, client=client, checkout=checkout, value=value)
         elif not value.get('schedule') and now() - billing.utc(change.created_at) > timedelta(hours=23):
             change.state = 'stopped'
-            notice(db, change, 'stopped', 'No Stripe schedule remains. Review your subscription before choosing another change.')
+            notice(db, change=change, event='stopped', message='No Stripe schedule remains. Review your subscription before choosing another change.')
         return
     if change.state not in WORK:
         return
     if change.state == 'preparing':
-        value = subscription(client, checkout)
+        value = subscription(client=client, checkout=checkout)
         if not change.schedule_id:
             item = ((value.get('items') or {}).get('data') or [{}])[0]
             if (value.get('status') != 'active' or value.get('cancel_at_period_end') or ref(item.get('price')) != change.source_price_id
@@ -187,7 +194,7 @@ def advance(db, client, change):
                 attached = ref(value['schedule'])
             else:
                 attached = None
-            simple_subscription(value)
+            simple_subscription(value=value)
             created = client.request('POST', 'subscription_schedules', data={'from_subscription': checkout.subscription_id},
                 idempotency_key=f'radar-change-{change.id}-create')
             sid = billing.identifier(created.get('id'), 'sub_sched_')
@@ -199,25 +206,25 @@ def advance(db, client, change):
             db.refresh(change)
             if change.state != 'preparing':
                 return
-        current = verified_schedule(client, checkout, change)
+        current = verified_schedule(client=client, checkout=checkout, change=change)
         if current.get('status') != 'active':
             change.state = 'stopped'
-            notice(db, change, 'stopped', 'Stripe no longer has an active schedule. Review your billing status.')
+            notice(db, change=change, event='stopped', message='Stripe no longer has an active schedule. Review your billing status.')
             return
-        if has_target(current, change):
+        if has_target(value=current, change=change):
             change.state = 'scheduled'
-            notice(db, change, 'scheduled', 'Your requested change is scheduled. No immediate charge or proration is made. You can undo it before renewal.')
+            notice(db, change=change, event='scheduled', message='Your requested change is scheduled. No immediate charge or proration is made. You can undo it before renewal.')
             return
         if billing.utc(change.effective_at) <= now() + timedelta(seconds=30):
             change.state, change.last_error = 'needs_review', 'Renewal arrived before the schedule could be confirmed. Operator review is required.'
             return
-        current_subscription = subscription(client, checkout)
+        current_subscription = subscription(client=client, checkout=checkout)
         item = ((current_subscription.get('items') or {}).get('data') or [{}])[0]
         if (current_subscription.get('status') != 'active' or current_subscription.get('cancel_at_period_end')
             or ref(current_subscription.get('schedule')) != change.schedule_id or ref(item.get('price')) != change.source_price_id
             or item.get('current_period_end', current_subscription.get('current_period_end')) != int(billing.utc(change.effective_at).timestamp())):
             raise billing.Error('The source subscription changed before confirmation. Operator review is required.', 409)
-        simple_subscription(current_subscription)
+        simple_subscription(value=current_subscription)
         if not change.parameters:
             phases = current.get('phases') or []
             if len(phases) != 1 or len(phases[0].get('items') or []) != 1 or ref(phases[0]['items'][0].get('price')) != change.source_price_id:
@@ -240,13 +247,13 @@ def advance(db, client, change):
                 return
         client.request('POST', f'subscription_schedules/{change.schedule_id}', data=change.parameters,
             idempotency_key=f'radar-change-{change.id}-configure')
-        confirmed = verified_schedule(client, checkout, change)
-        if not has_target(confirmed, change):
+        confirmed = verified_schedule(client=client, checkout=checkout, change=change)
+        if not has_target(value=confirmed, change=change):
             raise billing.Error('Stripe has not confirmed the requested future phase.', 503)
         change.state = 'scheduled'
-        notice(db, change, 'scheduled', 'Your requested change is scheduled. No immediate charge or proration is made. You can undo it before renewal.')
+        notice(db, change=change, event='scheduled', message='Your requested change is scheduled. No immediate charge or proration is made. You can undo it before renewal.')
     elif change.state in {'undoing', 'finalizing'}:
-        value = verified_schedule(client, checkout, change)
+        value = verified_schedule(client=client, checkout=checkout, change=change)
         if value.get('status') == 'active':
             if change.state == 'undoing' and billing.utc(change.effective_at) <= now() + timedelta(seconds=30):
                 # Do not release after the boundary: it could leave the new price in place.
@@ -256,7 +263,7 @@ def advance(db, client, change):
                 return
             client.request('POST', f'subscription_schedules/{change.schedule_id}/release', data={'preserve_cancel_date': 'true'},
                 idempotency_key=f'radar-change-{change.id}-release')
-            value = verified_schedule(client, checkout, change)
+            value = verified_schedule(client=client, checkout=checkout, change=change)
         if value.get('status') not in {'released', 'completed', 'canceled'}:
             raise billing.Error('Stripe has not confirmed release of this schedule.', 503)
         was_undo = change.state == 'undoing'
@@ -267,7 +274,7 @@ def advance(db, client, change):
                 change.state, change.last_error = 'needs_review', 'The schedule was released, but the original subscription is no longer active at its saved price. Review billing.'
                 return
             change.state = 'undone'
-            notice(db, change, 'undone', 'The scheduled change was undone. Your current plan and billing interval continue.')
+            notice(db, change=change, event='undone', message='The scheduled change was undone. Your current plan and billing interval continue.')
         elif change.state == 'finalizing':
             change.state = 'applied'
 

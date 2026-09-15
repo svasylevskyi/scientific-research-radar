@@ -5,9 +5,13 @@ Never submits, retries, or undoes a Stripe change.
 """
 
 from datetime import datetime, timezone
+from typing import cast
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.core.config import Settings
+from app.models.stripe_sandbox import SandboxCheckout
 from app.models.subscription_access import SubscriptionAccountState
 from app.models.subscription_change import SubscriptionChange as Change
 from app.models.subscription_plan import SubscriptionPlanRevision as Plan
@@ -15,14 +19,16 @@ from app.services import billing_provider as billing
 from app.services.billing_invoice_service import assessment, ref, stamp
 from app.services.billing_notification_service import enqueue
 from app.services.billing_policy import CHANGE_TERMINAL as TERMINAL
+from app.services.billing_types import ProviderObject
 
 
-def now():
+def now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def notice(db, change, event, message):
-    target = db.get(Plan, change.target_revision_id).configuration
+def notice(db: Session, *, change: Change, event: str, message: str) -> None:
+    # Target revisions are retained by the intent foreign key.
+    target = cast(Plan, db.get(Plan, change.target_revision_id)).configuration
     enqueue(
         db,
         change.user_id,
@@ -32,7 +38,9 @@ def notice(db, change, event, message):
     )
 
 
-def verified_schedule(client, checkout, change):
+def verified_schedule(
+    *, client: billing.StripeSandboxClient, checkout: SandboxCheckout, change: Change
+) -> ProviderObject:
     value = client.request(
         "GET",
         "subscription_schedules/"
@@ -50,7 +58,7 @@ def verified_schedule(client, checkout, change):
     return value
 
 
-def has_target(value, change):
+def has_target(*, value: ProviderObject, change: Change) -> bool:
     phases = value.get("phases") or []
     if (
         value.get("end_behavior") != "release"
@@ -74,7 +82,13 @@ def has_target(value, change):
     )
 
 
-def observe(db, client, checkout, value):
+def observe(
+    db: Session,
+    *,
+    client: billing.StripeSandboxClient,
+    checkout: SandboxCheckout,
+    value: ProviderObject,
+) -> None:
     """Called before matching price and reconciling invoices; never commits."""
     change = db.scalar(
         select(Change)
@@ -88,9 +102,9 @@ def observe(db, client, checkout, value):
         change.state = "stopped"
         notice(
             db,
-            change,
-            "stopped",
-            "The subscription ended before this change completed. Review your Free access and billing status.",
+            change=change,
+            event="stopped",
+            message="The subscription ended before this change completed. Review your Free access and billing status.",
         )
         return
     items = (value.get("items") or {}).get("data") or []
@@ -105,8 +119,8 @@ def observe(db, client, checkout, value):
         and start
         and start >= billing.utc(change.effective_at)
     ):
-        schedule = verified_schedule(client, checkout, change)
-        if not has_target(schedule, change):
+        schedule = verified_schedule(client=client, checkout=checkout, change=change)
+        if not has_target(value=schedule, change=change):
             return
         if schedule.get("status") == "released" and (
             schedule.get("released_at") or 0
@@ -128,26 +142,26 @@ def observe(db, client, checkout, value):
         change.state = "stopped"
         notice(
             db,
-            change,
-            "stopped",
-            "The subscription ended before this change completed. Review your Free access and billing status.",
+            change=change,
+            event="stopped",
+            message="The subscription ended before this change completed. Review your Free access and billing status.",
         )
     elif (
         change.state in {"scheduled", "preparing", "needs_review"}
         and price == change.source_price_id
     ):
-        schedule = verified_schedule(client, checkout, change)
+        schedule = verified_schedule(client=client, checkout=checkout, change=change)
         if schedule.get("status") in {"released", "canceled"}:
             change.state = "stopped"
             notice(
                 db,
-                change,
-                "stopped",
-                "The schedule was removed in Stripe. Review the current subscription before choosing another change.",
+                change=change,
+                event="stopped",
+                message="The schedule was removed in Stripe. Review the current subscription before choosing another change.",
             )
 
 
-def paid(db, checkout, settings):
+def paid(db: Session, *, checkout: SandboxCheckout, settings: Settings) -> None:
     change = db.scalar(
         select(Change).where(
             Change.checkout_id == checkout.id, Change.state == "awaiting_payment"
@@ -162,7 +176,7 @@ def paid(db, checkout, settings):
         change.state, change.next_attempt_at = "finalizing", now()
         notice(
             db,
-            change,
-            "completed",
-            "Payment was verified and your subscription change is now in effect.",
+            change=change,
+            event="completed",
+            message="Payment was verified and your subscription change is now in effect.",
         )

@@ -50,3 +50,39 @@ alongside command/access clocks.
 Typed response/domain objects, provider injection and smaller command functions
 can follow separately. Avoid mixing those changes with payment-policy or
 transaction-boundary changes. This increment needs no migration.
+
+## Typed payment rules and transition invariants
+
+The second increment adds immutable `ProrationLine`, `VerifiedUpgradeInvoice`,
+`PriceBinding`, and `PlanEntitlements` values in the dependency-free
+`billing_types` module. `UpgradeQuoteRecord` and `InvoiceReview` describe the
+existing dictionary contracts. ORM JSON and API serialization remain unchanged.
+Raw `ProviderObject` dictionaries intentionally contain `Any`: provider fields
+must pass named validation rules before becoming verified evidence. Type
+annotations do not replace runtime checks.
+
+Invoice validation reads in order: require ownership, require supported setup,
+validate each proration line, require the source credit and target charge, then
+require an exact positive total. The snapshot adapter retains the original keys
+and price ordering so existing saved quotes remain comparable. Database
+references guaranteed by intent foreign keys or a preceding evidence refresh are
+documented where narrowed for type checking.
+
+| Transition | Invariants preserved |
+| --- | --- |
+| Immediate paid upgrade | Higher price, same currency/interval, no lost quota/capability, and at least one improved benefit. Evidence matches the saved quote. Activation still requires settlement and original paid coverage. |
+| Scheduled downgrade | Different tier, lower monthly catalogue price, no increased quota/capability. The command still checks normalized interval price, current coverage and renewal boundary. |
+| Interval switch | Retain the purchased revision; change at renewal. Existing schedule identity, phase and payment checks remain authoritative. |
+| Undo / expiry | Preserve cutoff, retry identity and verified provider state. A voided unpaid optional upgrade retains prior paid terms. |
+| Free fallback / recovery | Retain usage and allowance anchors; subscription status alone cannot establish payment evidence. |
+
+Observer/shared-policy arguments are annotated and keyword-only after the session
+argument; quote validation uses entirely keyword-only arguments. Callers name the
+checkout, upgrade/change, user and evidence explicitly. HTTP contracts are
+unaffected; internal helper signatures changed.
+
+Run `python -m mypy` from `backend` to check six typed boundary modules. CI runs it
+alongside both database variants. Scope can grow in future increments; legacy
+command/API dictionaries are not claimed as fully typed. Added payment tests
+cover quote serialization, adjustment rejection, monetary non-coercion,
+period/total matching, preview ownership and entitlement preservation.

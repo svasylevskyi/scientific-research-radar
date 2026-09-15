@@ -27,6 +27,7 @@ dev = [
   "httpx>=0.28,<1",
   "pytest>=8.3,<9",
   "pytest-cov>=6,<7",
+  "mypy>=1.15,<3",
 ]
 
 [tool.setuptools.packages.find]
@@ -38,3 +39,17 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+# Expand this list as subsequent refactoring increments type more services.
+[tool.mypy]
+files = [
+  "app/services/billing_types.py",
+  "app/services/billing_provider.py",
+  "app/services/billing_payment_rules.py",
+  "app/services/billing_policy.py",
+  "app/services/billing_change_observation.py",
+  "app/services/billing_upgrade_observation.py",
+]
+follow_imports = "silent"
+disallow_untyped_defs = true
+check_untyped_defs = true
