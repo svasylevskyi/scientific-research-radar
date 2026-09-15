@@ -1,3 +1,4 @@
+from app.repositories.run_state_repository import RunStateRepository
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -228,7 +229,7 @@ def test_concurrent_reservations_do_not_double_count(tmp_path):
         values['reporting_from'] = date.fromisoformat(values['reporting_from'])
         values['reporting_to'] = date.fromisoformat(values['reporting_to'])
         db.add(Digest(id=did, owner_id=uid, **values)); db.flush()
-        run = DigestRunRepository(db).create_running(digest_id=did, owner_id=uid,
+        run = RunStateRepository(db).create_running(digest_id=did, owner_id=uid,
             digest_snapshot=_digest_payload(), history_context=[], feedback_context=[], model_name='test', prompt_version='test')
         rid = run.id
         db.commit()

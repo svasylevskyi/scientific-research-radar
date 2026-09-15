@@ -1,3 +1,5 @@
+from app.radar.lifecycle import RunLifecycle
+from app.repositories.run_state_repository import RunStateRepository
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 import pytest
@@ -86,7 +88,7 @@ def test_failure_releases_retry_uses_current_window(client, enrolled, db_session
     from app.repositories.digest_run_repository import DigestRunRepository
     with db_session_factory() as db:
         run = db.get(DigestRun, run_id)
-        DigestRunRepository(db).mark_failed(run=run, stage=run.stages[0], message='Test failure')
+        RunLifecycle(db).mark_failed(run=run, stage=run.stages[0], message='Test failure')
         db.commit()
         assert db.get(Usage, run_id).state == 'released'
     later = datetime(2030, 2, 28, 12, tzinfo=timezone.utc)
@@ -312,7 +314,7 @@ def test_concurrent_reservations_cannot_overspend(tmp_path, monkeypatch, billing
         db.add(Digest(id=did, owner_id=uid, **values)); db.flush()
         ids = []
         for _ in range(2):
-            run = DigestRunRepository(db).create_running(digest_id=did, owner_id=uid, digest_snapshot=_digest_payload(maximum_papers=3),
+            run = RunStateRepository(db).create_running(digest_id=did, owner_id=uid, digest_snapshot=_digest_payload(maximum_papers=3),
                 history_context=[], feedback_context=[], model_name='fake', prompt_version='test')
             run.status = DigestRunStatus.FAILED; db.flush(); ids.append(run.id)
         db.commit()
@@ -348,7 +350,7 @@ def test_legacy_scheduled_retry_keeps_email_intent(client, enrolled, db_session_
     with db_session_factory() as db:
         run = db.scalar(select(DigestRun))
         rid = run.id
-        DigestRunRepository(db).mark_failed(run=run, stage=run.stages[0], message='Test')
+        RunLifecycle(db).mark_failed(run=run, stage=run.stages[0], message='Test')
         db.commit()
         assert db.get(Usage, rid) is None  # Originally admitted under complimentary access.
     assert client.delete(f"/api/v1/digests/{digest['id']}/schedule", headers=auth).status_code == 204
@@ -395,7 +397,7 @@ def test_retry_preview_uses_original_papers_and_checks_ownership(client, enrolle
     with db_session_factory() as db:
         run = db.get(DigestRun, rid)
         run.digest_snapshot = {**run.digest_snapshot, 'maximum_papers': 8}
-        DigestRunRepository(db).mark_failed(run=run, stage=run.stages[0], message='Test')
+        RunLifecycle(db).mark_failed(run=run, stage=run.stages[0], message='Test')
         db.commit()
     path = f"/api/v1/subscription?digest_id={digest['id']}&run_id={rid}"
     data = client.get(path, headers=auth).json()
