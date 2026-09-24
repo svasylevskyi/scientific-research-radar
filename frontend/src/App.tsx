@@ -1,4 +1,5 @@
 import { AboutPage } from "./pages/AboutPage";
+import { PageNavigation } from "./components/PageNavigation";
 import { ContactPage } from "./pages/ContactPage";
 import { AdminMessagesPage } from "./pages/AdminMessagesPage";
 import { AdminSubscriptionPlanEditPage } from "./pages/AdminSubscriptionPlanEditPage";
@@ -45,6 +46,7 @@ export default function App() {
 
   return (
     <Box sx={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+      <PageNavigation />
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", "& > *": { flex: 1 } }}>
         <Routes>
           <Route path="/" element={<LandingPage />} />

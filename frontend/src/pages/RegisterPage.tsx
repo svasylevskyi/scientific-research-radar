@@ -85,7 +85,7 @@ export function RegisterPage() {
   return (
     <AuthLayout>
       <Box component="header" sx={{ mb: 4 }}>
-        <Typography component="h2" variant="h3" sx={{ mb: 1.25 }}>
+        <Typography component="h1" variant="h3" sx={{ mb: 1.25 }}>
           Create your account
         </Typography>
         <Typography color="text.secondary">Start a focused workspace for the science you follow.</Typography>

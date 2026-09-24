@@ -35,7 +35,7 @@ export function AuthLayout({ children }: PropsWithChildren) {
         </Box>
         <Box sx={{ maxWidth: 520, py: 6 }}>
           <Typography
-            component="h1"
+            component="p"
             sx={{
               fontSize: { md: "2.5rem", lg: "3.4rem" },
               lineHeight: 1.08,
@@ -74,7 +74,7 @@ export function AuthLayout({ children }: PropsWithChildren) {
         </Typography>
       </Box>
 
-      <Box sx={{ display: "flex", alignItems: "center", bgcolor: "background.default", py: { xs: 3, sm: 5 } }}>
+      <Box component="main" sx={{ display: "flex", alignItems: "center", bgcolor: "background.default", py: { xs: 3, sm: 5 } }}>
         <Container maxWidth="sm" sx={{ px: { xs: 2.5, sm: 4 } }}>
           <Box sx={{ display: { md: "none" }, mb: 5 }}>
             <Box component={RouterLink} to="/" aria-label="Scientific Research Radar home" sx={{ display: "inline-block", color: "inherit", textDecoration: "none" }}>
