@@ -17,7 +17,7 @@ def imports(path):
 
 
 def test_pure_stage_inputs_and_validation_have_no_runtime_dependencies():
-    for name in ("stage_inputs", "validation"):
+    for name in ("stage_inputs", "validation", "quality"):
         dependencies = imports(APP / "radar" / f"{name}.py")
         assert not any(
             item.startswith(("app.services", "app.repositories", "sqlalchemy", "httpx"))

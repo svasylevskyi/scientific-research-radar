@@ -11,6 +11,7 @@ from fastapi.routing import APIRoute
 CONTRACT_MODULES = frozenset(
     {
         "contact",
+        "research_quality",
         "admin_pricing",
         "admin_spending",
         "admin_subscriptions",

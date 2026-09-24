@@ -18,6 +18,12 @@ backend (FastAPI)
 
 The API, service, repository, and persistence layers are separate. SQLite is selected only through `DATABASE_URL`, so PostgreSQL can replace it later without changing the API contract or frontend. The frontend reads its API location from `VITE_API_URL`.
 
+## Research quality
+
+Research quality gates and the super-admin Off/Observe/Enforce settings are
+documented in [the research quality guide](docs/research-quality.md). New runs
+default to Observe; legacy runs remain Not evaluated.
+
 ## Website navigation
 
 Public information pages remain at `/`, `/about`, `/plans`, `/contact`, `/privacy`, and `/terms`. User application pages live under `/radar`; admin pages retain their `/admin` URLs and access rules.

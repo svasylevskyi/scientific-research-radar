@@ -20,6 +20,7 @@ from app.models.digest_run import (
     RADAR_STAGE_ORDER,
 )
 from app.models.contact_message import ContactMessage
+from app.models.research_quality import ResearchQualitySettings
 from app.models.user import User, UserRole
 from app.models.email_verification import EmailVerification
 

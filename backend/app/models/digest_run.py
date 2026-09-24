@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     CheckConstraint,
+    Boolean,
     Date,
     DateTime,
     Float,
@@ -109,6 +110,11 @@ class DigestRun(Base):
     feedback_text: Mapped[str | None] = mapped_column(Text)
     feedback_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     feedback_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    quality_config: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    quality_status: Mapped[str] = mapped_column(String(20), default="not_evaluated", server_default="not_evaluated")
+    quality_findings: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, server_default="[]")
+    quality_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    quality_delivery_blocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

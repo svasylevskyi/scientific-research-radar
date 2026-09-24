@@ -157,6 +157,7 @@ class DigestRunRepository:
             .where(
                 DigestRun.digest_id == digest_id,
                 DigestRun.status == DigestRunStatus.COMPLETED,
+                DigestRun.quality_delivery_blocked.is_(False),
             )
             .options(
                 selectinload(DigestRun.paper_results).joinedload(DigestRunPaper.paper),
@@ -178,6 +179,7 @@ class DigestRunRepository:
                 DigestRun.digest_id == digest_id,
                 DigestRun.status == DigestRunStatus.COMPLETED,
                 DigestRun.feedback_text.is_not(None),
+                DigestRun.quality_delivery_blocked.is_(False),
             )
             .order_by(DigestRun.started_at.desc(), DigestRun.id.desc())
             .limit(limit)

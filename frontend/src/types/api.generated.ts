@@ -224,6 +224,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/research-quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Settings */
+        get: operations["read_settings_api_v1_admin_research_quality_get"];
+        put?: never;
+        /** Update Settings */
+        post: operations["update_settings_api_v1_admin_research_quality_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/research-quality/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** History */
+        get: operations["history_api_v1_admin_research_quality_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/spending": {
         parameters: {
             query?: never;
@@ -2194,6 +2229,18 @@ export interface components {
             paper_results: components["schemas"]["DigestRunPaperRead"][];
             /** Prompt Version */
             prompt_version: string;
+            quality_config: components["schemas"]["QualitySnapshot"] | null;
+            /** Quality Delivery Blocked */
+            quality_delivery_blocked: boolean;
+            /** Quality Evaluated At */
+            quality_evaluated_at: string | null;
+            /** Quality Findings */
+            quality_findings: components["schemas"]["QualityFinding"][];
+            /**
+             * Quality Status
+             * @enum {string}
+             */
+            quality_status: "not_evaluated" | "pass" | "warning" | "hold";
             /** Relevance Data */
             relevance_data: {
                 [key: string]: unknown;
@@ -2334,6 +2381,13 @@ export interface components {
             paper_count: number;
             /** Prompt Version */
             prompt_version: string;
+            /** Quality Delivery Blocked */
+            quality_delivery_blocked: boolean;
+            /**
+             * Quality Status
+             * @enum {string}
+             */
+            quality_status: "not_evaluated" | "pass" | "warning" | "hold";
             /** Request Count */
             request_count: number;
             /**
@@ -2853,6 +2907,88 @@ export interface components {
             items: components["schemas"]["PublicPlanRead"][];
             /** Sandbox */
             sandbox: boolean;
+        };
+        /** QualityConfig */
+        QualityConfig: {
+            /**
+             * Check Duplicates
+             * @default true
+             */
+            check_duplicates?: boolean;
+            /**
+             * Check Reporting Dates
+             * @default true
+             */
+            check_reporting_dates?: boolean;
+            /**
+             * Check Source Access
+             * @default true
+             */
+            check_source_access?: boolean;
+            /**
+             * Mode
+             * @default observe
+             * @enum {string}
+             */
+            mode?: "off" | "observe" | "enforce";
+            /**
+             * Sparse Paper Threshold
+             * @default 3
+             */
+            sparse_paper_threshold?: number;
+        };
+        /** QualityFinding */
+        QualityFinding: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Paper Ids */
+            paper_ids?: string[];
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "warning" | "hold";
+        };
+        /** QualitySettingsHistory */
+        QualitySettingsHistory: {
+            /** Items */
+            items: components["schemas"]["QualitySettingsRead"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** QualitySettingsRead */
+        QualitySettingsRead: {
+            /** Change Reason */
+            change_reason: string;
+            config: components["schemas"]["QualityConfig"];
+            /** Created At */
+            created_at: string | null;
+            /** Created By Name */
+            created_by_name: string | null;
+            /** Version */
+            version: number;
+        };
+        /** QualitySettingsUpdate */
+        QualitySettingsUpdate: {
+            /** Change Reason */
+            change_reason: string;
+            config: components["schemas"]["QualityConfig"];
+            /** Expected Version */
+            expected_version: number;
+        };
+        /** QualitySnapshot */
+        QualitySnapshot: {
+            config: components["schemas"]["QualityConfig"];
+            /** Engine Version */
+            engine_version: string;
+            /** Version */
+            version: number;
         };
         /** QueuedRead */
         QueuedRead: {
@@ -4027,6 +4163,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RadarPriceDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_settings_api_v1_admin_research_quality_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualitySettingsRead"];
+                };
+            };
+        };
+    };
+    update_settings_api_v1_admin_research_quality_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QualitySettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualitySettingsRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    history_api_v1_admin_research_quality_history_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualitySettingsHistory"];
                 };
             };
             /** @description Validation Error */
