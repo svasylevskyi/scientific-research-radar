@@ -3,6 +3,7 @@ from html import escape
 from urllib.parse import urlsplit
 
 from app.services.email_service import OutgoingEmail
+from app.services.research_quality_service import delivery_allowed, quality_email_note
 
 
 def safe_url(value):
@@ -14,6 +15,8 @@ def safe_url(value):
 
 
 def briefing_email(run, recipient, base_url):
+    if not delivery_allowed(run):
+        raise ValueError("Quality checks prevent delivery of this research output.")
     briefing = run.briefing
     data = briefing.data
     link = f"{base_url.rstrip('/')}/radar/digests/{run.digest_id}?run_id={run.id}"
@@ -28,6 +31,7 @@ def briefing_email(run, recipient, base_url):
         plain.extend([title, *[str(value) for value in values]])
         sections.append(f'<tr><td style="padding:20px 28px;border-top:1px solid #dce5ea"><h2 style="font-size:19px;color:#087d67">{escape(title)}</h2>{"".join(paragraph(v) for v in values)}</td></tr>')
 
+    section("Research quality", [quality_email_note(run)])
     section("Highlights", data.get("highlights", []))
     signal = data.get("main_signal")
     section("Main signal", [signal["title"], signal["summary"], f"Why it matters: {signal['why_it_matters']}",

@@ -6,6 +6,7 @@ import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
 import ManageSearchRoundedIcon from "@mui/icons-material/ManageSearchRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
+import FactCheckRoundedIcon from "@mui/icons-material/FactCheckRounded";
 import SubscriptionsRoundedIcon from "@mui/icons-material/SubscriptionsRounded";
 import { AppBar, Avatar, Box, Container, Toolbar } from "@mui/material";
 import { useState } from "react";
@@ -37,6 +38,7 @@ export function AppHeader() {
     ] : []),
     ...(user?.is_super_admin ? [{ label: "Pricing", to: "/admin/pricing", icon: <PaymentsRoundedIcon /> }] : []),
     ...(user?.role === "admin" ? [{ label: "Messages", to: "/admin/messages", icon: <MailOutlineRoundedIcon /> }] : []),
+    ...(user?.role === "admin" ? [{ label: "Research quality", to: "/admin/research-quality", icon: <FactCheckRoundedIcon /> }] : []),
   ];
 
   async function handleLogout() {

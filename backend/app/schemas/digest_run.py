@@ -3,6 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from app.schemas.research_quality import QualityFinding, QualitySnapshot, QualityStatus
 
 from app.models.digest_run import (
     DigestRunStageStatus,
@@ -89,6 +90,8 @@ class DigestRunSummaryRead(BaseModel):
     started_at: datetime
     completed_at: datetime | None
     created_at: datetime
+    quality_status: QualityStatus
+    quality_delivery_blocked: bool
 
 
 class DigestEmailDeliveryRead(BaseModel):
@@ -100,6 +103,9 @@ class DigestEmailDeliveryRead(BaseModel):
 
 
 class DigestRunDetailRead(DigestRunSummaryRead):
+    quality_config: QualitySnapshot | None
+    quality_findings: list[QualityFinding]
+    quality_evaluated_at: datetime | None
     email_delivery: DigestEmailDeliveryRead | None = None
     scheduled_for: datetime | None = None
     digest_snapshot: dict[str, Any]

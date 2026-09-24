@@ -185,7 +185,8 @@ def test_email_failure_limit_lease_recovery_and_account_disable(client, db_sessi
 
 
 def test_email_escapes_untrusted_content_and_rejects_unsafe_links():
-    run = SimpleNamespace(id=uuid4(), digest_id=uuid4(), briefing=SimpleNamespace(
+    run = SimpleNamespace(id=uuid4(), digest_id=uuid4(), quality_config=None,
+        quality_status="not_evaluated", quality_delivery_blocked=False, quality_findings=[], briefing=SimpleNamespace(
         title="Title\nInjected: header", executive_summary='<img src=x onerror="alert(1)">',
         data={"highlights": ["<script>bad</script>"], "top_paper_external_ids": ["paper"]}),
         paper_results=[SimpleNamespace(paper=SimpleNamespace(external_id="paper", title="<b>Title</b>", url="javascript:alert(1)"))])

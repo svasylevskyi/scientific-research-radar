@@ -31,6 +31,7 @@ from app.repositories.run_result_repository import RunResultRepository
 from app.repositories.run_state_repository import RunStateRepository
 from app.services import subscription_access_service as access
 from app.services import subscription_observation_service as observation
+from app.services.research_quality_service import assess_run
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,7 @@ class RunLifecycle:
 
     def complete_run(self, run_id: UUID) -> None:
         run = self.reload(run_id)
+        assess_run(run)
         access.settle(self.db, run, success=True)
         observation.settle(self.db, run, success=True)
         self.state.mark_completed(run=run)

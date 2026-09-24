@@ -25,6 +25,7 @@ from app.repositories.run_state_repository import RunStateRepository
 from app.services import subscription_access_service as access
 from app.services import subscription_observation_service as observation
 from app.services.rate_limit_service import enforce
+from app.services.research_quality_settings import snapshot_settings
 
 
 class RunSubmission:
@@ -89,6 +90,7 @@ class RunSubmission:
             model_name=self.model_name,
             prompt_version=first_prompt.version,
         )
+        run.quality_config = snapshot_settings(self.db)
         if scheduled_for is not None:
             run.trigger = DigestRunTrigger.SCHEDULED
             run.scheduled_for = scheduled_for

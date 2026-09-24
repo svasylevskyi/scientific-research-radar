@@ -1,0 +1,228 @@
+{
+  "description": "Synthetic contract fixture, not evidence of factual research accuracy.",
+  "digest_snapshot": {
+    "reporting_from": "2026-09-01",
+    "reporting_to": "2026-09-24"
+  },
+  "config": {
+    "mode": "enforce",
+    "sparse_paper_threshold": 1
+  },
+  "stages": {
+    "discovery_relevance": {
+      "search": {
+        "queries": [
+          "AI agents software engineering benchmarks"
+        ],
+        "sources_used": [
+          "Crossref"
+        ],
+        "deduplication_notes": [],
+        "coverage_notes": [
+          "The fixture contains one paper."
+        ],
+        "next_step_recommendations": [
+          "Search additional scholarly indexes."
+        ],
+        "papers": [
+          {
+            "source_name": "Crossref",
+            "external_id": "doi:10.1234/radar.test",
+            "title": "Evaluating AI Agents for Software Engineering",
+            "authors": [
+              "Ada Researcher"
+            ],
+            "abstract": "A test record used to verify structured persistence.",
+            "published_date": "2026-09-10",
+            "updated_date": "2026-09-24",
+            "venue_or_source": "Journal of Test Research",
+            "url": "https://doi.org/10.1234/radar.test",
+            "pdf_url": null,
+            "doi": "10.1234/radar.test",
+            "access_status": "metadata_only",
+            "license": null,
+            "full_text_available": true,
+            "discovery_reason": "Matches the digest topic and reporting period.",
+            "matched_keywords": [
+              "AI agents",
+              "benchmarks"
+            ],
+            "possible_duplicate_of": null,
+            "factual_note": "Metadata-only test fixture.",
+            "warnings": [
+              "Full text was not evaluated."
+            ],
+            "citations": [
+              {
+                "title": "Canonical DOI record",
+                "url": "https://doi.org/10.1234/radar.test"
+              }
+            ]
+          }
+        ]
+      },
+      "relevance": {
+        "methodology": "Scored topic fit, novelty, and practical value.",
+        "assessments": [
+          {
+            "topic_relevance_score": 9,
+            "novelty_signal_score": 7,
+            "practical_value_score": 8,
+            "score": 86.0,
+            "confidence_score": 6,
+            "recommended_status": "summarize",
+            "best_digest_placement": "top_paper",
+            "rationale": "Directly addresses evaluation of coding agents.",
+            "criteria": [
+              "Topic match",
+              "Audience value"
+            ],
+            "evidence_used": [
+              "Title",
+              "Bibliographic metadata"
+            ],
+            "potential_value_for_audience": "Supports benchmark selection.",
+            "caveats": [
+              "Findings were not verified from full text."
+            ],
+            "next_step_recommendations": [
+              "Review the source paper."
+            ],
+            "external_id": "doi:10.1234/radar.test"
+          }
+        ],
+        "recommendations": [
+          "Verify findings against the source."
+        ],
+        "quality_warnings": [
+          "Assessment is based on limited source material."
+        ]
+      }
+    },
+    "paper_summaries": {
+      "paper_summaries": [
+        {
+          "external_id": "doi:10.1234/radar.test",
+          "summary_basis": "open_full_text",
+          "paper_type": "unclear",
+          "concise_summary": "The paper appears relevant to evaluation of software-engineering agents.",
+          "why_this_paper_matters": [
+            "It addresses the configured topic."
+          ],
+          "methods": [],
+          "key_findings": [],
+          "limitations": [
+            "Only metadata was available."
+          ],
+          "implications": [
+            "The full paper should be reviewed before use."
+          ],
+          "recommendations": [
+            "Read the canonical source."
+          ],
+          "suggested_digest_bullet": "A relevant evaluation paper was identified.",
+          "follow_up_questions": [
+            "Which benchmarks are evaluated?"
+          ],
+          "related_search_terms": [
+            "coding agent benchmark"
+          ],
+          "warnings": [
+            "No detailed findings were inferred."
+          ],
+          "confidence_score": 6
+        }
+      ]
+    },
+    "trend_analysis": {
+      "trend_analysis": {
+        "overview": "The available evidence is insufficient to establish a broad trend.",
+        "overall_confidence": "low",
+        "analysis_limitations": [
+          "Only one paper is represented."
+        ],
+        "themes": [
+          {
+            "title": "Agent evaluation",
+            "summary": "Evaluation remains a visible research concern.",
+            "evidence_type": "single_paper_signal",
+            "evidence_external_ids": [
+              "doi:10.1234/radar.test"
+            ],
+            "observed_pattern": "One relevant evaluation paper was identified.",
+            "interpretation": "More evidence is required before calling this a trend.",
+            "confidence": "low",
+            "relevance_to_audience": "Useful as an item to monitor.",
+            "caveats": [
+              "Single-paper signal."
+            ]
+          }
+        ],
+        "emerging_items": [],
+        "repeated_limitations_or_unresolved_problems": [],
+        "contradictions_or_competing_approaches": [],
+        "weak_signals": [],
+        "changes_vs_previous_digest": [],
+        "practical_implications": [],
+        "recommendations": [
+          "Continue monitoring evaluation research."
+        ],
+        "recommended_next_searches": [
+          {
+            "query": "software engineering agent benchmark evaluation",
+            "reason": "Broaden the evidence base.",
+            "priority": "high"
+          }
+        ]
+      }
+    },
+    "digest_briefing": {
+      "digest_briefing": {
+        "title": "AI agents for software engineering",
+        "executive_summary": "One relevant paper was identified, with limited source access.",
+        "highlights": [
+          "Agent evaluation is a signal worth monitoring."
+        ],
+        "main_signal": {
+          "title": "Evaluation evidence",
+          "summary": "A paper directly related to agent evaluation was found.",
+          "why_it_matters": "Reliable evaluation is necessary for adoption decisions.",
+          "supporting_external_ids": [
+            "doi:10.1234/radar.test"
+          ],
+          "confidence": "low",
+          "caveats": [
+            "The result is based on metadata."
+          ]
+        },
+        "top_paper_external_ids": [
+          "doi:10.1234/radar.test"
+        ],
+        "secondary_paper_external_ids": [],
+        "recommendations": [
+          {
+            "action": "Review the source paper.",
+            "reason": "Detailed findings were not available.",
+            "priority": "high",
+            "related_external_ids": [
+              "doi:10.1234/radar.test"
+            ]
+          }
+        ],
+        "recommended_next_searches": [
+          {
+            "query": "software engineering agent benchmark evaluation",
+            "reason": "Broaden the evidence base.",
+            "priority": "high"
+          }
+        ],
+        "source_basis": "metadata_only",
+        "transparency_note": "AI-assisted briefing; verify the original source.",
+        "quality_warnings": [
+          "Only metadata was available."
+        ],
+        "content_markdown": "# AI agents for software engineering\n\nOne relevant paper was identified."
+      }
+    }
+  }
+}

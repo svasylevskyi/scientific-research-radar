@@ -10,6 +10,7 @@ from app.models.user import User
 from app.repositories.digest_run_repository import DigestRunRepository
 from app.services.briefing_email import briefing_email
 from app.services.email_service import EmailService
+from app.services.research_quality_service import delivery_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,9 @@ class BriefingDeliveryWorker:
             if not delivery or not run:
                 return True
             owner = db.get(User, run.owner_id)
-            if not owner or not owner.is_active:
+            if not delivery_allowed(run):
+                values = dict(status="held", last_error="Quality checks held this output. Automatic delivery is blocked.")
+            elif not owner or not owner.is_active:
                 values = dict(status="cancelled", last_error="Account is inactive.")
             else:
                 try:

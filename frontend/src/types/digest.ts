@@ -287,6 +287,8 @@ export interface DigestBriefingData {
 }
 
 export interface DigestRunSummary {
+  quality_status: import("./api.generated").components["schemas"]["DigestRunSummaryRead"]["quality_status"];
+  quality_delivery_blocked: boolean;
   id: string;
   digest_id: string;
   owner_id: string;
@@ -345,6 +347,9 @@ export interface DigestRunStage {
 }
 
 export interface DigestRunDetail extends DigestRunSummary {
+  quality_config: import("./api.generated").components["schemas"]["QualitySnapshot"] | null;
+  quality_findings: import("./api.generated").components["schemas"]["QualityFinding"][];
+  quality_evaluated_at: string | null;
   email_delivery?: { status: string; attempts: number; sent_at: string | null; last_error: string | null } | null;
   scheduled_for?: string | null;
   digest_snapshot: Record<string, unknown>;

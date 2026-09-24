@@ -32,6 +32,7 @@ import { useAuth } from "../auth/AuthContext";
 import type { DigestRunDetail, DigestRunSummary } from "../types/digest";
 import { DigestRunFeedback } from "./DigestRunFeedback";
 import { DigestRunProgress } from "./DigestRunProgress";
+import { ResearchQualityNotice } from "./ResearchQualityNotice";
 import {
   DigestBriefingResult,
   PaperSummariesResult,
@@ -263,7 +264,7 @@ export function DigestWorkspace({
                       }
                     />
                   }
-                  label="Successful runs"
+                  label="Completed runs"
                 />
                 <FormControlLabel
                   control={
@@ -303,9 +304,9 @@ export function DigestWorkspace({
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Chip
                         size="small"
-                        label={item.status}
+                        label={item.quality_delivery_blocked ? "generated · held" : item.status}
                         color={
-                          item.status === "completed"
+                          item.quality_delivery_blocked ? "warning" : item.status === "completed"
                             ? "success"
                             : item.status === "failed"
                               ? "error"
@@ -329,6 +330,7 @@ export function DigestWorkspace({
         )}
       </Paper>
       <Box sx={{ minWidth: 0, width: "100%", flex: 1 }}>
+        {run && <ResearchQualityNotice run={run} admin={admin} />}
         {run && (
           <Typography color="text.secondary" sx={{ mb: 2 }}>
             Run: {runDate(run.started_at).toLocaleString()} · {run.status}
