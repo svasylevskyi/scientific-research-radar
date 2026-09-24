@@ -3,7 +3,7 @@ import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import {
   Box, Button, Divider, IconButton, ListItemIcon, ListItemText, ListSubheader, Menu, MenuItem, Stack,
-  Tooltip, useMediaQuery, useTheme,
+  Tooltip, Typography, useMediaQuery, useTheme,
 } from "@mui/material";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
@@ -19,6 +19,8 @@ export type MainMenuItem = {
   disabled?: boolean;
   emphasized?: boolean;
   icon?: ReactNode;
+  mobileLabel?: string;
+  mobileIcon?: ReactNode;
 };
 
 type Props = {
@@ -26,7 +28,7 @@ type Props = {
   items: MainMenuItem[];
   accountItems?: MainMenuItem[];
   adminItems?: MainMenuItem[];
-  profileMenu?: { icon: ReactNode; items: MainMenuItem[] };
+  profileMenu?: { icon: ReactNode; fullName: string; items: MainMenuItem[] };
 };
 
 export function ResponsiveMainMenu({ label, items, accountItems = [], adminItems = [], profileMenu }: Props) {
@@ -56,13 +58,17 @@ export function ResponsiveMainMenu({ label, items, accountItems = [], adminItems
   function menuItem(item: MainMenuItem) {
     const current = item.to ? navigationCurrent(pathname, item.to) : undefined;
     const select = () => { close(); item.onClick?.(); };
+    const label = mobile ? item.mobileLabel ?? item.label : item.label;
+    const icon = mobile ? item.mobileIcon ?? item.icon : item.icon;
+    const truncate = mobile && !!item.mobileLabel;
     const content = <>
-      {item.icon && <ListItemIcon>{item.icon}</ListItemIcon>}
-      <ListItemText>{item.label}</ListItemText>
+      {icon && <ListItemIcon>{icon}</ListItemIcon>}
+      <ListItemText sx={{ minWidth: 0 }} slotProps={{ primary: { noWrap: truncate } }}>{label}</ListItemText>
     </>;
     return item.to ? (
       <MenuItem key={item.to} component={MainMenuLink} to={item.to} state={item.state}
         disabled={item.disabled} aria-current={current} selected={!!current}
+        aria-label={truncate ? `${item.label}: ${label}` : undefined} title={truncate ? label : undefined}
         sx={mainMenuItemSx} onClick={select}>
         {content}
       </MenuItem>
@@ -103,6 +109,7 @@ export function ResponsiveMainMenu({ label, items, accountItems = [], adminItems
             </IconButton>
           </Tooltip>
           <Menu id={menuId} anchorEl={anchor} open={!!anchor} onClose={close}
+            slotProps={{ paper: { sx: { maxWidth: "calc(100vw - 32px)" } } }}
             MenuListProps={{ "aria-label": label }}>
             {items.map(menuItem)}
             {!!adminItems.length && <Divider />}
@@ -152,7 +159,17 @@ export function ResponsiveMainMenu({ label, items, accountItems = [], adminItems
                 </IconButton>
               </Tooltip>
               <Menu id={profileMenuId} anchorEl={profileAnchor} open={!!profileAnchor} onClose={close}
+                slotProps={{ paper: { sx: { maxWidth: "min(320px, calc(100vw - 32px))" } } }}
                 MenuListProps={{ "aria-labelledby": profileButtonId }}>
+                <ListSubheader disableSticky sx={{ py: 1, bgcolor: "transparent", color: "text.primary" }}>
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    {profileMenu?.icon}
+                    <Typography variant="body2" sx={{ minWidth: 0, fontWeight: 600, overflowWrap: "anywhere" }}>
+                      {profileMenu?.fullName}
+                    </Typography>
+                  </Stack>
+                </ListSubheader>
+                <Divider />
                 {profileItems.map(menuItem)}
               </Menu>
             </>

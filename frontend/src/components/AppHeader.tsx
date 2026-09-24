@@ -5,6 +5,7 @@ import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
 import ManageSearchRoundedIcon from "@mui/icons-material/ManageSearchRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import SubscriptionsRoundedIcon from "@mui/icons-material/SubscriptionsRounded";
 import { AppBar, Avatar, Box, Container, Toolbar } from "@mui/material";
 import { useState } from "react";
@@ -66,8 +67,8 @@ export function AppHeader() {
             </Box>
           )}
           <ResponsiveMainMenu label="Workspace navigation" items={items} adminItems={adminItems}
-            profileMenu={{ icon: avatar, items: [
-              { label: "Profile", to: "/radar/profile", icon: avatar },
+            profileMenu={{ icon: avatar, fullName: user?.full_name ?? "", items: [
+              { label: "Profile", to: "/radar/profile", icon: <PersonRoundedIcon />, mobileLabel: user?.full_name, mobileIcon: avatar },
               { label: "Sign out", icon: <LogoutRoundedIcon />, disabled: isSigningOut, onClick: () => void handleLogout() },
             ] }} />
         </Container>
