@@ -64,21 +64,29 @@ export function DashboardPage() {
       <AppHeader />
 
       <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 7 } }}>
-        <Typography component="h1" variant="h2" sx={{ mb: 3 }}>
-          Welcome, {user?.full_name.split(" ")[0]}.
-        </Typography>
-        <Button
-          component={RouterLink}
-          to="/radar/digests/new"
-          disabled={!access.data?.create_allowed || !!access.error}
-          aria-describedby={!access.data?.create_allowed || access.error ? "create-allowance-notice" : undefined}
-          variant="contained"
-          size="large"
-          startIcon={<TravelExploreRoundedIcon />}
-          sx={{ minHeight: 48 }}
-        >
-          Create research digest
-        </Button>
+        <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 3 }}>
+          <Box sx={{ flex: "1 1 28rem", minWidth: 0 }}>
+            <Typography component="h1" variant="h2" sx={{ mb: 1, overflowWrap: "anywhere" }}>
+              Welcome, {user?.full_name.split(" ")[0]}.
+            </Typography>
+            <Typography color="text.secondary" sx={{ maxWidth: "65ch" }}>
+              This is your personal research workspace. Create digests for the topics you follow,
+              run or schedule research, and return here to explore your results.
+            </Typography>
+          </Box>
+          <Button
+            component={RouterLink}
+            to="/radar/digests/new"
+            disabled={!access.data?.create_allowed || !!access.error}
+            aria-describedby={!access.data?.create_allowed || access.error ? "create-allowance-notice" : undefined}
+            variant="contained"
+            size="large"
+            startIcon={<TravelExploreRoundedIcon />}
+            sx={{ minHeight: 48, maxWidth: "100%", flexShrink: 0, ml: "auto" }}
+          >
+            Create research digest
+          </Button>
+        </Box>
 
         <AllowanceNotice {...access} context="create" id="create-allowance-notice" />
 
