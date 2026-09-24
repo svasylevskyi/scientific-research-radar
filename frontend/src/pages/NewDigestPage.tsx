@@ -32,7 +32,7 @@ export function NewDigestPage() {
     setError(null);
     try {
       const created = await digestsApi.create(input);
-      navigate(`/digests/${created.id}`, {
+      navigate(`/radar/digests/${created.id}`, {
         replace: true,
         state: { success: "Digest created." },
       });

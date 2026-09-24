@@ -112,7 +112,7 @@ def test_completed_run_email_uses_profile_and_retries_without_regeneration(clien
     assert not delivery.run_once(NOW + timedelta(minutes=4))
     assert len(messages) == 1
     assert messages[0].recipient == "new-verified@example.com"
-    assert f"https://radar.example.com/digests/{digest['id']}?run_id=" in messages[0].html
+    assert f"https://radar.example.com/radar/digests/{digest['id']}?run_id=" in messages[0].html
     assert "Executive summary" in messages[0].html and "Papers to read" in messages[0].text
     assert len(fake.calls) == calls
     with db_session_factory() as db:
@@ -190,6 +190,8 @@ def test_email_escapes_untrusted_content_and_rejects_unsafe_links():
         data={"highlights": ["<script>bad</script>"], "top_paper_external_ids": ["paper"]}),
         paper_results=[SimpleNamespace(paper=SimpleNamespace(external_id="paper", title="<b>Title</b>", url="javascript:alert(1)"))])
     message = briefing_email(run, "verified@example.com", "https://radar.example.com")
+    assert f"https://radar.example.com/radar/digests/{run.digest_id}?run_id={run.id}" in message.text
+    assert f"https://radar.example.com/radar/digests/{run.digest_id}?run_id={run.id}" in message.html
     assert "<script>" not in message.html and "<img" not in message.html
     assert "&lt;script&gt;" in message.html and "javascript:" not in message.html
     assert "\n" not in message.subject

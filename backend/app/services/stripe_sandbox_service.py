@@ -226,7 +226,7 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None, co
         if not price:
             raise Error("This interval has no mapped price.", 422)
         attempt_id = uuid4()
-        base = settings.frontend_base_url + ("/subscription" if subscriber else "/admin/subscription-testing")
+        base = settings.frontend_base_url + ("/radar/subscription" if subscriber else "/admin/subscription-testing")
         params = {"mode": "subscription", "payment_method_types[0]": "card",
             "line_items[0][price]": price, "line_items[0][quantity]": "1",
             "client_reference_id": str(attempt_id), "metadata[radar_attempt_id]": str(attempt_id),
@@ -293,7 +293,7 @@ def portal(db, settings, user_id, *, client=None, subscriber=False, cancel=False
         or (features.get("subscription_cancel") or {}).get("mode") != "at_period_end"):
         raise Error("The Stripe portal must be active, allow cancellation at period end, and disable subscription plan updates.", 422)
     data = {"customer": row.customer_id, "configuration": config_id,
-        "return_url": settings.frontend_base_url + ("/subscription?stripe_return=portal" if subscriber else "/admin/subscription-testing?stripe_return=portal")}
+        "return_url": settings.frontend_base_url + ("/radar/subscription?stripe_return=portal" if subscriber else "/admin/subscription-testing?stripe_return=portal")}
     if change_pending:
         data["flow_data[type]"] = "payment_method_update"
     if cancel:

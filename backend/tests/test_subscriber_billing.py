@@ -58,7 +58,8 @@ def test_subscriber_checkout_and_resume_are_owner_scoped(client, subscriber, db_
     assert client.post(URL + '/billing/resume', headers=auth).status_code == 200
     with db_session_factory() as db:
         row = billing.latest(db, uid)
-        assert row.parameters['success_url'] == 'https://radar.example/subscription?stripe_return=checkout'
+        assert row.parameters['success_url'] == 'https://radar.example/radar/subscription?stripe_return=checkout'
+        assert row.parameters['cancel_url'] == 'https://radar.example/radar/subscription?stripe_return=cancel'
         assert db.scalar(select(func.count()).select_from(SandboxCheckout)) == 1
     other = _authorization(_register(client, 'other-subscriber@example.com', 'Other'))
     assert client.get(URL + '/billing', headers=other).json()['attempt'] is None
@@ -92,7 +93,7 @@ def test_subscriber_portal_and_refresh_do_not_grant_policy(client, subscriber, d
     result = client.post(URL + '/billing/portal', headers=auth)
     assert result.status_code == 200, result.text
     post = next(c for c in provider.calls if c[:2] == ('POST', 'billing_portal/sessions'))
-    assert post[2]['return_url'] == 'https://radar.example/subscription?stripe_return=portal'
+    assert post[2]['return_url'] == 'https://radar.example/radar/subscription?stripe_return=portal'
     assert post[2]['customer'] == 'cus_sub_1'
     assert client.post(URL + '/billing/checkout', headers=auth, json={'code': 'explorer', 'revision': 1, 'interval': 'monthly'}).status_code == 409
     with db_session_factory() as db:

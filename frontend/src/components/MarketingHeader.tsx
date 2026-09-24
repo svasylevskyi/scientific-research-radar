@@ -1,9 +1,9 @@
-import { Box, Button, Container, Stack } from "@mui/material";
-import { Link as RouterLink, useLocation } from "react-router-dom";
+import { Box, Button, Container } from "@mui/material";
+import { Link as RouterLink } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Brand } from "./Brand";
-import { navigationCurrent } from "../navigation";
-import { MainMenuLink, mainMenuItemSx } from "./MainMenuLink";
+import { MainMenuLink } from "./MainMenuLink";
+import { ResponsiveMainMenu, type MainMenuItem } from "./ResponsiveMainMenu";
 
 export function RadarLink() {
   const { user, isInitializing } = useAuth();
@@ -13,24 +13,26 @@ export function RadarLink() {
   return user ? (
     <Button component={RouterLink} to="/radar" variant="contained">Open your radar ↗</Button>
   ) : (
-    <Button component={RouterLink} to="/login" state={{ from: "/radar" }} variant="contained">Sign in to Radar ↗</Button>
+    <Button component={RouterLink} to="/radar/login" state={{ from: "/radar" }} variant="contained">Sign in to Radar ↗</Button>
   );
 }
 
 export function MarketingHeader() {
-  const { pathname } = useLocation();
-  const { user } = useAuth();
-  const contactPath = user ? "/radar/contact" : "/contact";
+  const { user, isInitializing } = useAuth();
+  const accountItem: MainMenuItem = isInitializing
+    ? { label: "Restoring your session…", disabled: true, emphasized: true }
+    : user
+      ? { label: "Open your radar", to: "/radar", emphasized: true }
+      : { label: "Sign in to Radar", to: "/radar/login", state: { from: "/radar" }, emphasized: true };
   return (
     <Box component="header" sx={{ bgcolor: "#fff", borderBottom: "1px solid", borderColor: "divider" }}>
-      <Container maxWidth="lg" sx={{ py: 2.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
+      <Container maxWidth="lg" sx={{ py: 2.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
         <Box component={MainMenuLink} to="/" aria-label="Scientific Research Radar home" sx={{ textDecoration: "none" }}><Brand compact /></Box>
-        <Stack component="nav" aria-label="Main navigation" direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
-          <Button component={MainMenuLink} to="/plans" aria-current={navigationCurrent(pathname, "/plans")} sx={mainMenuItemSx} color="inherit">Plans</Button>
-          <Button component={MainMenuLink} to="/about" aria-current={navigationCurrent(pathname, "/about")} sx={mainMenuItemSx} color="inherit">About</Button>
-          <Button component={MainMenuLink} to={contactPath} aria-current={navigationCurrent(pathname, contactPath)} sx={mainMenuItemSx} color="inherit">Contact</Button>
-          <RadarLink />
-        </Stack>
+        <ResponsiveMainMenu label="Main navigation" items={[
+          { label: "Plans", to: "/plans" },
+          { label: "About", to: "/about" },
+          { label: "Contact", to: user ? "/radar/contact" : "/contact" },
+        ]} accountItems={[accountItem]} />
       </Container>
     </Box>
   );

@@ -41,7 +41,7 @@ def send_recovery(session_factory, settings, email):
             base = settings.frontend_base_url
             if settings.environment == "production" and (urlsplit(base).scheme != "https" or urlsplit(base).hostname in ("localhost", "127.0.0.1", "::1")):
                 raise ValueError("A public HTTPS FRONTEND_BASE_URL is required")
-            link = f"{base}/reset-password#token={token}"
+            link = f"{base}/radar/reset-password#token={token}"
             text = f"Reset your Scientific Research Radar password using this link:\n\n{link}\n\nThis link expires in 30 minutes and can be used once. If you did not request it, ignore this email; your password has not changed."
             EmailService(settings).send(OutgoingEmail(recipient=email, subject="Reset your Radar password", text=text,
                 html=f'<h1>Reset your password</h1><p><a href="{escape(link, quote=True)}">Choose a new password</a></p><p>This link expires in 30 minutes and can be used once.</p><p>If you did not request it, ignore this email. Your password has not changed.</p>'))

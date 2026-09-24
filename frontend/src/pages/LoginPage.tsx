@@ -31,7 +31,8 @@ export function LoginPage() {
     (location.state as { passwordChanged?: boolean } | null)?.passwordChanged,
   );
 
-  if (!isInitializing && user) return <Navigate to="/radar" replace />;
+  const destination = (location.state as { from?: string } | null)?.from ?? "/radar";
+  if (!isInitializing && user) return <Navigate to={destination} replace />;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,7 +40,6 @@ export function LoginPage() {
     setIsSubmitting(true);
     try {
       await login({ email, password });
-      const destination = (location.state as { from?: string } | null)?.from ?? "/radar";
       navigate(destination, { replace: true });
     } catch {
       setError("Email or password is incorrect.");
@@ -107,10 +107,10 @@ export function LoginPage() {
         </Button>
       </Stack>
 
-      <Box sx={{ mt: 2 }}><Link component={RouterLink} to="/forgot-password">Forgot your password?</Link></Box>
+      <Box sx={{ mt: 2 }}><Link component={RouterLink} to="/radar/forgot-password">Forgot your password?</Link></Box>
       <Typography sx={{ mt: 3.5, color: "text.secondary" }}>
         New to Research Radar?{" "}
-        <Link component={RouterLink} to="/register" fontWeight={700} underline="hover">
+        <Link component={RouterLink} to="/radar/register" fontWeight={700} underline="hover">
           Create an account
         </Link>
       </Typography>

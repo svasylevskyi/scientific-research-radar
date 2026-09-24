@@ -15,7 +15,9 @@ import { LandingPage } from "./pages/LandingPage";
 import { PlansPage } from "./pages/PlansPage";
 import { LegalPage } from "./pages/LegalPage";
 import { ForgotPasswordPage, ResetPasswordPage } from "./pages/PasswordRecoveryPage";
-import { matchPath, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { matchPath, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { LegacyWorkspaceRedirect } from "./components/LegacyWorkspaceRedirect";
+import { radarPathname } from "./workspaceRoutes";
 
 import { RequireAuth } from "./auth/RequireAuth";
 import { RequireAdmin } from "./auth/RequireAdmin";
@@ -32,17 +34,11 @@ import { NewDigestPage } from "./pages/NewDigestPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { RegisterPage } from "./pages/RegisterPage";
 
-function LegacyDigestHistoryRedirect() {
-  const { digestId } = useParams();
-  const location = useLocation();
-  return <Navigate to={`/digests/${digestId}${location.search}`} state={location.state} replace />;
-}
-
 export default function App() {
   const { pathname } = useLocation();
   // Registration includes its email verification step; profile keeps its footer.
-  const isAuthPage = ["/login", "/register", "/forgot-password", "/reset-password"]
-    .some((path) => matchPath(path, pathname));
+  const isAuthPage = ["/radar/login", "/radar/register", "/radar/forgot-password", "/radar/reset-password"]
+    .some((path) => matchPath(path, radarPathname(pathname)));
 
   return (
     <Box sx={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
@@ -55,7 +51,8 @@ export default function App() {
           <Route path="/radar/contact" element={<RequireAuth><ContactPage workspace /></RequireAuth>} />
           <Route path="/admin/messages" element={<RequireAuth><RequireAdmin><AdminMessagesPage /></RequireAdmin></RequireAuth>} />
           <Route path="/plans" element={<PlansPage />} />
-          <Route path="/register/plan" element={<RequireAuth><PlansPage enrolment /></RequireAuth>} />
+          <Route path="/radar/plans" element={<RequireAuth><PlansPage workspace /></RequireAuth>} />
+          <Route path="/radar/register/plan" element={<RequireAuth><PlansPage enrolment /></RequireAuth>} />
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
           <Route path="/terms" element={<LegalPage kind="terms" />} />
           <Route
@@ -66,12 +63,12 @@ export default function App() {
               </RequireAuth>
             }
           />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/radar/login" element={<LoginPage />} />
+          <Route path="/radar/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/radar/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/radar/register" element={<RegisterPage />} />
           <Route
-            path="/profile"
+            path="/radar/profile"
             element={
               <RequireAuth>
                 <ProfilePage />
@@ -79,7 +76,7 @@ export default function App() {
             }
           />
           <Route
-            path="/digests/new"
+            path="/radar/digests/new"
             element={
               <RequireAuth>
                 <NewDigestPage />
@@ -87,7 +84,7 @@ export default function App() {
             }
           />
           <Route
-            path="/digests/:digestId"
+            path="/radar/digests/:digestId"
             element={
               <RequireAuth>
                 <DigestDetailPage />
@@ -95,10 +92,10 @@ export default function App() {
             }
           />
           <Route
-            path="/digests/:digestId/history"
+            path="/radar/digests/:digestId/history"
             element={
               <RequireAuth>
-                <LegacyDigestHistoryRedirect />
+                <LegacyWorkspaceRedirect />
               </RequireAuth>
             }
           />
@@ -144,7 +141,7 @@ export default function App() {
           />
           <Route path="/admin/spending" element={<RequireAuth><RequireAdmin superAdmin><AdminSpendingPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/subscription-observation" element={<RequireAuth><RequireAdmin><AdminSubscriptionObservationPage /></RequireAdmin></RequireAuth>} />
-          <Route path="/subscription" element={<RequireAuth><SubscriptionAccessPage /></RequireAuth>} />
+          <Route path="/radar/subscription" element={<RequireAuth><SubscriptionAccessPage /></RequireAuth>} />
           <Route path="/admin/subscription-access" element={<RequireAuth><RequireAdmin><SubscriptionAccessPage admin /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/billing-sync" element={<RequireAuth><RequireAdmin><AdminBillingSyncPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/subscription-testing" element={<RequireAuth><RequireAdmin><AdminSandboxBillingPage /></RequireAdmin></RequireAuth>} />
@@ -154,6 +151,16 @@ export default function App() {
           <Route path="/admin/pricing/new" element={<RequireAuth><RequireAdmin superAdmin><AdminPricingEditPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/pricing/:priceId/copy" element={<RequireAuth><RequireAdmin superAdmin><AdminPricingEditPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/pricing" element={<RequireAuth><RequireAdmin superAdmin><AdminPricingPage /></RequireAdmin></RequireAuth>} />
+          <Route path="/login" element={<LegacyWorkspaceRedirect />} />
+          <Route path="/register" element={<LegacyWorkspaceRedirect />} />
+          <Route path="/register/plan" element={<LegacyWorkspaceRedirect />} />
+          <Route path="/forgot-password" element={<LegacyWorkspaceRedirect />} />
+          <Route path="/reset-password" element={<LegacyWorkspaceRedirect />} />
+          <Route path="/profile" element={<LegacyWorkspaceRedirect />} />
+          <Route path="/subscription" element={<LegacyWorkspaceRedirect />} />
+          <Route path="/digests/new" element={<LegacyWorkspaceRedirect />} />
+          <Route path="/digests/:digestId" element={<LegacyWorkspaceRedirect />} />
+          <Route path="/digests/:digestId/history" element={<LegacyWorkspaceRedirect />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Box>

@@ -391,7 +391,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                     {!currentDigestIsRunning && (
                       <Button
                         component={RouterLink}
-                        to={`/digests/${activeRun.digest_id}`}
+                        to={`/radar/digests/${activeRun.digest_id}`}
                         size="small"
                         sx={{ ml: { sm: 1 } }}
                       >

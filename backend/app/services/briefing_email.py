@@ -16,7 +16,7 @@ def safe_url(value):
 def briefing_email(run, recipient, base_url):
     briefing = run.briefing
     data = briefing.data
-    link = f"{base_url.rstrip('/')}/digests/{run.digest_id}?run_id={run.id}"
+    link = f"{base_url.rstrip('/')}/radar/digests/{run.digest_id}?run_id={run.id}"
     sections = []
     plain = [briefing.title, briefing.executive_summary]
 

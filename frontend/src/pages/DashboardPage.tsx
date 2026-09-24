@@ -69,7 +69,7 @@ export function DashboardPage() {
         </Typography>
         <Button
           component={RouterLink}
-          to="/digests/new"
+          to="/radar/digests/new"
           disabled={!access.data?.create_allowed || !!access.error}
           aria-describedby={!access.data?.create_allowed || access.error ? "create-allowance-notice" : undefined}
           variant="contained"
@@ -100,7 +100,7 @@ export function DashboardPage() {
           <>
             <DigestList
               digests={digests}
-              detailPath={(digest) => `/digests/${digest.id}`}
+              detailPath={(digest) => `/radar/digests/${digest.id}`}
             />
             {total > PAGE_SIZE && (
               <Pagination

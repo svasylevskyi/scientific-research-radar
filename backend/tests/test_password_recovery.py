@@ -38,7 +38,7 @@ def test_recovery_single_use_revokes_all_tokens_and_allows_new_login(client, db_
     refresh = client.cookies.get(get_settings().refresh_cookie_name)
     token = request_link(client)
     message = client.outbox[-1]
-    assert get_settings().frontend_base_url + "/reset-password#token=" in message.text
+    assert get_settings().frontend_base_url + "/radar/reset-password#token=" in message.text
     assert "untrusted.example" not in message.text
     with db_session_factory() as db:
         saved = db.scalar(select(PasswordReset))

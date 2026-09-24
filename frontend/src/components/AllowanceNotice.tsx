@@ -15,8 +15,8 @@ export function AllowanceNotice({ data, error, loading, context, id }: {
   return <Alert id={id} severity="info" sx={{ my: 2 }}>
     {message}
     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 0.5 }}>
-      <Button component={Link} to="/subscription" size="small">Subscription and usage</Button>
-      <Button component={Link} to="/subscription#upgrade" size="small">Upgrade options</Button>
+      <Button component={Link} to="/radar/subscription" size="small">Subscription and usage</Button>
+      <Button component={Link} to="/radar/subscription#upgrade" size="small">Upgrade options</Button>
     </Box>
   </Alert>;
 }

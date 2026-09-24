@@ -39,7 +39,7 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
         {admin ? (
           <AdminDigestNavigation digestId={digestId} current="runs" />
         ) : (
-          <Button component={Link} to={`/digests/${digestId}`}>
+          <Button component={Link} to={`/radar/digests/${digestId}`}>
             Back to digest
           </Button>
         )}
@@ -101,7 +101,7 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
                   <Typography>{data.digest.topic}</Typography>
                   <Button
                     component={Link}
-                    to={`${admin ? "/admin" : ""}/digests/${digestId}`}
+                    to={`${admin ? "/admin" : "/radar"}/digests/${digestId}`}
                   >
                     Open digest details and settings
                   </Button>
