@@ -19,6 +19,8 @@ export function RadarLink() {
 
 export function MarketingHeader() {
   const { pathname } = useLocation();
+  const { user } = useAuth();
+  const contactPath = user ? "/radar/contact" : "/contact";
   return (
     <Box component="header" sx={{ bgcolor: "#fff", borderBottom: "1px solid", borderColor: "divider" }}>
       <Container maxWidth="lg" sx={{ py: 2.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
@@ -26,7 +28,7 @@ export function MarketingHeader() {
         <Stack component="nav" aria-label="Main navigation" direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
           <Button component={MainMenuLink} to="/plans" aria-current={navigationCurrent(pathname, "/plans")} sx={mainMenuItemSx} color="inherit">Plans</Button>
           <Button component={MainMenuLink} to="/about" aria-current={navigationCurrent(pathname, "/about")} sx={mainMenuItemSx} color="inherit">About</Button>
-          <Button component={MainMenuLink} to="/contact" aria-current={navigationCurrent(pathname, "/contact")} sx={mainMenuItemSx} color="inherit">Contact</Button>
+          <Button component={MainMenuLink} to={contactPath} aria-current={navigationCurrent(pathname, contactPath)} sx={mainMenuItemSx} color="inherit">Contact</Button>
           <RadarLink />
         </Stack>
       </Container>

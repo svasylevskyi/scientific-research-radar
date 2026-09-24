@@ -66,7 +66,7 @@ export function AppHeader() {
     {
       label: "Contact",
       short: "Contact",
-      to: "/contact",
+      to: "/radar/contact",
       icon: <MailOutlineRoundedIcon />,
     },
   ];
