@@ -1,4 +1,12 @@
-import { AppBar, Box, Container, Toolbar } from "@mui/material";
+import AdminPanelSettingsRoundedIcon from "@mui/icons-material/AdminPanelSettingsRounded";
+import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
+import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
+import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
+import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
+import ManageSearchRoundedIcon from "@mui/icons-material/ManageSearchRounded";
+import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import SubscriptionsRoundedIcon from "@mui/icons-material/SubscriptionsRounded";
+import { AppBar, Avatar, Box, Container, Toolbar } from "@mui/material";
 import { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { StripeModeBadge } from "./StripeModeBadge";
@@ -9,19 +17,25 @@ import { ResponsiveMainMenu, type MainMenuItem } from "./ResponsiveMainMenu";
 export function AppHeader() {
   const { user, logout } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const initials = user?.full_name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+  const avatar = (
+    <Avatar sx={{ width: 32, height: 32, bgcolor: "primary.dark", fontSize: "0.85rem", fontWeight: 800 }}>
+      {initials}
+    </Avatar>
+  );
   const items: MainMenuItem[] = [
-    { label: "Workspace", to: "/radar" },
-    { label: "Subscription and usage", shortLabel: "Subscription", to: "/radar/subscription" },
-    { label: "Contact", to: "/radar/contact" },
+    { label: "Workspace", to: "/radar", icon: <ManageSearchRoundedIcon /> },
+    { label: "Subscription and usage", shortLabel: "Subscription", to: "/radar/subscription", icon: <AutoStoriesRoundedIcon /> },
+    { label: "Contact", to: "/radar/contact", icon: <MailOutlineRoundedIcon /> },
   ];
   const adminItems: MainMenuItem[] = [
     ...(user?.role === "admin" ? [
-      { label: "Users", to: "/admin/users" },
-      { label: "Digests", to: "/admin/digests" },
-      { label: "Plans", to: "/admin/subscription-plans" },
+      { label: "Users", to: "/admin/users", icon: <AdminPanelSettingsRoundedIcon /> },
+      { label: "Digests", to: "/admin/digests", icon: <LibraryBooksRoundedIcon /> },
+      { label: "Plans", to: "/admin/subscription-plans", icon: <SubscriptionsRoundedIcon /> },
     ] : []),
-    ...(user?.is_super_admin ? [{ label: "Pricing", to: "/admin/pricing" }] : []),
-    ...(user?.role === "admin" ? [{ label: "Messages", to: "/admin/messages" }] : []),
+    ...(user?.is_super_admin ? [{ label: "Pricing", to: "/admin/pricing", icon: <PaymentsRoundedIcon /> }] : []),
+    ...(user?.role === "admin" ? [{ label: "Messages", to: "/admin/messages", icon: <MailOutlineRoundedIcon /> }] : []),
   ];
 
   async function handleLogout() {
@@ -52,10 +66,10 @@ export function AppHeader() {
             </Box>
           )}
           <ResponsiveMainMenu label="Workspace navigation" items={items} adminItems={adminItems}
-            accountItems={[
-              { label: "Profile", to: "/radar/profile" },
-              { label: "Sign out", disabled: isSigningOut, onClick: () => void handleLogout() },
-            ]} />
+            profileMenu={{ icon: avatar, items: [
+              { label: "Profile", to: "/radar/profile", icon: avatar },
+              { label: "Sign out", icon: <LogoutRoundedIcon />, disabled: isSigningOut, onClick: () => void handleLogout() },
+            ] }} />
         </Container>
       </Toolbar>
     </AppBar>

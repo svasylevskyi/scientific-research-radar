@@ -36,7 +36,7 @@ Previous user URLs redirect with their query strings, fragments, and navigation 
 
 `FRONTEND_BASE_URL` remains the website origin (do not append `/radar`). API paths are unchanged. No database migration or new configuration is required for these browser routes.
 
-Public and workspace headers share a text-only main menu. Below 1200 px, all menu items appear under a hamburger button; admin links retain their mobile Admin section and desktop submenu. Active items use only a pale background. Main-menu selections return to the page top; tabs and filters retain position, and direct section links still reveal their target.
+Public and workspace headers share responsive menu behavior. Radar links include icons; the public website links remain text-only. Below 1200 px, all menu items appear under a hamburger button, with separate Admin and Profile sections in Radar. On desktop, Admin has a submenu and the initials avatar opens a Profile submenu containing Profile and Sign out. Active items use only a pale background. Main-menu selections return to the page top; tabs and filters retain position, and direct section links still reveal their target.
 
 ## Included auth flow
 
