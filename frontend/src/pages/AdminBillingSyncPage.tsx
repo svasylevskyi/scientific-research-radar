@@ -76,7 +76,7 @@ export function AdminBillingSyncPage() {
   return (
     <Box>
       <AppHeader />
-      <Container component="main" maxWidth="lg" sx={{ py: 4 }}>
+      <Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ py: 4 }}>
         <AdminBillingNavigation
           current="sync"
           userId={owner}

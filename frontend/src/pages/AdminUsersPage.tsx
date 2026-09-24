@@ -73,7 +73,7 @@ export function AdminUsersPage() {
   return (
     <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
-      <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
+      <Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="space-between" sx={{ mb: 4 }}>
           <Box>
             <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 0.75 }}>

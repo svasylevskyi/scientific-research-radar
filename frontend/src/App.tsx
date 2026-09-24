@@ -1,3 +1,4 @@
+import { NavigationAccessibility } from "./components/NavigationAccessibility";
 import { AboutPage } from "./pages/AboutPage";
 import { ContactPage } from "./pages/ContactPage";
 import { AdminMessagesPage } from "./pages/AdminMessagesPage";
@@ -45,7 +46,8 @@ export default function App() {
 
   return (
     <Box sx={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
-      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", "& > *": { flex: 1 } }}>
+      <NavigationAccessibility />
+      <Box id="page-content" sx={{ flex: 1, display: "flex", flexDirection: "column", "& > *": { flex: 1 } }}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/about" element={<AboutPage />} />

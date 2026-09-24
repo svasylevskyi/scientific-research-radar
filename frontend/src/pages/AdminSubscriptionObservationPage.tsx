@@ -85,7 +85,7 @@ export function AdminSubscriptionObservationPage() {
   }
   const options = plans.filter(plan => plan.configuration.state !== "archived");
   if (data?.assignment.plan && !options.some(plan => plan.id === data.assignment.plan?.id)) options.unshift(data.assignment.plan);
-  return <Box><AppHeader /><Container component="main" maxWidth="lg" sx={{ py: 4 }}>
+  return <Box><AppHeader /><Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ py: 4 }}>
     <AdminBillingNavigation current="observation" userId={userId} email={data?.user.email} />
     <Typography variant="h3" component="h1" gutterBottom>Subscription observation</Typography>
     <Alert severity="info" sx={{ mb: 3 }}>Observation assignments compare usage against a fixed plan revision. Effective access is managed separately under Subscription access;

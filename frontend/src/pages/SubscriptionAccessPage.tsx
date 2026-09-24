@@ -35,7 +35,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
   return (
     <Box>
       <AppHeader />
-      <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
+      <Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
         <Typography component="h1" variant="h3" gutterBottom>
           Subscription and usage
         </Typography>

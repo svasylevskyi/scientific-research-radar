@@ -38,7 +38,7 @@ export function AdminMessagesPage() {
     } catch (error) { setReviewError(error instanceof Error ? error.message : "Could not update message."); }
     finally { setSaving(false); }
   }
-  return <Box><AppHeader /><Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
+  return <Box><AppHeader /><Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
     <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2} sx={{ mb: 3 }}>
       <Box><Typography component="h1" variant="h3">Contact messages</Typography><Typography color="text.secondary">Review messages sent to the Radar administration team. Sender details are supplied by the visitor.</Typography></Box>
       <Button disabled={loading} onClick={() => setRefresh((value) => value + 1)}>Refresh</Button>
