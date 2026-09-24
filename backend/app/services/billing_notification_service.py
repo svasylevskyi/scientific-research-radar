@@ -70,7 +70,7 @@ def tick(factory, settings):
         if not user:
             return False
         message = OutgoingEmail(recipient=user.email, subject='Research Radar — ' + row.subject,
-            text=row.text + '\n\nReview your subscription: ' + settings.frontend_base_url + '/subscription',
+            text=row.text + '\n\nReview your subscription: ' + settings.frontend_base_url + '/radar/subscription',
             message_id='<billing-' + hashlib.sha256(key.encode()).hexdigest() + '@research-radar>')
         attempts = row.attempts
     try:

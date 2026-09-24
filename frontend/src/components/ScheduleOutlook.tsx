@@ -54,7 +54,7 @@ export function ScheduleOutlook({ digestId, schedule, exhausted }: {
     {executing && <Alert severity="info">
       {state === "queued" ? "Scheduled run queued — waiting to begin." : "Scheduled run in progress."}
       {preview?.active_run_id && <Button size="small" component={RouterLink}
-        to={`/digests/${digestId}?run_id=${preview.active_run_id}`}>View progress</Button>}
+        to={`/radar/digests/${digestId}?run_id=${preview.active_run_id}`}>View progress</Button>}
     </Alert>}
     {waiting && <Alert severity="info">
       {waitingLabels[state as keyof typeof waitingLabels]}

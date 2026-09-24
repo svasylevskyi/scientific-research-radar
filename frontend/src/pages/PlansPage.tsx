@@ -19,19 +19,20 @@ import {
   Typography,
 } from "@mui/material";
 import { MarketingHeader } from "../components/MarketingHeader";
+import { AppHeader } from "../components/AppHeader";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import { usePollingResource } from "../hooks/usePollingResource";
 import { subscriptionsApi } from "../api/subscriptions";
 import { isCurrentPlan } from "../subscriptionPresentation";
 import type { PublicPlan as Plan } from "../types/subscription";
-export function PlansPage({ enrolment = false }: { enrolment?: boolean }) {
+export function PlansPage({ enrolment = false, workspace = false }: { enrolment?: boolean; workspace?: boolean }) {
   const { user } = useAuth();
   return (
-    <PlansContent key={`${user?.id ?? "public"}:${enrolment}`} enrolment={enrolment} />
+    <PlansContent key={`${user?.id ?? "public"}:${enrolment}`} enrolment={enrolment} workspace={workspace || enrolment} />
   );
 }
-function PlansContent({ enrolment }: { enrolment: boolean }) {
+function PlansContent({ enrolment, workspace }: { enrolment: boolean; workspace: boolean }) {
   const navigate = useNavigate();
   const [selectedCode, setSelectedCode] = useState("free");
   const { user, isInitializing } = useAuth();
@@ -101,11 +102,11 @@ function PlansContent({ enrolment }: { enrolment: boolean }) {
     (selectedPlan.billing_type === "free" || canChoosePaidPlan(selectedPlan));
   if (enrolment && access &&
       (access.billing_type === "stripe" || access.mode === "complimentary")) {
-    return <Navigate to="/subscription" replace />;
+    return <Navigate to="/radar/subscription" replace />;
   }
   return (
     <Box>
-      <MarketingHeader />
+      {workspace ? <AppHeader /> : <MarketingHeader />}
       <Container component="main" maxWidth="lg" sx={{ py: 6 }}>
         <Chip
           label={catalogue.data?.sandbox ? "Sandbox subscriptions" : "Subscriptions"}
@@ -135,7 +136,7 @@ function PlansContent({ enrolment }: { enrolment: boolean }) {
         {billingError && (
           <Alert severity="error">
             {billingError}{" "}
-            <Button component={Link} to="/subscription">
+            <Button component={Link} to="/radar/subscription">
               Review billing
             </Button>
             <Button onClick={() => {
@@ -150,7 +151,7 @@ function PlansContent({ enrolment }: { enrolment: boolean }) {
         {billing?.reason && (
           <Alert severity="info" sx={{ my: 2 }}>
             {billing.reason}{" "}
-            <Button component={Link} to="/subscription">
+            <Button component={Link} to="/radar/subscription">
               Subscription and billing
             </Button>
           </Alert>
@@ -249,13 +250,13 @@ function PlansContent({ enrolment }: { enrolment: boolean }) {
                 ) : plan.billing_type === "free" ? (
                   <Button
                     component={Link}
-                    to={user ? "/subscription" : "/register"}
+                    to={user ? "/radar/subscription" : "/radar/register"}
                     variant="outlined"
                   >
                     {user ? "Review subscription" : "Create a free account"}
                   </Button>
                 ) : !user && !isInitializing ? (
-                  <Button component={Link} to="/login" variant="outlined">
+                  <Button component={Link} to="/radar/login" variant="outlined">
                     Sign in to continue
                   </Button>
                 ) : user &&
@@ -264,7 +265,7 @@ function PlansContent({ enrolment }: { enrolment: boolean }) {
                   !billing.resume_allowed ? (
                   <Button
                     component={Link}
-                    to="/subscription#plans"
+                    to="/radar/subscription#plans"
                     variant="outlined"
                   >
                     {isCurrentPlan(plan, access, billing)
@@ -274,7 +275,7 @@ function PlansContent({ enrolment }: { enrolment: boolean }) {
                 ) : billing?.resume_allowed ? (
                   <Button
                     component={Link}
-                    to="/subscription#billing"
+                    to="/radar/subscription#billing"
                     variant="outlined"
                   >
                     Resume existing checkout

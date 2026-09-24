@@ -1,23 +1,26 @@
+import { radarPathname } from "./workspaceRoutes";
+
 /** Page metadata shared by document titles and section-aware navigation. */
 const pages = [
   ["/", "Home", "/"],
   ["/about", "About Radar", "/about"],
   ["/contact", "Contact us", "/contact"],
   ["/plans", "Research plans", "/plans"],
-  ["/register/plan", "Choose your research plan", "/plans"],
+  ["/radar/register/plan", "Choose your research plan", "/radar/subscription"],
+  ["/radar/plans", "Research plans", "/radar/subscription"],
   ["/privacy", "Privacy notice", "/privacy"],
   ["/terms", "Terms of use", "/terms"],
-  ["/login", "Sign in", "/login"],
-  ["/register", "Create your account", "/register"],
-  ["/forgot-password", "Forgot your password", "/forgot-password"],
-  ["/reset-password", "Reset your password", "/reset-password"],
-  ["/profile", "Your profile", "/profile"],
+  ["/radar/login", "Sign in", "/radar/login"],
+  ["/radar/register", "Create your account", "/radar/register"],
+  ["/radar/forgot-password", "Forgot your password", "/radar/forgot-password"],
+  ["/radar/reset-password", "Reset your password", "/radar/reset-password"],
+  ["/radar/profile", "Your profile", "/radar/profile"],
   ["/radar", "Your workspace", "/radar"],
   ["/radar/contact", "Contact us", "/radar/contact"],
-  ["/digests/new", "Create a digest", "/radar"],
-  ["/digests/:digestId", "Digest details and research", "/radar"],
-  ["/digests/:digestId/history", "Digest run history", "/radar"],
-  ["/subscription", "Subscription and usage", "/subscription"],
+  ["/radar/digests/new", "Create a digest", "/radar"],
+  ["/radar/digests/:digestId", "Digest details and research", "/radar"],
+  ["/radar/digests/:digestId/history", "Digest run history", "/radar"],
+  ["/radar/subscription", "Subscription and usage", "/radar/subscription"],
   ["/admin/users", "User management", "/admin/users"],
   ["/admin/users/:userId", "User details · Admin", "/admin/users"],
   ["/admin/digests", "Digest management", "/admin/digests"],
@@ -38,7 +41,7 @@ const pages = [
 ] as const;
 
 export function pageNavigation(pathname: string) {
-  const path = pathname.replace(/\/+$/, "") || "/";
+  const path = radarPathname(pathname);
   const segments = path.split("/");
   const page = pages.find(([pattern]) => {
     const parts = pattern.split("/");
@@ -54,7 +57,7 @@ export function pageNavigation(pathname: string) {
 
 export function navigationCurrent(pathname: string, destination: string) {
   if (pageNavigation(pathname).activeLink !== destination) return undefined;
-  return (pathname.replace(/\/+$/, "") || "/") === destination ? "page" as const : "location" as const;
+  return radarPathname(pathname) === destination ? "page" as const : "location" as const;
 }
 
 type PageLocation = {

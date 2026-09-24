@@ -87,7 +87,7 @@ export function SubscriberBilling() {
                   Cancel at renewal
                 </Button>
               )}
-              <Button component={Link} to="/plans">
+              <Button component={Link} to="/radar/plans">
                 Compare plans
               </Button>
               {data.resume_allowed && (

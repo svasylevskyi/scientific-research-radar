@@ -90,7 +90,7 @@ export function FreeDigestPreferences() {
                     />
                   }
                 />
-                <Button component={Link} to={`/digests/${item.id}`}>
+                <Button component={Link} to={`/radar/digests/${item.id}`}>
                   Open digest
                 </Button>
                 {item.schedule_paused && (

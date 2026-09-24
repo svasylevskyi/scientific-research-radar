@@ -2,7 +2,7 @@
 
 Verified registration creates the account, assigns the latest reviewed Radar Free
 revision, and enables subscription limits in the same transaction. The browser
-then opens `/register/plan`, with Free selected. Continuing with Free opens Radar
+then opens `/radar/register/plan`, with Free selected. Continuing with Free opens Radar
 without a checkout request. No existing accounts or policies are migrated.
 
 The authenticated `GET /api/v1/subscription/enrolment-plans` returns the account's

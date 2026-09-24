@@ -30,7 +30,7 @@ export function ForgotPasswordPage() {
       <TextField label="Email address" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={busy} fullWidth />
       <Button type="submit" variant="contained" disabled={busy}>{busy ? "Requesting…" : "Send reset link"}</Button>
     </Stack>
-    <Box sx={{ mt: 3 }}><Link component={RouterLink} to="/login">Back to sign in</Link></Box>
+    <Box sx={{ mt: 3 }}><Link component={RouterLink} to="/radar/login">Back to sign in</Link></Box>
   </AuthLayout>;
 }
 
@@ -80,8 +80,8 @@ export function ResetPasswordPage() {
         <Button type="submit" variant="contained" disabled={busy}>{busy ? "Resetting…" : "Reset password"}</Button>
       </Stack>}
     <Stack spacing={1.5} sx={{ mt: 3 }}>
-      <Link component={RouterLink} to="/login">Sign in</Link>
-      {!done && <Link component={RouterLink} to="/forgot-password">Request a new reset link</Link>}
+      <Link component={RouterLink} to="/radar/login">Sign in</Link>
+      {!done && <Link component={RouterLink} to="/radar/forgot-password">Request a new reset link</Link>}
     </Stack>
   </AuthLayout>;
 }

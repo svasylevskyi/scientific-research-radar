@@ -46,7 +46,7 @@ export function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
 
   if (!isInitializing && user) {
-    return <Navigate to={confirmingRegistration.current ? "/register/plan" : "/radar"} replace />;
+    return <Navigate to={confirmingRegistration.current ? "/radar/register/plan" : "/radar"} replace />;
   }
 
   const passwordIsValid = isValidNewPassword(password);
@@ -97,7 +97,7 @@ export function RegisterPage() {
           try {
             await confirmRegistration(challenge.id, code);
             rememberChallenge(null);
-            navigate("/register/plan", { replace: true });
+            navigate("/radar/register/plan", { replace: true });
           } catch (error) {
             confirmingRegistration.current = false;
             throw error;
@@ -193,7 +193,7 @@ export function RegisterPage() {
 
       <Typography sx={{ mt: 3.5, color: "text.secondary" }}>
         Already have an account?{" "}
-        <Link component={RouterLink} to="/login" fontWeight={700} underline="hover">
+        <Link component={RouterLink} to="/radar/login" fontWeight={700} underline="hover">
           Sign in
         </Link>
       </Typography>

@@ -91,7 +91,7 @@ export function ProfilePage() {
         new_password_confirmation: newPasswordConfirmation,
       });
       await logout();
-      navigate("/login", { replace: true, state: { passwordChanged: true } });
+      navigate("/radar/login", { replace: true, state: { passwordChanged: true } });
     } catch (caught) {
       setPasswordError(caught instanceof ApiError ? caught.message : "Could not change your password.");
       setIsChangingPassword(false);

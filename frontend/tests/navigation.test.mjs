@@ -22,7 +22,8 @@ async function load(path, dependencies = {}, globals = {}) {
   });
   return module.exports;
 }
-const navigation = await load("../src/navigation.ts");
+const workspaceRoutes = await load("../src/workspaceRoutes.ts");
+const navigation = await load("../src/navigation.ts", { "./workspaceRoutes": workspaceRoutes });
 const { pageNavigation, navigationCurrent } = navigation;
 
 test("every declared route has a meaningful browser title", async () => {
@@ -36,18 +37,84 @@ test("every declared route has a meaningful browser title", async () => {
     assert.doesNotMatch(title, /Page not found/, path);
     if (path !== "/") assert.doesNotMatch(title, /^Home \|/, path);
   }
-  assert.equal(pageNavigation("/digests/new").title, "Create a digest | Scientific Research Radar");
+  assert.equal(pageNavigation("/radar/digests/new").title, "Create a digest | Scientific Research Radar");
 });
 
 test("detail and editor pages identify their main-menu section without matching unrelated prefixes", () => {
   assert.equal(navigationCurrent("/radar/", "/radar"), "page");
-  assert.equal(navigationCurrent("/digests/example", "/radar"), "location");
+  assert.equal(navigationCurrent("/radar/digests/example", "/radar"), "location");
   assert.equal(navigationCurrent("/admin/subscription-plans/explorer/edit", "/admin/subscription-plans"), "location");
   assert.equal(navigationCurrent("/admin/pricing/version/copy", "/admin/pricing"), "location");
   assert.equal(navigationCurrent("/admin/users/example", "/admin/users"), "location");
   assert.equal(navigationCurrent("/admin/users-other", "/admin/users"), undefined);
   assert.equal(navigationCurrent("/admin/digests/example", "/radar"), undefined);
   assert.equal(pageNavigation("/admin/billing-sync").admin, true);
+  assert.equal(navigationCurrent("/radar/profile", "/radar/profile"), "page");
+  assert.equal(navigationCurrent("/radar/plans", "/radar/subscription"), "location");
+  assert.equal(navigationCurrent("/radar/register/plan", "/radar/subscription"), "location");
+});
+
+test("old user URLs resolve under Radar while public pages and every admin route retain their URLs", async () => {
+  for (const path of ["/login", "/register", "/register/plan", "/forgot-password", "/reset-password", "/profile", "/subscription", "/digests/new", "/digests/example"]) {
+    assert.equal(workspaceRoutes.radarPathname(path), `/radar${path}`);
+  }
+  assert.equal(workspaceRoutes.radarPathname("/digests/example/history"), "/radar/digests/example");
+  assert.equal(workspaceRoutes.radarPathname("/radar/digests/example/history"), "/radar/digests/example");
+  const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const adminPaths = [...app.matchAll(/<Route\s+path="(\/admin\/[^"]+)"/g)].map((match) => match[1]);
+  for (const path of ["/", "/plans", "/about", "/contact", "/privacy", "/terms", ...adminPaths]) {
+    assert.equal(workspaceRoutes.radarPathname(path), path);
+  }
+});
+
+test("legacy redirects preserve run selection, Stripe returns, reset-token fragments, and navigation state", async () => {
+  let location;
+  const { LegacyWorkspaceRedirect } = await load("../src/components/LegacyWorkspaceRedirect.tsx", {
+    "../workspaceRoutes": workspaceRoutes,
+    "react-router-dom": { Navigate: "Navigate", useLocation: () => location },
+  });
+  for (const [pathname, search, hash] of [
+    ["/digests/example/history", "?run_id=chosen", "#papers"],
+    ["/subscription", "?stripe_return=checkout", "#billing"],
+    ["/reset-password", "", "#token=example-reset-token"],
+  ]) {
+    location = { pathname, search, hash, state: { scrollToTop: true } };
+    const redirect = LegacyWorkspaceRedirect();
+    assert.equal(redirect.props.to.pathname, workspaceRoutes.radarPathname(pathname));
+    assert.equal(redirect.props.to.search, search);
+    assert.equal(redirect.props.to.hash, hash);
+    assert.equal(redirect.props.state, location.state);
+    assert.equal(redirect.props.replace, true);
+  }
+});
+
+test("sign-in guard retains the full destination for both Radar and admin deep links", async () => {
+  let location;
+  const { RequireAuth } = await load("../src/auth/RequireAuth.tsx", {
+    "./AuthContext": { useAuth: () => ({ user: null, isInitializing: false }) },
+    "react-router-dom": { Navigate: "Navigate", useLocation: () => location },
+    "@mui/material": {},
+  });
+  for (const pathname of ["/radar/digests/example", "/radar/subscription", "/admin/digests/example/runs"]) {
+    location = { pathname, search: "?run_id=chosen", hash: "#billing" };
+    const redirect = RequireAuth({ children: null });
+    assert.equal(redirect.props.to, "/radar/login");
+    assert.equal(redirect.props.state.from, pathname + "?run_id=chosen#billing");
+  }
+});
+
+test("session completion on the sign-in page uses the saved deep link instead of the dashboard", async () => {
+  const destination = "/radar/subscription?stripe_return=checkout#billing";
+  const { LoginPage } = await load("../src/pages/LoginPage.tsx", {
+    "../auth/AuthContext": { useAuth: () => ({ user: { id: "signed-in" }, isInitializing: false }) },
+    "../layouts/AuthLayout": { AuthLayout: "AuthLayout" },
+    react: { useState: (value) => [value, () => {}] },
+    "react-router-dom": {
+      Navigate: "Navigate", useLocation: () => ({ state: { from: destination } }), useNavigate: () => () => {},
+    },
+    "@mui/material": {},
+  });
+  assert.equal(LoginPage().props.to, destination);
 });
 
 async function pageHarness() {
@@ -100,22 +167,22 @@ test("global navigation opens at the page top and reselecting the current page d
 
 test("tabs, run selection, and query filters do not reset page position", async () => {
   const page = await pageHarness();
-  page.navigate({ pathname: "/subscription", state: { scrollToTop: true } });
-  page.navigate({ pathname: "/subscription", hash: "#billing", state: { preserveScroll: true } });
-  page.navigate({ pathname: "/subscription", hash: "#plans", state: { preserveScroll: true } });
+  page.navigate({ pathname: "/radar/subscription", state: { scrollToTop: true } });
+  page.navigate({ pathname: "/radar/subscription", hash: "#billing", state: { preserveScroll: true } });
+  page.navigate({ pathname: "/radar/subscription", hash: "#plans", state: { preserveScroll: true } });
   assert.equal(page.scrolls.length, 1);
-  page.navigate({ pathname: "/digests/example" });
-  page.navigate({ pathname: "/digests/example", search: "?run_id=second" });
-  page.navigate({ pathname: "/digests/example", search: "?run_id=third" });
+  page.navigate({ pathname: "/radar/digests/example" });
+  page.navigate({ pathname: "/radar/digests/example", search: "?run_id=second" });
+  page.navigate({ pathname: "/radar/digests/example", search: "?run_id=third" });
   assert.equal(page.scrolls.length, 2);
 });
 
 test("explicit section links keep their own scroll behavior while global navigation clears the section", async () => {
   const page = await pageHarness();
-  page.navigate({ pathname: "/subscription", hash: "#upgrade" });
+  page.navigate({ pathname: "/radar/subscription", hash: "#upgrade" });
   assert.equal(page.scrolls.length, 0);
   assert.equal(page.document.title, "Subscription and usage | Scientific Research Radar");
-  page.navigate({ pathname: "/subscription", state: { scrollToTop: true } });
+  page.navigate({ pathname: "/radar/subscription", state: { scrollToTop: true } });
   assert.equal(page.scrolls.length, 1);
 });
 
@@ -131,8 +198,8 @@ test("browser history retains native scroll restoration and updates the title", 
 test("main-menu links retain router behavior and existing state while requesting the page top", async () => {
   const { MainMenuLink, mainMenuItemSx } = await load("../src/components/MainMenuLink.tsx");
   const onClick = () => {};
-  const link = MainMenuLink.render({ to: "/login", state: { from: "/radar" }, onClick }, null);
-  assert.equal(link.props.to, "/login");
+  const link = MainMenuLink.render({ to: "/radar/login", state: { from: "/radar" }, onClick }, null);
+  assert.equal(link.props.to, "/radar/login");
   assert.equal(link.props.onClick, onClick);
   assert.equal(link.props.state.from, "/radar");
   assert.equal(link.props.state.scrollToTop, true);
@@ -204,4 +271,102 @@ test("subscription tab selection leaves focus and scroll alone, but section link
   effect();
   assert.deepEqual(scrolls, ["billing"]);
   assert.deepEqual(focusCalls, ["billing"]);
+});
+
+function renderedElements(tree) {
+  if (Array.isArray(tree)) return tree.flatMap(renderedElements);
+  if (!tree || typeof tree !== "object" || !tree.props) return [];
+  return [tree, ...renderedElements(tree.props.children)];
+}
+
+async function menuHarness(props) {
+  let mobile = true, key = "first", cursor = 0;
+  const slots = [], effects = [], previousDeps = [];
+  let effectCursor = 0;
+  const material = new Proxy({
+    useTheme: () => ({ breakpoints: { down: (value) => { assert.equal(value, "lg"); return value; } } }),
+    useMediaQuery: () => mobile,
+  }, { get: (target, name) => target[name] ?? name });
+  const { ResponsiveMainMenu } = await load("../src/components/ResponsiveMainMenu.tsx", {
+    "@mui/material": material,
+    "@mui/icons-material/MenuRounded": { default: "HamburgerIcon" },
+    "../navigation": navigation,
+    "./MainMenuLink": { MainMenuLink: "MainMenuLink", mainMenuItemSx: {} },
+    "react-router-dom": { useLocation: () => ({ pathname: props.pathname ?? "/about", key }) },
+    react: {
+      useId: () => "example",
+      useState: (initial) => {
+        const index = cursor++;
+        if (!(index in slots)) slots[index] = initial;
+        return [slots[index], (value) => { slots[index] = value; }];
+      },
+      useEffect: (effect, deps) => {
+        const index = effectCursor++;
+        if (!previousDeps[index] || deps.some((value, i) => value !== previousDeps[index][i])) effects.push(effect);
+        previousDeps[index] = deps;
+      },
+    },
+  });
+  return {
+    render() {
+      cursor = 0; effectCursor = 0;
+      const tree = ResponsiveMainMenu(props);
+      effects.splice(0).forEach((effect) => effect());
+      return renderedElements(tree);
+    },
+    setMobile(value) { mobile = value; },
+    navigate() { key = "second"; },
+  };
+}
+
+test("public hamburger exposes all links, current page, and sign-in; selection and dismissal close it", async () => {
+  const menu = await menuHarness({ label: "Main navigation", items: [
+    { label: "Plans", to: "/plans" }, { label: "About", to: "/about" }, { label: "Contact", to: "/contact" },
+  ], accountItems: [{ label: "Sign in to Radar", to: "/radar/login", state: { from: "/radar" } }] });
+  const open = () => menu.render().find((element) => element.type === "IconButton").props.onClick({ currentTarget: "button" });
+  open();
+  let elements = menu.render();
+  assert.equal(elements.find((element) => element.type === "Menu").props.open, true);
+  const items = elements.filter((element) => element.type === "MenuItem");
+  assert.deepEqual(items.map((item) => item.props.children), ["Plans", "About", "Contact", "Sign in to Radar"]);
+  assert.equal(items[1].props["aria-current"], "page");
+  assert.equal(items[3].props.state.from, "/radar");
+  items[0].props.onClick();
+  assert.equal(menu.render().find((element) => element.type === "Menu").props.open, false);
+  open();
+  elements = menu.render();
+  elements.find((element) => element.type === "Menu").props.onClose();
+  assert.equal(menu.render().find((element) => element.type === "Menu").props.open, false);
+});
+
+test("workspace menu remains text-only with ordered admin links and closes across route and breakpoint changes", async () => {
+  let signedOut = false;
+  const menu = await menuHarness({ label: "Workspace navigation", pathname: "/admin/users", items: [
+    { label: "Workspace", to: "/radar" },
+    { label: "Subscription and usage", shortLabel: "Subscription", to: "/radar/subscription" },
+    { label: "Contact", to: "/radar/contact" },
+  ], adminItems: [
+    { label: "Users", to: "/admin/users" }, { label: "Digests", to: "/admin/digests" },
+    { label: "Plans", to: "/admin/subscription-plans" }, { label: "Pricing", to: "/admin/pricing" },
+    { label: "Messages", to: "/admin/messages" },
+  ], accountItems: [{ label: "Profile", to: "/radar/profile" }, { label: "Sign out", onClick: () => { signedOut = true; } }] });
+  let elements = menu.render();
+  const items = elements.filter((element) => element.type === "MenuItem");
+  assert.deepEqual(items.map((item) => item.props.children), ["Workspace", "Subscription and usage", "Contact", "Users", "Digests", "Plans", "Pricing", "Messages", "Profile", "Sign out"]);
+  items.at(-1).props.onClick();
+  assert.equal(signedOut, true);
+  elements.find((element) => element.type === "IconButton").props.onClick({ currentTarget: "button" });
+  menu.navigate(); menu.render();
+  assert.equal(menu.render().find((element) => element.type === "Menu").props.open, false);
+  menu.setMobile(false); menu.render();
+  elements = menu.render();
+  assert.equal(elements.some((element) => element.type === "IconButton" || element.type === "HamburgerIcon"), false);
+  const buttons = elements.filter((element) => element.type === "Button");
+  assert.deepEqual(buttons.map((element) => element.props.children), ["Workspace", "Subscription", "Contact", "Admin", "Profile", "Sign out"]);
+  assert.ok(buttons.every((button) => !button.props.startIcon && !button.props.endIcon));
+  buttons.find((button) => button.props.children === "Admin").props.onClick({ currentTarget: "admin" });
+  assert.equal(menu.render().find((element) => element.type === "Menu").props.open, true);
+  menu.setMobile(true); menu.render();
+  menu.setMobile(false); menu.render();
+  assert.equal(menu.render().find((element) => element.type === "Menu").props.open, false);
 });

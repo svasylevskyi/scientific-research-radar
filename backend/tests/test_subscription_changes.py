@@ -251,6 +251,7 @@ def test_notification_retry_dedup_and_transaction_rollback(changing, client, db_
     monkeypatch.setattr(EmailService, 'send', lambda self, message: messages.append(message))
     assert notices.tick(db_session_factory, get_settings())
     assert messages[0].recipient == 'subscriber@example.com'
+    assert get_settings().frontend_base_url + '/radar/subscription' in messages[0].text
     assert not notices.tick(db_session_factory, get_settings())
 
 

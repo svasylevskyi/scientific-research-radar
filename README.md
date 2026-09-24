@@ -18,6 +18,26 @@ backend (FastAPI)
 
 The API, service, repository, and persistence layers are separate. SQLite is selected only through `DATABASE_URL`, so PostgreSQL can replace it later without changing the API contract or frontend. The frontend reads its API location from `VITE_API_URL`.
 
+## Website navigation
+
+Public information pages remain at `/`, `/about`, `/plans`, `/contact`, `/privacy`, and `/terms`. User application pages live under `/radar`; admin pages retain their `/admin` URLs and access rules.
+
+| Page | Canonical browser URL |
+|---|---|
+| Workspace | `/radar` |
+| Digest creation and details/results | `/radar/digests/new`, `/radar/digests/:digestId` |
+| Subscription, usage, and plan comparison | `/radar/subscription`, `/radar/plans` |
+| Profile and authenticated contact | `/radar/profile`, `/radar/contact` |
+| Sign-in and registration | `/radar/login`, `/radar/register` |
+| Registration plan selection | `/radar/register/plan` |
+| Password recovery | `/radar/forgot-password`, `/radar/reset-password` |
+
+Previous user URLs redirect with their query strings, fragments, and navigation state intact. Old digest-history links open the combined digest page. Sign-in preserves the complete intended destination, including selected runs and subscription sections. New email and subscriber Stripe return links use the canonical routes; existing saved checkout parameters remain unchanged and their old return URLs still work.
+
+`FRONTEND_BASE_URL` remains the website origin (do not append `/radar`). API paths are unchanged. No database migration or new configuration is required for these browser routes.
+
+Public and workspace headers share a text-only main menu. Below 1200 px, all menu items appear under a hamburger button; admin links retain their mobile Admin section and desktop submenu. Active items use only a pale background. Main-menu selections return to the page top; tabs and filters retain position, and direct section links still reveal their target.
+
 ## Included auth flow
 
 - Register with name, email, and password, then confirm a 6-digit email code.
@@ -204,9 +224,9 @@ Owner-authenticated `PUT /api/v1/digests/{digest_id}/schedule` creates/replaces 
 
 ## Password recovery
 
-The sign-in page links to `/forgot-password`. `POST /api/v1/auth/forgot-password` accepts an email and always returns the same 202 message for syntactically valid addresses, including missing, inactive, and throttled accounts. The email task runs after the response, using the configured SMTP service and `FRONTEND_BASE_URL` (public HTTPS required in production). It does not rely on the inbound Host header. No scheduler process is required for recovery.
+The sign-in page links to `/radar/forgot-password`. `POST /api/v1/auth/forgot-password` accepts an email and always returns the same 202 message for syntactically valid addresses, including missing, inactive, and throttled accounts. The email task runs after the response, using the configured SMTP service and `FRONTEND_BASE_URL` (public HTTPS required in production). It does not rely on the inbound Host header. No scheduler process is required for recovery.
 
-Links expire after 30 minutes and are single-use. Only a SHA-256 token hash and a fingerprint of the email/password state are stored. A later request replaces the earlier token; changing the password or confirmed email invalidates it. The `/reset-password` page reads the token from a URL fragment, removes it from history, keeps it in memory only, and submits it in the body of `POST /api/v1/auth/reset-password` with password and password_confirmation. Reopening the email link is required after refreshing the reset page. Viewing the link does not consume it. Do not log request bodies on recovery endpoints.
+Links expire after 30 minutes and are single-use. Only a SHA-256 token hash and a fingerprint of the email/password state are stored. A later request replaces the earlier token; changing the password or confirmed email invalidates it. The `/radar/reset-password` page reads the token from a URL fragment, removes it from history, keeps it in memory only, and submits it in the body of `POST /api/v1/auth/reset-password` with password and password_confirmation. Reopening the email link is required after refreshing the reset page. Viewing the link does not consume it. Do not log request bodies on recovery endpoints.
 
 Successful recovery changes the password, invalidates existing access and refresh tokens, clears pending profile email changes, and sends a best-effort password-change notification. It does not automatically sign in. Profile password changes now also invalidate access tokens immediately. Legacy access tokens without a session ID must be renewed after the security migration; valid refresh cookies can renew them silently unless the session exceeds its absolute lifetime. Deploy the updated API instances together so older instances cannot continue accepting revoked access tokens.
 
