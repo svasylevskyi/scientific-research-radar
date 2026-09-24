@@ -13,6 +13,7 @@ const pages = [
   ["/reset-password", "Reset your password", "/reset-password"],
   ["/profile", "Your profile", "/profile"],
   ["/radar", "Your workspace", "/radar"],
+  ["/radar/contact", "Contact us", "/radar/contact"],
   ["/digests/new", "Create a digest", "/radar"],
   ["/digests/:digestId", "Digest details and research", "/radar"],
   ["/digests/:digestId/history", "Digest run history", "/radar"],

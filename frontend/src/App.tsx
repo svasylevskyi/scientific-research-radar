@@ -52,6 +52,7 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
+          <Route path="/radar/contact" element={<RequireAuth><ContactPage workspace /></RequireAuth>} />
           <Route path="/admin/messages" element={<RequireAuth><RequireAdmin><AdminMessagesPage /></RequireAdmin></RequireAuth>} />
           <Route path="/plans" element={<PlansPage />} />
           <Route path="/register/plan" element={<RequireAuth><PlansPage enrolment /></RequireAuth>} />

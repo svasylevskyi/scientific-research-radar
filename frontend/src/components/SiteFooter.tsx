@@ -23,7 +23,7 @@ export function SiteFooter() {
             <Stack spacing={1}>
               <Typography color="white" fontWeight={700}>About Radar</Typography>
               {["About", "Contact"].map((label) => (
-                <Link key={label} component={RouterLink} to={`/${label.toLowerCase()}`} color="inherit" underline="hover">{label}</Link>
+                <Link key={label} component={RouterLink} to={label === "Contact" && user ? "/radar/contact" : `/${label.toLowerCase()}`} color="inherit" underline="hover">{label}</Link>
               ))}
             </Stack>
             <Stack spacing={1}>
