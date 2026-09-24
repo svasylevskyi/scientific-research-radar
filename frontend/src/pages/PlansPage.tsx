@@ -106,7 +106,7 @@ function PlansContent({ enrolment }: { enrolment: boolean }) {
   return (
     <Box>
       <MarketingHeader />
-      <Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ py: 6 }}>
+      <Container component="main" maxWidth="lg" sx={{ py: 6 }}>
         <Chip
           label={catalogue.data?.sandbox ? "Sandbox subscriptions" : "Subscriptions"}
           color="primary"

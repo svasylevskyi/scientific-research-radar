@@ -11,18 +11,17 @@ export function RequireAuth({ children }: PropsWithChildren) {
   if (isInitializing) {
     return (
       <Box
-        component="main" id="main-content" tabIndex={-1} data-navigation-pending
+        role="status"
+        aria-label="Restoring your session"
         sx={{ minHeight: "100%", display: "grid", placeItems: "center" }}
       >
-        <Box role="status" aria-label="Restoring your session">
-          <CircularProgress size={32} />
-        </Box>
+        <CircularProgress size={32} />
       </Box>
     );
   }
 
   if (initializationError && !user) {
-    return <Box component="main" id="main-content" tabIndex={-1} sx={{ p: 3 }}><Alert severity="warning" action={<Button onClick={retryInitialization}>Retry</Button>}>
+    return <Box sx={{ p: 3 }}><Alert severity="warning" action={<Button onClick={retryInitialization}>Retry</Button>}>
       {initializationError}
     </Alert></Box>;
   }
@@ -33,3 +32,4 @@ export function RequireAuth({ children }: PropsWithChildren) {
 
   return children;
 }
+

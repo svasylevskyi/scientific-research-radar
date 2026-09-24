@@ -32,7 +32,6 @@ import { Link as RouterLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { StripeModeBadge } from "./StripeModeBadge";
 import { Brand } from "./Brand";
-import { navigationCurrent, pageNavigation } from "../navigation";
 
 export function AppHeader() {
   const { user, logout } = useAuth();
@@ -42,7 +41,6 @@ export function AppHeader() {
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down("md"));
   const location = useLocation();
-  const current = (to: string) => navigationCurrent(location.pathname, to);
   const initials = user?.full_name
     .split(" ")
     .slice(0, 2)
@@ -146,8 +144,6 @@ export function AppHeader() {
         <Container
           maxWidth="lg"
           disableGutters
-          component="nav"
-          aria-label="Workspace navigation"
           sx={{ display: "flex", alignItems: "center" }}
         >
           <Box
@@ -183,11 +179,9 @@ export function AppHeader() {
               >
                 {links.map((link) => (
                   <MenuItem
-                    selected={!!current(link.to)}
                     key={link.to}
                     component={RouterLink}
                     to={link.to}
-                    aria-current={current(link.to)}
                     onClick={() => setAnchor(null)}
                   >
                     <ListItemIcon>{link.icon}</ListItemIcon>
@@ -209,11 +203,9 @@ export function AppHeader() {
                 )}
                 {adminLinks.map((link) => (
                   <MenuItem
-                    selected={!!current(link.to)}
                     key={link.to}
                     component={RouterLink}
                     to={link.to}
-                    aria-current={current(link.to)}
                     onClick={() => setAnchor(null)}
                   >
                     <ListItemIcon>{link.icon}</ListItemIcon>
@@ -222,9 +214,7 @@ export function AppHeader() {
                 ))}
                 <MenuItem
                   component={RouterLink}
-                  selected={!!current("/profile")}
                   to="/profile"
-                  aria-current={current("/profile")}
                   onClick={() => setAnchor(null)}
                 >
                   <ListItemIcon>{avatar}</ListItemIcon>
@@ -252,7 +242,6 @@ export function AppHeader() {
                   <Button
                     component={RouterLink}
                     to={link.to}
-                    aria-current={current(link.to)}
                     color="inherit"
                     aria-label={link.label}
                     sx={{ minWidth: 44 }}
@@ -271,9 +260,6 @@ export function AppHeader() {
                 <>
                   <Button
                     id="admin-menu-button"
-                    aria-current={
-                      pageNavigation(location.pathname).admin ? "location" : undefined
-                    }
                     color="inherit"
                     startIcon={<AdminPanelSettingsRoundedIcon />}
                     endIcon={<ExpandMoreRoundedIcon />}
@@ -295,11 +281,9 @@ export function AppHeader() {
                   >
                     {adminLinks.map((link) => (
                       <MenuItem
-                        selected={!!current(link.to)}
                         key={link.to}
                         component={RouterLink}
                         to={link.to}
-                        aria-current={current(link.to)}
                         onClick={() => setAdminAnchor(null)}
                       >
                         <ListItemIcon>{link.icon}</ListItemIcon>
@@ -313,9 +297,8 @@ export function AppHeader() {
                 <IconButton
                   component={RouterLink}
                   to="/profile"
-                  aria-current={current("/profile")}
                   aria-label="Profile"
-                  sx={{ p: 0.5, "&[aria-current]": { outline: "2px solid", outlineOffset: 2 } }}
+                  sx={{ p: 0.5 }}
                 >
                   {avatar}
                 </IconButton>

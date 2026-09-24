@@ -63,7 +63,7 @@ export function DashboardPage() {
     <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
 
-      <Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ py: { xs: 4, sm: 7 } }}>
+      <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 7 } }}>
         <Typography component="h1" variant="h2" sx={{ mb: 3 }}>
           Welcome, {user?.full_name.split(" ")[0]}.
         </Typography>

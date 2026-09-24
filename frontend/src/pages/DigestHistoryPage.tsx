@@ -35,7 +35,7 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
   return (
     <Box>
       <AppHeader />
-      <Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ py: { xs: 3, sm: 6 } }}>
+      <Container component="main" maxWidth="lg" sx={{ py: { xs: 3, sm: 6 } }}>
         {admin ? (
           <AdminDigestNavigation digestId={digestId} current="runs" />
         ) : (

@@ -313,7 +313,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   return (
     <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
-      <Container component="main" id="main-content" tabIndex={-1} maxWidth={!admin && hasSuccessfulRun ? "lg" : "md"} sx={{ py: { xs: 3, sm: 6 } }}>
+      <Container component="main" maxWidth={!admin && hasSuccessfulRun ? "lg" : "md"} sx={{ py: { xs: 3, sm: 6 } }}>
         <Button
           component={RouterLink}
           to={backPath}
