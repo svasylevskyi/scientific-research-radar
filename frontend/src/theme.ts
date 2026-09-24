@@ -26,14 +26,7 @@ let theme = createTheme({
   components: {
     MuiButton: {
       styleOverrides: {
-        root: {
-          borderRadius: 12,
-          boxShadow: "none",
-          "&[aria-current]": {
-            backgroundColor: "rgba(8, 125, 103, 0.08)",
-            boxShadow: "inset 0 -2px currentColor",
-          },
-        },
+        root: { borderRadius: 12, boxShadow: "none" },
         contained: { boxShadow: "0 9px 22px rgba(8, 125, 103, 0.2)" },
       },
     },
@@ -48,13 +41,6 @@ let theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         body: { margin: 0 },
-        "#main-content, #main-content h1": { scrollMarginTop: "100px" },
-        "#main-content:focus-visible, #main-content h1:focus-visible": {
-          outline: "2px solid #087d67", outlineOffset: "4px",
-        },
-        "a[aria-current='page'], a[aria-current='location'], button[aria-current='location']": {
-          textDecoration: "underline", textUnderlineOffset: "0.3em", textDecorationThickness: "2px",
-        },
         "*": { boxSizing: "border-box" },
         "::selection": { backgroundColor: "rgba(31, 181, 147, 0.25)" },
       },
@@ -65,3 +51,4 @@ let theme = createTheme({
 theme = responsiveFontSizes(theme);
 
 export default theme;
+

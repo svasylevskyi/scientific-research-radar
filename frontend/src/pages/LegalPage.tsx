@@ -104,7 +104,7 @@ export function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
   return (
     <Box>
       <MarketingHeader />
-      <Container component="main" id="main-content" tabIndex={-1} maxWidth="md" sx={{ py: { xs: 5, md: 8 } }}>
+      <Container component="main" maxWidth="md" sx={{ py: { xs: 5, md: 8 } }}>
         <Typography variant="overline" color="primary" fontWeight={800}>Transparency & trust</Typography>
         <Typography component="h1" variant="h2" sx={{ mt: 1, mb: 2 }}>{title}</Typography>
         <Typography color="text.secondary" sx={{ mb: 3 }}>Draft for review · Prepared 7 September 2026 · Effective date not yet set</Typography>

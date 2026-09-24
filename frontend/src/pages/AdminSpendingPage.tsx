@@ -72,7 +72,7 @@ export function AdminSpendingPage() {
   return (
     <Box>
       <AppHeader />
-      <Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ py: { xs: 3, sm: 6 } }}>
+      <Container component="main" maxWidth="lg" sx={{ py: { xs: 3, sm: 6 } }}>
         <Button component={Link} to="/admin/pricing">
           Back to pricing
         </Button>

@@ -46,7 +46,7 @@ export function NewDigestPage() {
   return (
     <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
-      <Container component="main" id="main-content" tabIndex={-1} maxWidth="md" sx={{ py: { xs: 3, sm: 6 } }}>
+      <Container component="main" maxWidth="md" sx={{ py: { xs: 3, sm: 6 } }}>
         <Button
           component={RouterLink}
           to="/radar"
