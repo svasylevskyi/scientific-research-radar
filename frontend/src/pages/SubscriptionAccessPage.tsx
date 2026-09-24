@@ -55,11 +55,12 @@ function SubscriberSections() {
   const navigate = useNavigate();
   const section = subscriptionSection(location.hash);
   useEffect(() => {
-    if (!location.hash) return;
+    // Tab selection stays in place; direct section links still reveal their target.
+    if (!location.hash || location.state?.preserveScroll) return;
     const target = document.getElementById(location.hash.slice(1));
     target?.scrollIntoView({ block: "start" });
     target?.focus({ preventScroll: true });
-  }, [location.hash]);
+  }, [location.hash, location.state]);
   return (
     <Stack spacing={3}>
       <SubscriptionOverview />
@@ -68,7 +69,7 @@ function SubscriberSections() {
         onChange={(_, value) =>
           navigate(
             { hash: "#" + value, search: location.search },
-            { preventScrollReset: true },
+            { preventScrollReset: true, state: { preserveScroll: true } },
           )
         }
         variant="scrollable"

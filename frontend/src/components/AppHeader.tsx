@@ -27,11 +27,13 @@ import {
   useTheme,
 } from "@mui/material";
 import { useEffect, useState } from "react";
-import { Link as RouterLink, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 import { StripeModeBadge } from "./StripeModeBadge";
 import { Brand } from "./Brand";
+import { navigationCurrent, pageNavigation } from "../navigation";
+import { MainMenuLink, mainMenuItemSx } from "./MainMenuLink";
 
 export function AppHeader() {
   const { user, logout } = useAuth();
@@ -41,6 +43,7 @@ export function AppHeader() {
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down("md"));
   const location = useLocation();
+  const current = (to: string) => navigationCurrent(location.pathname, to);
   const initials = user?.full_name
     .split(" ")
     .slice(0, 2)
@@ -144,10 +147,12 @@ export function AppHeader() {
         <Container
           maxWidth="lg"
           disableGutters
+          component="nav"
+          aria-label="Workspace navigation"
           sx={{ display: "flex", alignItems: "center" }}
         >
           <Box
-            component={RouterLink}
+            component={MainMenuLink}
             to="/"
             aria-label="Scientific Research Radar home"
             sx={{ color: "inherit", textDecoration: "none" }}
@@ -180,8 +185,11 @@ export function AppHeader() {
                 {links.map((link) => (
                   <MenuItem
                     key={link.to}
-                    component={RouterLink}
+                    component={MainMenuLink}
                     to={link.to}
+                    aria-current={current(link.to)}
+                    selected={!!current(link.to)}
+                    sx={mainMenuItemSx}
                     onClick={() => setAnchor(null)}
                   >
                     <ListItemIcon>{link.icon}</ListItemIcon>
@@ -204,8 +212,11 @@ export function AppHeader() {
                 {adminLinks.map((link) => (
                   <MenuItem
                     key={link.to}
-                    component={RouterLink}
+                    component={MainMenuLink}
                     to={link.to}
+                    aria-current={current(link.to)}
+                    selected={!!current(link.to)}
+                    sx={mainMenuItemSx}
                     onClick={() => setAnchor(null)}
                   >
                     <ListItemIcon>{link.icon}</ListItemIcon>
@@ -213,8 +224,11 @@ export function AppHeader() {
                   </MenuItem>
                 ))}
                 <MenuItem
-                  component={RouterLink}
+                  component={MainMenuLink}
                   to="/profile"
+                  aria-current={current("/profile")}
+                  selected={!!current("/profile")}
+                  sx={mainMenuItemSx}
                   onClick={() => setAnchor(null)}
                 >
                   <ListItemIcon>{avatar}</ListItemIcon>
@@ -240,11 +254,12 @@ export function AppHeader() {
               {links.map((link) => (
                 <Tooltip key={link.to} title={link.label}>
                   <Button
-                    component={RouterLink}
+                    component={MainMenuLink}
                     to={link.to}
+                    aria-current={current(link.to)}
                     color="inherit"
                     aria-label={link.label}
-                    sx={{ minWidth: 44 }}
+                    sx={{ minWidth: 44, ...mainMenuItemSx }}
                   >
                     {link.icon}
                     <Box
@@ -260,6 +275,8 @@ export function AppHeader() {
                 <>
                   <Button
                     id="admin-menu-button"
+                    aria-current={pageNavigation(location.pathname).admin ? "location" : undefined}
+                    sx={mainMenuItemSx}
                     color="inherit"
                     startIcon={<AdminPanelSettingsRoundedIcon />}
                     endIcon={<ExpandMoreRoundedIcon />}
@@ -282,8 +299,11 @@ export function AppHeader() {
                     {adminLinks.map((link) => (
                       <MenuItem
                         key={link.to}
-                        component={RouterLink}
+                        component={MainMenuLink}
                         to={link.to}
+                        aria-current={current(link.to)}
+                        selected={!!current(link.to)}
+                        sx={mainMenuItemSx}
                         onClick={() => setAdminAnchor(null)}
                       >
                         <ListItemIcon>{link.icon}</ListItemIcon>
@@ -295,10 +315,11 @@ export function AppHeader() {
               )}
               <Tooltip title="Profile">
                 <IconButton
-                  component={RouterLink}
+                  component={MainMenuLink}
                   to="/profile"
+                  aria-current={current("/profile")}
                   aria-label="Profile"
-                  sx={{ p: 0.5 }}
+                  sx={{ p: 0.5, ...mainMenuItemSx }}
                 >
                   {avatar}
                 </IconButton>
