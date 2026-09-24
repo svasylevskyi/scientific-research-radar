@@ -46,7 +46,7 @@ export function AdminSandboxBillingPage() {
   const subscribed = !!latest?.subscription_status && !["canceled", "incomplete_expired"].includes(latest.subscription_status);
   const pending = latest && ["creating", "open"].includes(latest.checkout_status) && !subscribed;
   const config = data?.plan?.configuration;
-  return <Box><AppHeader /><Container component="main" maxWidth="md" sx={{ py: { xs: 3, sm: 6 } }}>
+  return <Box><AppHeader /><Container component="main" id="main-content" tabIndex={-1} maxWidth="md" sx={{ py: { xs: 3, sm: 6 } }}>
     <Button component={Link} to="/admin/subscription-plans" sx={{ mb: 2 }}>Back to plans</Button>
     <Button component={Link} to="/admin/billing-sync" sx={{ mb: 2 }}>Synchronization status</Button>
     <Typography component="h1" variant="h3" gutterBottom>Billing</Typography>

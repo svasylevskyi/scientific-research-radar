@@ -98,7 +98,7 @@ export function AdminSubscriptionPlansPage() {
   return (
     <Box>
       <AppHeader />
-      <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
+      <Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
           spacing={2}

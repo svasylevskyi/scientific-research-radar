@@ -113,7 +113,7 @@ export function ProfilePage() {
   return (
     <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
-      <Container component="main" maxWidth="md" sx={{ py: { xs: 4, sm: 6 } }}>
+      <Container component="main" id="main-content" tabIndex={-1} maxWidth="md" sx={{ py: { xs: 4, sm: 6 } }}>
         <Typography component="h1" variant="h3" sx={{ mb: 1 }}>Your profile</Typography>
         <Typography color="text.secondary" sx={{ mb: 4 }}>
           Manage your account details and sign-in credentials.

@@ -37,7 +37,7 @@ export function ContactPage() {
     } finally { setSending(false); }
   }
 
-  return <Box><MarketingHeader /><Container component="main" maxWidth="sm" sx={{ py: { xs: 4, md: 7 } }}>
+  return <Box><MarketingHeader /><Container component="main" id="main-content" tabIndex={-1} maxWidth="sm" sx={{ py: { xs: 4, md: 7 } }}>
     <Typography component="h1" variant="h3" gutterBottom>Contact us</Typography>
     <Typography color="text.secondary" sx={{ mb: 3 }}>Have a question, feedback, or a problem with Radar? Send a message to our administration team. Include an email address where we can reach you.</Typography>
     <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>

@@ -10,7 +10,7 @@ const steps = [
 ];
 
 export function AboutPage() {
-  return <Box><MarketingHeader /><Container component="main" maxWidth="md" sx={{ py: { xs: 4, md: 7 } }}>
+  return <Box><MarketingHeader /><Container component="main" id="main-content" tabIndex={-1} maxWidth="md" sx={{ py: { xs: 4, md: 7 } }}>
     <Typography component="h1" variant="h3" gutterBottom>About Scientific Research Radar</Typography>
     <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>A simpler way to follow science that matters to you.</Typography>
     <Typography sx={{ mb: 4 }}>Research keeps growing. Radar helps curious readers, researchers, and teams turn a broad topic into a focused, readable overview, without having to sort through every paper themselves.</Typography>

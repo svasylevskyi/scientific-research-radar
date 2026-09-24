@@ -1,9 +1,11 @@
 import { Box, Container, Link, Stack, Typography } from "@mui/material";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Brand } from "./Brand";
+import { navigationCurrent } from "../navigation";
 
 export function SiteFooter() {
+  const { pathname } = useLocation();
   const { user } = useAuth();
   return (
     <Box component="footer" sx={{ bgcolor: "#071a2b", color: "#c0ced7", py: { xs: 4, md: 5 } }}>
@@ -16,20 +18,20 @@ export function SiteFooter() {
           <Stack component="nav" aria-label="Footer navigation" direction="row" spacing={{ xs: 3, sm: 6 }} flexWrap="wrap" useFlexGap>
             <Stack spacing={1}>
               <Typography color="white" fontWeight={700}>Explore</Typography>
-              <Link component={RouterLink} to="/" color="inherit" underline="hover">Home</Link>
-              <Link component={RouterLink} to="/plans" color="inherit" underline="hover">Sample plans</Link>
-              {user && <Link component={RouterLink} to="/radar" color="inherit" underline="hover">Your radar</Link>}
+              <Link component={RouterLink} to="/" aria-current={navigationCurrent(pathname, "/")} color="inherit" underline="hover">Home</Link>
+              <Link component={RouterLink} to="/plans" aria-current={navigationCurrent(pathname, "/plans")} color="inherit" underline="hover">Sample plans</Link>
+              {user && <Link component={RouterLink} to="/radar" aria-current={navigationCurrent(pathname, "/radar")} color="inherit" underline="hover">Your radar</Link>}
             </Stack>
             <Stack spacing={1}>
               <Typography color="white" fontWeight={700}>About Radar</Typography>
               {["About", "Contact"].map((label) => (
-                <Link key={label} component={RouterLink} to={`/${label.toLowerCase()}`} color="inherit" underline="hover">{label}</Link>
+                <Link key={label} component={RouterLink} to={`/${label.toLowerCase()}`} aria-current={navigationCurrent(pathname, `/${label.toLowerCase()}`)} color="inherit" underline="hover">{label}</Link>
               ))}
             </Stack>
             <Stack spacing={1}>
               <Typography color="white" fontWeight={700}>Legal drafts</Typography>
-              <Link component={RouterLink} to="/privacy" color="inherit" underline="hover">Privacy</Link>
-              <Link component={RouterLink} to="/terms" color="inherit" underline="hover">Terms</Link>
+              <Link component={RouterLink} to="/privacy" aria-current={navigationCurrent(pathname, "/privacy")} color="inherit" underline="hover">Privacy</Link>
+              <Link component={RouterLink} to="/terms" aria-current={navigationCurrent(pathname, "/terms")} color="inherit" underline="hover">Terms</Link>
             </Stack>
           </Stack>
         </Stack>

@@ -13,7 +13,7 @@ export function LandingPage() {
   return (
     <Box sx={{ bgcolor: "#fbfcf9" }}>
       <MarketingHeader />
-      <Box component="main">
+      <Box component="main" id="main-content" tabIndex={-1}>
         <Container maxWidth="lg" sx={{ py: { xs: 7, md: 11 }, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1.05fr 1fr" }, gap: { xs: 6, md: 7 }, alignItems: "center" }}>
           <Box>
             <Typography variant="overline" color="primary" fontWeight={800} letterSpacing={2}>A personal lens on scientific research</Typography>

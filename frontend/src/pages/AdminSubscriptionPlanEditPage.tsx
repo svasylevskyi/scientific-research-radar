@@ -212,7 +212,7 @@ function PlanEditor({ routeCode }: { routeCode?: string }) {
   return (
     <Box>
       <AppHeader />
-      <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
+      <Container component="main" id="main-content" tabIndex={-1} maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
         <Button component={Link} to="/admin/subscription-plans" sx={{ mb: 2 }}>
           Back to plans
         </Button>

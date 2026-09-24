@@ -74,7 +74,7 @@ function AccessEditor() {
   return (
     <Box>
       <AppHeader />
-      <Container component="main" maxWidth="md" sx={{ py: 4 }}>
+      <Container component="main" id="main-content" tabIndex={-1} maxWidth="md" sx={{ py: 4 }}>
         <AdminBillingNavigation current="access" userId={userId} email={data?.email} />
         <Typography component="h1" variant="h3" gutterBottom>
           Subscription access

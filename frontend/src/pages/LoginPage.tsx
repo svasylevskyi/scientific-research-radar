@@ -51,8 +51,8 @@ export function LoginPage() {
   return (
     <AuthLayout>
       <Box component="header" sx={{ mb: 4 }}>
-        <Typography component="h2" variant="h3" sx={{ mb: 1.25 }}>
-          Welcome back
+        <Typography component="h1" variant="h3" sx={{ mb: 1.25 }}>
+          Sign in
         </Typography>
         <Typography color="text.secondary">Sign in to continue to your research workspace.</Typography>
       </Box>
