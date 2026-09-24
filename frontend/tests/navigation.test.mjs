@@ -279,6 +279,10 @@ function renderedElements(tree) {
   return [tree, ...renderedElements(tree.props.children)];
 }
 
+function menuItemLabel(item) {
+  return renderedElements(item).find((element) => element.type === "ListItemText").props.children;
+}
+
 async function menuHarness(props) {
   let mobile = true, key = "first", cursor = 0;
   const slots = [], effects = [], previousDeps = [];
@@ -328,7 +332,8 @@ test("public hamburger exposes all links, current page, and sign-in; selection a
   let elements = menu.render();
   assert.equal(elements.find((element) => element.type === "Menu").props.open, true);
   const items = elements.filter((element) => element.type === "MenuItem");
-  assert.deepEqual(items.map((item) => item.props.children), ["Plans", "About", "Contact", "Sign in to Radar"]);
+  assert.deepEqual(items.map(menuItemLabel), ["Plans", "About", "Contact", "Sign in to Radar"]);
+  assert.equal(elements.some((element) => element.type === "ListSubheader" || element.type === "ListItemIcon"), false);
   assert.equal(items[1].props["aria-current"], "page");
   assert.equal(items[3].props.state.from, "/radar");
   items[0].props.onClick();
@@ -339,34 +344,95 @@ test("public hamburger exposes all links, current page, and sign-in; selection a
   assert.equal(menu.render().find((element) => element.type === "Menu").props.open, false);
 });
 
-test("workspace menu remains text-only with ordered admin links and closes across route and breakpoint changes", async () => {
+test("mobile workspace menu groups icon links under Admin and Profile and closes on selection or navigation", async () => {
   let signedOut = false;
   const menu = await menuHarness({ label: "Workspace navigation", pathname: "/admin/users", items: [
-    { label: "Workspace", to: "/radar" },
-    { label: "Subscription and usage", shortLabel: "Subscription", to: "/radar/subscription" },
-    { label: "Contact", to: "/radar/contact" },
+    { label: "Workspace", to: "/radar", icon: "research" },
+    { label: "Subscription and usage", shortLabel: "Subscription", to: "/radar/subscription", icon: "publication" },
+    { label: "Contact", to: "/radar/contact", icon: "mail" },
   ], adminItems: [
     { label: "Users", to: "/admin/users" }, { label: "Digests", to: "/admin/digests" },
     { label: "Plans", to: "/admin/subscription-plans" }, { label: "Pricing", to: "/admin/pricing" },
     { label: "Messages", to: "/admin/messages" },
-  ], accountItems: [{ label: "Profile", to: "/radar/profile" }, { label: "Sign out", onClick: () => { signedOut = true; } }] });
+  ], profileMenu: { icon: "avatar", items: [
+    { label: "Profile", to: "/radar/profile", icon: "avatar" },
+    { label: "Sign out", icon: "logout", onClick: () => { signedOut = true; } },
+  ] } });
   let elements = menu.render();
+  elements.find((element) => element.type === "IconButton").props.onClick({ currentTarget: "button" });
+  elements = menu.render();
   const items = elements.filter((element) => element.type === "MenuItem");
-  assert.deepEqual(items.map((item) => item.props.children), ["Workspace", "Subscription and usage", "Contact", "Users", "Digests", "Plans", "Pricing", "Messages", "Profile", "Sign out"]);
+  assert.deepEqual(items.map(menuItemLabel), ["Workspace", "Subscription and usage", "Contact", "Users", "Digests", "Plans", "Pricing", "Messages", "Profile", "Sign out"]);
+  assert.deepEqual(elements.filter((element) => element.type === "ListSubheader").map((element) => element.props.children), ["Admin", "Profile"]);
+  assert.equal(elements.filter((element) => element.type === "Divider").length, 2);
+  assert.deepEqual(elements.filter((element) => element.type === "ListItemIcon").map((element) => element.props.children), ["research", "publication", "mail", "avatar", "logout"]);
   items.at(-1).props.onClick();
   assert.equal(signedOut, true);
+  assert.equal(menu.render().find((element) => element.type === "Menu").props.open, false);
   elements.find((element) => element.type === "IconButton").props.onClick({ currentTarget: "button" });
   menu.navigate(); menu.render();
   assert.equal(menu.render().find((element) => element.type === "Menu").props.open, false);
+});
+
+test("desktop avatar opens Profile and Sign out with accessible state and closes across actions and layout changes", async () => {
+  let signedOut = false;
+  const props = { label: "Workspace navigation", pathname: "/radar/profile", items: [
+    { label: "Workspace", to: "/radar", icon: "research" },
+    { label: "Subscription and usage", shortLabel: "Subscription", to: "/radar/subscription", icon: "publication" },
+  ], adminItems: [{ label: "Users", to: "/admin/users", icon: "users" }],
+  profileMenu: { icon: "avatar", items: [
+    { label: "Profile", to: "/radar/profile", icon: "avatar" },
+    { label: "Sign out", icon: "logout", disabled: false, onClick: () => { signedOut = true; } },
+  ] } };
+  const menu = await menuHarness(props);
   menu.setMobile(false); menu.render();
-  elements = menu.render();
-  assert.equal(elements.some((element) => element.type === "IconButton" || element.type === "HamburgerIcon"), false);
+  let elements = menu.render();
+  const profileButton = () => menu.render().find((element) => element.type === "IconButton");
+  const profileMenu = () => menu.render().find((element) => element.type === "Menu" && element.props.id === "example-profile");
+  const adminMenu = () => menu.render().find((element) => element.type === "Menu" && element.props.id === "example-admin");
+  const openProfile = () => profileButton().props.onClick({ currentTarget: "profile" });
+  assert.equal(elements.some((element) => element.type === "HamburgerIcon"), false);
   const buttons = elements.filter((element) => element.type === "Button");
-  assert.deepEqual(buttons.map((element) => element.props.children), ["Workspace", "Subscription", "Contact", "Admin", "Profile", "Sign out"]);
-  assert.ok(buttons.every((button) => !button.props.startIcon && !button.props.endIcon));
+  assert.deepEqual(buttons.map((element) => element.props.children), ["Workspace", "Subscription", "Admin"]);
+  assert.ok(buttons.every((button) => button.props.startIcon));
+  assert.equal(profileButton().props.children, "avatar");
+  assert.equal(profileButton().props.to, undefined);
+  assert.equal(profileButton().props["aria-label"], "Profile menu");
+  assert.equal(profileButton().props["aria-current"], "location");
+  assert.equal(profileButton().props["aria-expanded"], false);
   buttons.find((button) => button.props.children === "Admin").props.onClick({ currentTarget: "admin" });
-  assert.equal(menu.render().find((element) => element.type === "Menu").props.open, true);
+  assert.equal(adminMenu().props.open, true);
+  openProfile();
+  assert.equal(adminMenu().props.open, false);
+  assert.equal(profileMenu().props.open, true);
+  assert.equal(profileButton().props["aria-expanded"], true);
+  assert.equal(profileButton().props["aria-controls"], profileMenu().props.id);
+  assert.equal(profileMenu().props.MenuListProps["aria-labelledby"], profileButton().props.id);
+  const items = renderedElements(profileMenu()).filter((element) => element.type === "MenuItem");
+  assert.deepEqual(items.map(menuItemLabel), ["Profile", "Sign out"]);
+  assert.equal(items[0].props.to, "/radar/profile");
+  assert.equal(items[0].props["aria-current"], "page");
+  items[0].props.onClick();
+  assert.equal(profileMenu().props.open, false);
+  openProfile();
+  items[1].props.onClick();
+  assert.equal(signedOut, true);
+  assert.equal(profileMenu().props.open, false);
+  props.profileMenu.items[1].disabled = true;
+  openProfile();
+  assert.equal(renderedElements(profileMenu()).find((element) => element.type === "MenuItem" && menuItemLabel(element) === "Sign out").props.disabled, true);
+  profileMenu().props.onClose(); // MUI routes Escape and backdrop dismissal here.
+  assert.equal(profileMenu().props.open, false);
+  openProfile();
+  menu.navigate(); menu.render();
+  assert.equal(profileMenu().props.open, false);
+  openProfile();
   menu.setMobile(true); menu.render();
+  assert.deepEqual(menu.render().filter((element) => element.type === "ListSubheader").map((element) => element.props.children), ["Admin", "Profile"]);
   menu.setMobile(false); menu.render();
-  assert.equal(menu.render().find((element) => element.type === "Menu").props.open, false);
+  assert.equal(profileMenu().props.open, false);
+  // Regular members retain Profile grouping without an empty Admin section.
+  props.adminItems = [];
+  menu.setMobile(true); menu.render();
+  assert.deepEqual(menu.render().filter((element) => element.type === "ListSubheader").map((element) => element.props.children), ["Profile"]);
 });
