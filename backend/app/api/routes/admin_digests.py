@@ -12,6 +12,10 @@ from app.schemas.digest import (
 from app.schemas.digest_run import DigestRunDetailRead, DigestRunListResponse
 from app.schemas.research_quality import QualityEvaluationHistory, QualityEvaluationRead, QualityEvaluationRequest
 from app.schemas.source_verification import SourceVerificationHistory, SourceVerificationRead
+from app.schemas.source_content import RunContentRead
+from app.services.source_content_service import stored_documents
+from app.radar.contracts import PaperSummariesOutput
+from app.radar.evidence import inspect_summary
 from app.services.source_verification_service import source_history, verify_manually
 from app.services.manual_quality_service import ManualQualityUnavailableError, evaluate_manually, evaluation_history
 from app.services.digest_service import (
@@ -120,6 +124,21 @@ def evaluate_run_quality(
         raise HTTPException(404, str(exc)) from exc
     except ManualQualityUnavailableError as exc:
         raise HTTPException(409, str(exc)) from exc
+
+
+@router.get("/{digest_id}/runs/{run_id}/source-content", response_model=RunContentRead)
+def get_run_source_content(digest_id: UUID, run_id: UUID, current_admin: CurrentAdmin,
+                           service: RunHistoryServiceDep, db: DbSession) -> RunContentRead:
+    try:
+        run = service.get_for_admin(actor=current_admin, digest_id=digest_id, run_id=run_id)
+    except (DigestNotFoundError, DigestRunNotFoundError) as exc:
+        raise HTTPException(404, str(exc)) from exc
+    documents = stored_documents(db, run.id)
+    summary_stage = next((stage for stage in run.stages if str(stage.stage) == "paper_summaries"), None)
+    summaries = PaperSummariesOutput.model_validate(summary_stage.result_data if summary_stage and summary_stage.result_data else {"paper_summaries": []})
+    by_id = {summary.external_id: summary for summary in summaries.paper_summaries}
+    return RunContentRead(items=[inspect_summary(document, by_id.get(key)) for key, document in documents.items()],
+                          legacy=run.prompt_version < "2026-09-25.1")
 
 
 @router.get("/{digest_id}/runs/{run_id}/source-verifications", response_model=SourceVerificationHistory)

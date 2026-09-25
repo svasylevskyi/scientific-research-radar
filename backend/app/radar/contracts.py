@@ -109,6 +109,20 @@ class RelevanceStage(RadarContract):
     quality_warnings: list[str]
 
 
+class FindingEvidence(RadarContract):
+    finding_index: int = Field(ge=0)
+    passage_ids: list[str]
+
+
+class SourceAttribution(RadarContract):
+    title: str
+    authors: list[str]
+    source_url: str
+    license_url: str
+    rights_notice: str
+    changes: str
+
+
 class PaperSummary(RadarContract):
     external_id: str
     summary_basis: Literal[
@@ -143,6 +157,10 @@ class PaperSummary(RadarContract):
     related_search_terms: list[str]
     warnings: list[str]
     confidence_score: int = Field(ge=1, le=10)
+
+    summary_evidence_ids: list[str] = Field(default_factory=list)
+    finding_evidence: list[FindingEvidence] = Field(default_factory=list)
+    source_attribution: SourceAttribution | None = None
 
 
 class TrendTheme(RadarContract):
@@ -290,6 +308,7 @@ class DigestBriefing(RadarContract):
     ]
     transparency_note: str
     quality_warnings: list[str]
+    source_attributions: list[SourceAttribution] = Field(default_factory=list)
     content_markdown: str
 
 

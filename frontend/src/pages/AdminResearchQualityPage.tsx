@@ -9,6 +9,7 @@ const rules = [
   ["check_reporting_dates", "Check publication dates against the reporting period"],
   ["check_duplicates", "Check for duplicate DOIs, source URLs, and titles"],
   ["check_source_access", "Check reported source access and summary basis"],
+  ["check_evidence_links", "Warn about missing source content or evidence links (observation only)"],
 ] as const;
 
 export function AdminResearchQualityPage() {
@@ -80,12 +81,13 @@ export function AdminResearchQualityPage() {
           <Typography component="h2" variant="h6">Optional checks</Typography>
           <TextField select label="Independent source verification" value={config.source_verification_mode ?? "observe"} disabled={!editable}
             onChange={(event) => setConfig({ ...config, source_verification_mode: event.target.value as QualityConfig["source_verification_mode"] })}>
-            <MenuItem value="off">Off — no external metadata lookups</MenuItem>
+            <MenuItem value="off">Off — disable independent metadata checks</MenuItem>
             <MenuItem value="observe">Observe — record metadata limitations as warnings</MenuItem>
             <MenuItem value="enforce">Enforce — confirmed metadata conflicts cause Hold</MenuItem>
           </TextField>
-          <Typography variant="body2" color="text.secondary">Checks DOI/arXiv metadata using external requests, without OpenAI. Unavailable sources and provider errors produce warnings. Conflicts block automatic delivery only when both modes are Enforce. Automatic lookups are skipped when the quality gate is Off; manual source checks remain available unless source verification itself is Off.</Typography>
+          <Typography variant="body2" color="text.secondary">Checks DOI/arXiv metadata using external requests, without OpenAI. Unavailable sources and provider errors produce warnings. Conflicts block automatic delivery only when both modes are Enforce. Automatic metadata checks are skipped when the quality gate is Off; manual checks remain available unless source verification itself is Off. Retrieving permitted source content for new summaries is separate and remains active.</Typography>
           {rules.map(([key, label]) => <FormControlLabel key={key} label={label} control={<Switch checked={!!config[key]} disabled={!editable} onChange={(_, checked) => setConfig({ ...config, [key]: checked })} />} />)}
+          <Typography variant="body2" color="text.secondary">Content reuse permissions are always required, including when quality checks are Off. This switch controls evidence warnings, not permission enforcement or content retrieval.</Typography>
           <TextField label="Warn when fewer papers are selected" type="number" value={threshold} disabled={!editable}
             onChange={(event) => setThreshold(event.target.value)} error={!thresholdValid}
             helperText="0–30. Set 0 to disable this warning. Sparse results never cause a hold by themselves."

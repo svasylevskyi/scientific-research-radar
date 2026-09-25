@@ -4,8 +4,10 @@ This increment verifies bibliographic metadata, not scientific claims. Crossref
 (DOI) and arXiv records are compared with the immutable selected/cited paper
 metadata saved for a run. Source URLs, retrieved metadata, lookup timestamps,
 cache provenance, comparison findings, settings, and reviewer identity are retained.
-It does not retrieve full text, extract supporting passages, validate licenses,
+This metadata checker does not retrieve full text, extract supporting passages, validate licenses,
 certify peer review, or certify that a summary is accurate.
+The separate generation-time [source content pipeline](source-content.md) checks
+reuse permissions and captures excerpts before summaries are requested.
 
 ## Scope and outcomes
 
@@ -31,8 +33,10 @@ published, and issued dates are accepted alternatives. Partial year/month metada
 never verifies a specific day. arXiv's initial publication date is used, not its
 revision date. Repeated identifiers are noted on affected paper records.
 
-Metadata availability is separate from full-text access. A retrieved abstract is
-shown as an excerpt of up to 10,000 characters. Provider-reported full-text links
+Metadata availability is separate from full-text access. arXiv abstracts are
+shown as excerpts of up to 10,000 characters under its CC0 metadata terms.
+Crossref abstracts are discarded because deposit does not establish reuse rights.
+Provider-reported full-text links
 are displayed but never fetched, so they do not establish access or licensing.
 
 ## Configuration and delivery
@@ -43,7 +47,7 @@ The new setting defaults to **Observe** for future settings/run snapshots.
 
 | Source mode | Behavior |
 | --- | --- |
-| Off | No automatic or manual external metadata lookup. Stored evidence remains available. |
+| Off | No automatic or manual independent metadata checks. Stored evidence remains available. |
 | Observe | Record evidence; conflicts and unverified fields contribute Warning findings. |
 | Enforce | Conflicts contribute Hold; unavailable or incomplete metadata contributes Warning. |
 
@@ -52,6 +56,8 @@ blocks automatic delivery only when **both** source mode and overall quality mod
 are Enforce. Settings are snapshotted at admission. Pre-feature run snapshots never
 acquire network verification on retry; their missing source mode is displayed as
 Off. Existing legacy runs are not backfilled.
+These modes control the metadata checker, not permission enforcement or source
+retrieval for new summaries. That separate pipeline remains active with checks Off.
 
 The ordinary **Evaluate quality** action remains a local consistency check.
 **Verify sources / Recheck sources**, in Run Diagnostics, is a separate action on

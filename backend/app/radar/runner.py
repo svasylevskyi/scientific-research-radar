@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.models.digest_run import DigestRun, DigestRunStageStatus, DigestRunStageType
 from app.radar import stage_inputs, validation
+from app.radar.evidence import constrain_summaries
 from app.radar.client import RadarClient
 from app.radar.contracts import (
     DigestBriefingOutput,
@@ -154,6 +155,9 @@ class RadarRunner:
             output=result.output,
             maximum_papers=int(run.digest_snapshot["maximum_papers"]),
         )
+        # Discovery may locate any scholarly source, but cannot authorize copied abstracts.
+        for paper in result.output.search.papers:
+            paper.abstract = None
         self.lifecycle.save_discovery_relevance(run=run, stage=stage, result=result)
         return result.output
 
@@ -168,16 +172,16 @@ class RadarRunner:
         if stage.status == DigestRunStageStatus.COMPLETED and stage.result_data:
             return PaperSummariesOutput.model_validate(stage.result_data)
 
-        papers = stage_inputs.summary_input(discovery)
         existing = list((stage.result_data or {}).get("paper_summaries", []))
+        self.lifecycle.begin_summaries(
+            stage=stage, existing=existing, progress_total=len(stage_inputs.summary_input(discovery))
+        )
+        documents = self.lifecycle.prepare_source_content(run, discovery)
+        papers = stage_inputs.summary_input(discovery, documents)
         completed_ids = {item["external_id"] for item in existing}
         remaining = [
             paper for paper in papers if paper["external_id"] not in completed_ids
         ]
-        self.lifecycle.begin_summaries(
-            stage=stage, existing=existing, progress_total=len(papers)
-        )
-
         for start in range(0, len(remaining), self.summary_batch_size):
             batch = remaining[start : start + self.summary_batch_size]
             prompt = self.prompt_builder.build_paper_summaries(
@@ -197,6 +201,7 @@ class RadarRunner:
                 output=result.output,
                 expected_ids={paper["external_id"] for paper in batch},
             )
+            constrain_summaries(result.output, documents)
             self.lifecycle.save_summary_batch(
                 run=run,
                 stage=stage,
@@ -273,5 +278,10 @@ class RadarRunner:
             output=result.output,
             known_ids={paper.external_id for paper in discovery.search.papers},
         )
+        result.output.digest_briefing.source_attributions = [summary.source_attribution
+            for summary in summaries.paper_summaries if summary.source_attribution is not None]
+        bases = {summary.summary_basis for summary in summaries.paper_summaries}
+        result.output.digest_briefing.source_basis = "metadata_only" if not bases or bases == {"metadata_only"} else "abstracts_only" if bases == {"abstract_only"} else "mixed"
+        result.output.digest_briefing.quality_warnings.append("Summary evidence is limited to the saved abstracts or selected sections; no complete full-text review or automated claim verification was performed.")
         self.lifecycle.save_digest_briefing(run=run, stage=stage, result=result)
         return result.output

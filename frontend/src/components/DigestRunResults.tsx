@@ -20,6 +20,7 @@ import {
 } from "@mui/material";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import type { ReactNode } from "react";
+import { SourceAttribution } from "./SourceAttribution";
 
 import type {
   Confidence,
@@ -263,6 +264,7 @@ export function DigestBriefingResult({ run }: { run: DigestRunDetail }) {
       <Section title="Transparency and quality">
         <Stack spacing={1.5}>
           <Typography color="text.secondary">{data.transparency_note}</Typography>
+          {data.source_attributions?.map((value, index) => <SourceAttribution key={index} value={value} />)}
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 0.4 }}>Quality warnings</Typography>
             <BulletList items={data.quality_warnings} emptyText="No quality warnings were reported." />
@@ -489,6 +491,7 @@ function PaperResult({ result }: { result: DigestRunPaper }) {
                 <Chip size="small" variant="outlined" label={`${summary.confidence_score}/10 confidence`} />
               </Stack>
               <Typography color="text.secondary">{summary.concise_summary}</Typography>
+              {summary.source_attribution && <SourceAttribution value={summary.source_attribution} />}
               <TextBlock title="Digest-ready bullet">{summary.suggested_digest_bullet}</TextBlock>
               <Box><Typography variant="subtitle2">Why this paper matters</Typography><BulletList items={summary.why_this_paper_matters} /></Box>
               <Box><Typography variant="subtitle2">Key findings</Typography><BulletList items={summary.key_findings} emptyText="No findings were verified." /></Box>

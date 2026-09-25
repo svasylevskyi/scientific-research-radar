@@ -6,15 +6,17 @@ from typing import Any
 from app.models.digest import Digest
 from app.radar.contracts import DiscoveryRelevanceOutput, PaperSummariesOutput
 from app.schemas.digest import DigestRead
+from app.schemas.source_content import SourceDocument
 
 
 def summary_input(
     discovery: DiscoveryRelevanceOutput,
+    documents: dict[str, SourceDocument] | None = None,
 ) -> list[dict[str, Any]]:
     relevance_by_id = {
         item.external_id: item for item in discovery.relevance.assessments
     }
-    return [
+    papers = [
         {
             **paper.model_dump(mode="json"),
             "relevance": relevance_by_id[paper.external_id].model_dump(mode="json"),
@@ -23,6 +25,13 @@ def summary_input(
         if relevance_by_id[paper.external_id].recommended_status
         in {"summarize", "mention_briefly"}
     ]
+    if documents is None:
+        return papers
+    # Search excerpts, factual notes, and model-reported licences are not evidence.
+    return [{"external_id": paper["external_id"], "title": paper["title"], "authors": paper["authors"],
+             "url": paper["url"], "published_date": paper["published_date"],
+             "source_evidence": documents[paper["external_id"]].model_dump(mode="json")}
+            for paper in papers]
 
 
 def trend_input(
@@ -44,7 +53,8 @@ def trend_input(
             "url": paper.url,
             "source_name": paper.source_name,
             "access_status": paper.access_status,
-            "relevance": relevance_by_id[paper.external_id].model_dump(mode="json"),
+            "relevance": {"score": relevance_by_id[paper.external_id].score,
+                          "recommended_status": relevance_by_id[paper.external_id].recommended_status},
             "summary": summary_by_id[paper.external_id].model_dump(mode="json"),
         }
         for paper in discovery.search.papers
@@ -75,6 +85,8 @@ def briefing_input(
                 paper.external_id
             ].suggested_digest_bullet,
             "confidence_score": summary_by_id[paper.external_id].confidence_score,
+            "summary_basis": summary_by_id[paper.external_id].summary_basis,
+            "warnings": summary_by_id[paper.external_id].warnings,
         }
         for paper in discovery.search.papers
         if paper.external_id in summary_by_id

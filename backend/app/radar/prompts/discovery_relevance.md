@@ -1,5 +1,11 @@
 # Stage 1 of 4 — Paper Discovery and Relevance
 
+Discover bibliographic records across the web. Return `abstract: null` for every paper;
+do not copy source prose into factual notes, rationale, or other fields. Use brief
+original descriptions. Include canonical PMC article links among citations when
+available. Discovery access/licence labels are unverified hints, not permission.
+The application retrieves reusable text independently before summarization.
+
 Discover, deduplicate, and assess papers for the digest below. Web search is enabled only for this stage.
 
 ## Digest configuration
