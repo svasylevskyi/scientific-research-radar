@@ -58,7 +58,10 @@ def test_resend_cooldown_and_replacement_preserve_deadline(client, db_session_fa
     pending = client.post("/api/v1/auth/register", json=PAYLOAD).json()
     path = f"/api/v1/auth/register/{pending['id']}"
     assert latest_code(client) == "000123"
-    assert client.post(f"{path}/resend").status_code == 429
+    cooldown = client.post(f"{path}/resend")
+    assert cooldown.status_code == 429
+    assert 1 <= int(cooldown.headers["Retry-After"]) <= 60
+    assert cooldown.headers["X-Radar-Rate-Limit-Scope"] == "request"
     assert len(client.outbox) == 1
     age_challenge(db_session_factory, pending["id"])
     resent = client.post(f"{path}/resend")
@@ -98,7 +101,9 @@ def test_bad_codes_are_counted_and_resend_does_not_reset_limit(client, db_sessio
         db.commit()
     assert client.post(f"{path}/confirm", json={"code": correct}).status_code == 410
     age_challenge(db_session_factory, pending["id"])
-    assert client.post(f"{path}/resend").status_code == 429
+    exhausted = client.post(f"{path}/resend")
+    assert exhausted.status_code == 429
+    assert exhausted.headers["X-Radar-Retryable"] == "false"
 
 
 def test_delivery_failure_rolls_back_and_can_retry(client, db_session_factory, monkeypatch):

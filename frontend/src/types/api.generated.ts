@@ -4625,6 +4625,7 @@ export interface operations {
                 limit?: number;
                 offset?: number;
                 owner_id?: string | null;
+                owner_query?: string | null;
             };
             header?: never;
             path?: never;
@@ -6130,6 +6131,7 @@ export interface operations {
                 limit?: number;
                 offset?: number;
                 q?: string | null;
+                sort?: "recent" | "name";
             };
             header?: never;
             path?: never;

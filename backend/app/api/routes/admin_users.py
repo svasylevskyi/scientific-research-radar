@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -30,12 +30,14 @@ def list_users(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=25, ge=1, le=100),
     q: str | None = Query(default=None, max_length=120),
+    sort: Literal["recent", "name"] = Query(default="recent"),
 ) -> UserListResponse:
     users, total = service.list_users(
         actor=current_admin,
         offset=offset,
         limit=limit,
         query=q,
+        alphabetical=sort == "name",
     )
     return UserListResponse(items=service.serialize_users(users), total=total, offset=offset, limit=limit)
 

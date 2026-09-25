@@ -33,6 +33,10 @@ model calls or production delivery changes.
 
 Public information pages remain at `/`, `/about`, `/plans`, `/contact`, `/privacy`, and `/terms`. User application pages live under `/radar`; admin pages retain their `/admin` URLs and access rules.
 
+Admin digest management supports owner-name/email search with suggestions and
+matching-owner filters. The shared API client silently waits through temporary
+rate limits; see [retry and owner-search behavior](docs/api-retries-and-owner-search.md).
+
 | Page | Canonical browser URL |
 |---|---|
 | Workspace | `/radar` |

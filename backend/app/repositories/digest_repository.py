@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.digest import Digest
 from app.models.user import User
+from app.repositories.user_search import user_matches
 
 
 class DigestRepository:
@@ -56,6 +57,7 @@ class DigestRepository:
         limit: int,
         owner_id: UUID | None,
         include_super_admin: bool,
+        owner_query: str | None = None,
     ) -> list[Digest]:
         statement = (
             select(Digest)
@@ -65,16 +67,20 @@ class DigestRepository:
         )
         if owner_id is not None:
             statement = statement.where(Digest.owner_id == owner_id)
+        if owner_query:
+            statement = statement.where(user_matches(owner_query))
         if not include_super_admin:
             statement = statement.where(User.is_super_admin.is_(False))
         return list(self.db.scalars(statement.offset(offset).limit(limit)))
 
     def count_for_admin(
-        self, *, owner_id: UUID | None, include_super_admin: bool
+        self, *, owner_id: UUID | None, include_super_admin: bool, owner_query: str | None = None
     ) -> int:
         statement = select(func.count()).select_from(Digest).join(Digest.owner)
         if owner_id is not None:
             statement = statement.where(Digest.owner_id == owner_id)
+        if owner_query:
+            statement = statement.where(user_matches(owner_query))
         if not include_super_admin:
             statement = statement.where(User.is_super_admin.is_(False))
         return self.db.scalar(statement) or 0

@@ -40,8 +40,9 @@ RECOVERY_POLICIES = {
 
 
 class RateLimitExceeded(Exception):
-    def __init__(self, retry_after: int):
+    def __init__(self, retry_after: int, scope: str = "request"):
         self.retry_after = retry_after
+        self.scope = scope
         super().__init__(f"Too many requests. Please try again in {retry_after} seconds.")
 
 
@@ -90,7 +91,7 @@ def allowed(db, settings, scope, subject, limit, seconds):
 def enforce(db, settings, scope, subject, limit, seconds, *, commit=True):
     accepted, retry_after = consume(db, settings, scope, subject, limit, seconds, commit=commit)
     if not accepted:
-        raise RateLimitExceeded(retry_after)
+        raise RateLimitExceeded(retry_after, scope)
 
 
 def cleanup_rate_limits(db):

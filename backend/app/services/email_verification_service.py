@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
+import math
 import secrets
 from uuid import UUID, uuid4
 
@@ -18,9 +19,10 @@ from app.services.email_service import EmailService, OutgoingEmail
 
 
 class VerificationError(Exception):
-    def __init__(self, message: str, status_code: int = 400):
+    def __init__(self, message: str, status_code: int = 400, *, retry_after: int | None = None):
         super().__init__(message)
         self.status_code = status_code
+        self.retry_after = retry_after
 
 
 def cleanup_expired(db: Session) -> None:
@@ -76,7 +78,8 @@ class EmailVerificationService:
             previous = self.db.scalar(select(EmailVerification).where(EmailVerification.user_id == user.id))
             if previous:
                 if now < _as_utc(previous.sent_at) + timedelta(minutes=1):
-                    raise VerificationError("Please wait 1 minute before requesting another code.", 429)
+                    raise VerificationError("Please wait 1 minute before requesting another code.", 429,
+                        retry_after=max(1, math.ceil((_as_utc(previous.sent_at) + timedelta(minutes=1) - now).total_seconds())))
                 self.db.delete(previous)
                 self.db.flush()
         challenge = EmailVerification(
@@ -121,8 +124,10 @@ class EmailVerificationService:
         try:
             if challenge.attempts >= 50:
                 raise VerificationError("Too many incorrect codes. Start again after this attempt expires.", 429)
-            if datetime.now(UTC) < _as_utc(challenge.sent_at) + timedelta(minutes=1):
-                raise VerificationError("Please wait 1 minute before requesting another code.", 429)
+            now = datetime.now(UTC)
+            if now < _as_utc(challenge.sent_at) + timedelta(minutes=1):
+                raise VerificationError("Please wait 1 minute before requesting another code.", 429,
+                    retry_after=max(1, math.ceil((_as_utc(challenge.sent_at) + timedelta(minutes=1) - now).total_seconds())))
             self._send(challenge)
             self.db.commit()
         except Exception:

@@ -15,17 +15,18 @@ export interface AdminUserUpdate {
 }
 
 export const adminApi = {
-  listUsers(params: { offset: number; limit: number; query?: string }): Promise<UserListResponse> {
+  listUsers(params: { offset: number; limit: number; query?: string; sort?: "recent" | "name"; signal?: AbortSignal }): Promise<UserListResponse> {
     const search = new URLSearchParams({
       offset: String(params.offset),
       limit: String(params.limit),
     });
     if (params.query) search.set("q", params.query);
-    return apiRequest<UserListResponse>(`/admin/users?${search}`);
+    if (params.sort) search.set("sort", params.sort);
+    return apiRequest<UserListResponse>(`/admin/users?${search}`, { signal: params.signal });
   },
 
-  getUser(userId: string): Promise<User> {
-    return apiRequest<User>(`/admin/users/${userId}`);
+  getUser(userId: string, signal?: AbortSignal): Promise<User> {
+    return apiRequest<User>(`/admin/users/${userId}`, { signal });
   },
 
   updateUser(userId: string, input: AdminUserUpdate): Promise<User> {

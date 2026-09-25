@@ -85,6 +85,7 @@ class DigestService:
         offset: int,
         limit: int,
         owner_id: UUID | None,
+        owner_query: str | None = None,
     ) -> tuple[list[Digest], int]:
         include_super_admin = actor.is_super_admin
         return (
@@ -92,10 +93,12 @@ class DigestService:
                 offset=offset,
                 limit=limit,
                 owner_id=owner_id,
+                owner_query=owner_query.strip() if owner_query else None,
                 include_super_admin=include_super_admin,
             ),
             self.digests.count_for_admin(
                 owner_id=owner_id,
+                owner_query=owner_query.strip() if owner_query else None,
                 include_super_admin=include_super_admin,
             ),
         )
