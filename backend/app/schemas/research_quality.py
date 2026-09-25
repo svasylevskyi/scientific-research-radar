@@ -1,7 +1,8 @@
 """Versioned deterministic quality settings and public run decisions."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -67,3 +68,35 @@ class QualityFinding(BaseModel):
 class QualityDecision(BaseModel):
     status: QualityStatus
     findings: list[QualityFinding] = Field(default_factory=list)
+
+
+class QualityEvaluationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_settings_version: int = Field(ge=0)
+
+
+class QualityEvaluationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    run_id: UUID
+    created_by: UUID | None
+    created_by_name: str
+    created_at: datetime
+    config: QualitySnapshot
+    status: Literal["pass", "warning", "hold"]
+    findings: list[QualityFinding]
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_timestamp(cls, value: datetime) -> datetime:
+        # SQLite drops timezone information; audit timestamps are always UTC.
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+class QualityEvaluationHistory(BaseModel):
+    items: list[QualityEvaluationRead]
+    total: int
+    offset: int
+    limit: int

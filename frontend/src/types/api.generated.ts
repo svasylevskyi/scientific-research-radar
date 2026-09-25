@@ -155,6 +155,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/digests/{digest_id}/runs/{run_id}/quality-evaluations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Quality Evaluations */
+        get: operations["list_quality_evaluations_api_v1_admin_digests__digest_id__runs__run_id__quality_evaluations_get"];
+        put?: never;
+        /** Evaluate Run Quality */
+        post: operations["evaluate_run_quality_api_v1_admin_digests__digest_id__runs__run_id__quality_evaluations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/messages": {
         parameters: {
             query?: never;
@@ -2937,6 +2955,52 @@ export interface components {
              */
             sparse_paper_threshold?: number;
         };
+        /** QualityEvaluationHistory */
+        QualityEvaluationHistory: {
+            /** Items */
+            items: components["schemas"]["QualityEvaluationRead"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** QualityEvaluationRead */
+        QualityEvaluationRead: {
+            config: components["schemas"]["QualitySnapshot"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Created By Name */
+            created_by_name: string;
+            /** Findings */
+            findings: components["schemas"]["QualityFinding"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warning" | "hold";
+        };
+        /** QualityEvaluationRequest */
+        QualityEvaluationRequest: {
+            /** Expected Settings Version */
+            expected_settings_version: number;
+        };
         /** QualityFinding */
         QualityFinding: {
             /** Code */
@@ -4000,6 +4064,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_quality_evaluations_api_v1_admin_digests__digest_id__runs__run_id__quality_evaluations_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                digest_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityEvaluationHistory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    evaluate_run_quality_api_v1_admin_digests__digest_id__runs__run_id__quality_evaluations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                digest_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QualityEvaluationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityEvaluationRead"];
                 };
             };
             /** @description Validation Error */
