@@ -17,9 +17,6 @@ export function AdminDigestNavigation({
       flexWrap="wrap"
       sx={{ mb: 3 }}
     >
-      <Button component={Link} to="/admin/digests">
-        All digests
-      </Button>
       <Button
         component={Link}
         to={`/admin/digests/${digestId}`}
