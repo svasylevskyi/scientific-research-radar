@@ -52,12 +52,14 @@ def list_digests(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=25, ge=1, le=100),
     owner_id: UUID | None = Query(default=None),
+    owner_query: str | None = Query(default=None, max_length=120),
 ) -> AdminDigestListResponse:
     digests, total = service.list_for_admin(
         actor=current_admin,
         offset=offset,
         limit=limit,
         owner_id=owner_id,
+        owner_query=owner_query,
     )
     return AdminDigestListResponse(
         items=digests, total=total, offset=offset, limit=limit

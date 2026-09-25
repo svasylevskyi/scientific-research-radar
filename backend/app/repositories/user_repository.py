@@ -1,9 +1,10 @@
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.user import User, UserRole
+from app.repositories.user_search import user_matches
 
 
 class UserRepository:
@@ -26,15 +27,14 @@ class UserRepository:
         limit: int,
         query: str | None = None,
         include_super_admin: bool = True,
+        alphabetical: bool = False,
     ) -> list[User]:
-        statement = select(User).order_by(User.created_at.desc(), User.email)
+        ordering = (func.lower(User.full_name), func.lower(User.email), User.id) if alphabetical else (User.created_at.desc(), User.email)
+        statement = select(User).order_by(*ordering)
         if not include_super_admin:
             statement = statement.where(User.is_super_admin.is_(False))
         if query:
-            pattern = f"%{query.lower()}%"
-            statement = statement.where(
-                or_(func.lower(User.email).like(pattern), func.lower(User.full_name).like(pattern))
-            )
+            statement = statement.where(user_matches(query))
         return list(self.db.scalars(statement.offset(offset).limit(limit)))
 
     def count(self, *, query: str | None = None, include_super_admin: bool = True) -> int:
@@ -42,10 +42,7 @@ class UserRepository:
         if not include_super_admin:
             statement = statement.where(User.is_super_admin.is_(False))
         if query:
-            pattern = f"%{query.lower()}%"
-            statement = statement.where(
-                or_(func.lower(User.email).like(pattern), func.lower(User.full_name).like(pattern))
-            )
+            statement = statement.where(user_matches(query))
         return self.db.scalar(statement) or 0
 
     def create(

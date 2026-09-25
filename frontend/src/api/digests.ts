@@ -11,12 +11,13 @@ import type {
 } from "../types/digest";
 import { apiRequest } from "./client";
 
-function listSearch(params: { offset: number; limit: number; ownerId?: string }) {
+function listSearch(params: { offset: number; limit: number; ownerId?: string; ownerQuery?: string }) {
   const search = new URLSearchParams({
     offset: String(params.offset),
     limit: String(params.limit),
   });
   if (params.ownerId) search.set("owner_id", params.ownerId);
+  if (params.ownerQuery) search.set("owner_query", params.ownerQuery);
   return search;
 }
 
@@ -98,9 +99,12 @@ export const adminDigestsApi = {
     offset: number;
     limit: number;
     ownerId?: string;
+    ownerQuery?: string;
+    signal?: AbortSignal;
   }): Promise<DigestListResponse<AdminDigest>> {
     return apiRequest<DigestListResponse<AdminDigest>>(
       `/admin/digests?${listSearch(params)}`,
+      { signal: params.signal },
     );
   },
 

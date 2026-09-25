@@ -1,27 +1,21 @@
-import FilterAltRoundedIcon from "@mui/icons-material/FilterAltRounded";
 import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
 import {
   Alert,
   Box,
   CircularProgress,
   Container,
-  FormControl,
-  InputLabel,
-  MenuItem,
   Pagination,
-  Select,
   Stack,
   Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { adminApi } from "../api/admin";
 import { ApiError } from "../api/client";
 import { adminDigestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
 import { DigestList } from "../components/DigestList";
-import type { User } from "../types/auth";
+import { DigestOwnerFilter } from "../components/DigestOwnerFilter";
 import type { AdminDigest } from "../types/digest";
 
 const PAGE_SIZE = 20;
@@ -29,41 +23,19 @@ const PAGE_SIZE = 20;
 export function AdminDigestsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const ownerId = searchParams.get("owner_id") ?? "";
+  const ownerQuery = searchParams.get("owner_query") ?? "";
   const [digests, setDigests] = useState<AdminDigest[]>([]);
-  const [owners, setOwners] = useState<User[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const filterKey = `${ownerId}:${ownerQuery}`;
+  const [pagination, setPagination] = useState({ key: filterKey, page: 1 });
+  const page = pagination.key === filterKey ? pagination.page : 1;
+  const setPage = (page: number) => setPagination({ key: filterKey, page });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    adminApi
-      .listUsers({ offset: 0, limit: 100 })
-      .then(async (result) => {
-        let availableOwners = result.items;
-        if (ownerId && !availableOwners.some((owner) => owner.id === ownerId)) {
-          try {
-            const selectedOwner = await adminApi.getUser(ownerId);
-            availableOwners = [selectedOwner, ...availableOwners];
-          } catch {
-            // The digest request will return an empty list for an inaccessible owner.
-          }
-        }
-        if (active) setOwners(availableOwners);
-      })
-      .catch((caught) => {
-        if (active) {
-          setError(caught instanceof ApiError ? caught.message : "Could not load digest owners.");
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [ownerId]);
-
-  useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
     setIsLoading(true);
     setError(null);
     adminDigestsApi
@@ -71,6 +43,8 @@ export function AdminDigestsPage() {
         offset: (page - 1) * PAGE_SIZE,
         limit: PAGE_SIZE,
         ownerId: ownerId || undefined,
+        ownerQuery: ownerQuery || undefined,
+        signal: controller.signal,
       })
       .then((result) => {
         if (!active) return;
@@ -87,12 +61,13 @@ export function AdminDigestsPage() {
       });
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [ownerId, page]);
+  }, [ownerId, ownerQuery, page]);
 
-  function changeOwner(nextOwnerId: string) {
+  function changeOwner(filter: { ownerId?: string; query?: string }) {
     setPage(1);
-    setSearchParams(nextOwnerId ? { owner_id: nextOwnerId } : {});
+    setSearchParams(filter.ownerId ? { owner_id: filter.ownerId } : filter.query ? { owner_query: filter.query } : {});
   }
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -102,10 +77,10 @@ export function AdminDigestsPage() {
       <AppHeader />
       <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
         <Stack
-          direction={{ xs: "column", sm: "row" }}
+          direction={{ xs: "column", md: "row" }}
           spacing={2}
           justifyContent="space-between"
-          alignItems={{ sm: "flex-end" }}
+          alignItems={{ md: "flex-end" }}
           sx={{ mb: 4 }}
         >
           <Box>
@@ -117,23 +92,7 @@ export function AdminDigestsPage() {
               Review and manage research digests across user accounts.
             </Typography>
           </Box>
-          <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 280 } }}>
-            <InputLabel id="digest-owner-filter-label">Digest owner</InputLabel>
-            <Select
-              labelId="digest-owner-filter-label"
-              value={ownerId}
-              label="Digest owner"
-              onChange={(event) => changeOwner(event.target.value)}
-              startAdornment={<FilterAltRoundedIcon fontSize="small" sx={{ mr: 1 }} />}
-            >
-              <MenuItem value="">All accessible users</MenuItem>
-              {owners.map((owner) => (
-                <MenuItem key={owner.id} value={owner.id}>
-                  {owner.full_name} · {owner.email}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <DigestOwnerFilter key={`${ownerId}:${ownerQuery}`} ownerId={ownerId} query={ownerQuery} onChange={changeOwner} />
         </Stack>
 
         {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
@@ -153,7 +112,8 @@ export function AdminDigestsPage() {
               showOwner
               emptyTitle="No digests found"
               emptyDescription={
-                ownerId
+                ownerQuery ? "No digests belong to owners matching this name or email."
+                : ownerId
                   ? "This user has not created any digests."
                   : "No accessible users have created a digest yet."
               }

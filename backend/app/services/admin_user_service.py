@@ -28,7 +28,7 @@ class AdminUserService:
         self.sessions = AuthSessionRepository(db)
 
     def list_users(
-        self, *, actor: User, offset: int, limit: int, query: str | None
+        self, *, actor: User, offset: int, limit: int, query: str | None, alphabetical: bool = False
     ) -> tuple[list[User], int]:
         normalized_query = query.strip() if query else None
         include_super_admin = actor.is_super_admin
@@ -38,6 +38,7 @@ class AdminUserService:
                 limit=limit,
                 query=normalized_query,
                 include_super_admin=include_super_admin,
+                alphabetical=alphabetical,
             ),
             self.users.count(
                 query=normalized_query,

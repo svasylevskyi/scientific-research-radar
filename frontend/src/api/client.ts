@@ -1,10 +1,13 @@
 import type { AuthResponse } from "../types/auth";
+import { createRateLimitRetry } from "./rateLimitRetry";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 export const AUTH_EXPIRED_EVENT = "research-radar:auth-expired";
 
 let accessToken: string | null = null;
 let sessionGeneration = 0;
+let sessionRequests = new AbortController();
+const rateLimitRetry = createRateLimitRetry();
 const sessionChannel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("radar-session") : null;
 sessionChannel?.addEventListener("message", (event) => {
   if (event.data === "signed-out") {
@@ -43,6 +46,8 @@ export class ApiError extends Error {
 
 export function setAccessToken(token: string | null): void {
   sessionGeneration += 1;
+  sessionRequests.abort(new DOMException("Session changed", "AbortError"));
+  sessionRequests = new AbortController();
   accessToken = token;
 }
 
@@ -60,16 +65,21 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (body !== undefined) {
     headers.set("Content-Type", "application/json");
   }
-  if (authenticate && accessToken) {
-    headers.set("Authorization", `Bearer ${accessToken}`);
+  const signal = requestInit.signal
+    ? AbortSignal.any([requestInit.signal, sessionRequests.signal]) : sessionRequests.signal;
+  const requestKey = `${requestInit.method ?? "GET"} ${path.split("?")[0]}`;
+  const serializedBody = body === undefined ? undefined : JSON.stringify(body);
+  let response: Response;
+  let attempts = 0;
+  for (;;) {
+    await rateLimitRetry.ready(requestKey, signal);
+    if (authenticate && accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+    response = await fetch(`${API_URL}${path}`, { ...requestInit, signal, headers,
+      body: serializedBody, credentials: "include" });
+    if (response.status !== 429 || response.headers.get("X-Radar-Retryable") === "false") break;
+    rateLimitRetry.defer(requestKey, response, attempts++);
+    await response.body?.cancel();
   }
-
-  const response = await fetch(`${API_URL}${path}`, {
-    ...requestInit,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: "include",
-  });
 
   if (response.status === 401 && authenticate && retryAfterRefresh) {
     try {

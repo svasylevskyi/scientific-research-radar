@@ -117,12 +117,22 @@ def test_cookie_endpoints_require_header_and_trusted_browser_origin(client):
     assert client.post("/api/v1/auth/refresh").status_code == 200
 
 
-def test_login_throttle_is_account_scoped_and_has_retry_guidance(client):
+def test_login_throttle_is_account_scoped_and_has_retry_guidance(client, monkeypatch):
+    # Keep all attempts in one window even when the suite crosses a quarter-hour.
+    stamp = datetime.now(UTC)
+
+    class FixedClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return stamp.astimezone(tz) if tz else stamp.replace(tzinfo=None)
+
+    monkeypatch.setattr("app.services.rate_limit_service.datetime", FixedClock)
     register(client)
     for _ in range(10):
         assert client.post("/api/v1/auth/login", json={"email": REGISTER_PAYLOAD["email"].upper(), "password": "wrong"}).status_code == 401
     limited = client.post("/api/v1/auth/login", json={"email": REGISTER_PAYLOAD["email"], "password": REGISTER_PAYLOAD["password"]})
     assert limited.status_code == 429 and int(limited.headers["Retry-After"]) > 0
+    assert limited.headers["X-Radar-Rate-Limit-Scope"] == "request"
     assert client.post("/api/v1/auth/login", json={"email": "other@example.com", "password": "wrong"}).status_code == 401
     assert client.get("/health").status_code == 200
 
@@ -133,6 +143,18 @@ def test_untrusted_forwarded_ip_cannot_bypass_limit(client, monkeypatch):
     for i in range(2):
         assert client.post("/api/v1/auth/login", json={"email": f"missing{i}@example.com", "password": "wrong"}, headers={"X-Forwarded-For": f"192.0.2.{i}"}).status_code == 401
     assert client.post("/api/v1/auth/login", json={"email": "another@example.com", "password": "wrong"}, headers={"X-Forwarded-For": "192.0.2.100"}).status_code == 429
+
+
+def test_global_throttle_exposes_retry_scope_to_browser_without_changing_status(client, monkeypatch):
+    from app.api.security import POLICIES
+    monkeypatch.setitem(POLICIES, "api-ip", (1, 60))
+    first = client.get("/api/v1/users/me")
+    assert first.status_code == 401
+    limited = client.get("/api/v1/users/me", headers={"Origin": "http://localhost:5173"})
+    assert limited.status_code == 429
+    assert limited.headers["X-Radar-Rate-Limit-Scope"] == "global"
+    assert int(limited.headers["Retry-After"]) > 0
+    assert "X-Radar-Rate-Limit-Scope" in limited.headers["Access-Control-Expose-Headers"]
 
 
 def test_validation_does_not_echo_passwords_and_responses_are_not_cached(client):

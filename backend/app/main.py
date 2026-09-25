@@ -79,7 +79,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Radar-Request"],
-    expose_headers=["Retry-After"],
+    expose_headers=["Retry-After", "X-Radar-Rate-Limit-Scope", "X-Radar-Retryable"],
 )
 
 app.include_router(api_router, prefix="/api/v1")
@@ -99,7 +99,13 @@ async def validation_error(request, exc):
 
 @app.exception_handler(VerificationError)
 async def verification_error(_request, exc):
-    return JSONResponse(status_code=exc.status_code, content={"detail": str(exc)})
+    headers = {}
+    if exc.retry_after is not None:
+        headers = {"Retry-After": str(exc.retry_after), "X-Radar-Rate-Limit-Scope": "request"}
+    elif exc.status_code == 429:
+        # Exhausted verification attempts require a new challenge, not retries.
+        headers = {"X-Radar-Retryable": "false"}
+    return JSONResponse(status_code=exc.status_code, headers=headers, content={"detail": str(exc)})
 
 
 @app.exception_handler(EmailDeliveryError)
@@ -114,7 +120,8 @@ def health() -> dict[str, str]:
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_error(_request, exc):
-    return JSONResponse(status_code=429, headers={"Retry-After": str(exc.retry_after), "Cache-Control": "no-store"},
+    return JSONResponse(status_code=429, headers={"Retry-After": str(exc.retry_after), "Cache-Control": "no-store",
+                        "X-Radar-Rate-Limit-Scope": "global" if exc.scope in {"api-ip", "api-user"} else "request"},
                         content={"detail": str(exc)})
 
 
