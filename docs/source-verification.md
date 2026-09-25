@@ -59,8 +59,8 @@ Off. Existing legacy runs are not backfilled.
 These modes control the metadata checker, not permission enforcement or source
 retrieval for new summaries. That separate pipeline remains active with checks Off.
 
-The ordinary **Evaluate quality** action remains a local consistency check.
-**Verify sources / Recheck sources**, in Run Diagnostics, is a separate action on
+The ordinary **Run local checks** action remains a local consistency check.
+**Verify sources (external) / Recheck sources (external)**, in Run Diagnostics, is a separate action on
 completed runs using current settings. It appends evidence/history without changing
 an earlier automatic decision, delivery eligibility, prior source evidence,
 research context, or allowance accounting. It neither generates research nor sends

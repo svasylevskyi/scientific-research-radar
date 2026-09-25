@@ -1,8 +1,6 @@
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip, Link, Stack, Typography } from "@mui/material";
-import { useCallback } from "react";
-import { researchQualityApi, type PaperContent } from "../api/researchQuality";
-import { usePollingResource } from "../hooks/usePollingResource";
+import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Chip, Link, Stack, Typography } from "@mui/material";
+import type { PaperContent, RunContent } from "../api/researchQuality";
 import { runDate } from "../runHistory";
 
 export function ContentEvidence({ item }: { item: PaperContent }) {
@@ -44,17 +42,11 @@ export function ContentEvidence({ item }: { item: PaperContent }) {
   </Accordion>;
 }
 
-export function AdminSourceContent({ digestId, runId }: { digestId: string; runId: string }) {
-  const load = useCallback(() => researchQualityApi.content(digestId, runId), [digestId, runId]);
-  const resource = usePollingResource(load, 60000);
+export function AdminSourceContent({ content }: { content: RunContent }) {
   return <Stack spacing={2}>
-    <Typography component="h3" variant="subtitle1" fontWeight={700}>Summary evidence</Typography>
-    <Typography variant="body2" color="text.secondary">Inspect the permission-checked excerpts supplied to the summarization step. Valid passage references establish traceability; they do not certify that the text supports the claim. Human review is still required. Saved inputs stay unchanged on retries.</Typography>
-    <Button sx={{ alignSelf: "flex-start" }} disabled={resource.loading} onClick={() => void resource.refresh()}>Refresh saved evidence</Button>
-    {resource.loading && <Typography role="status">Loading summary evidence…</Typography>}
-    {resource.error && <Alert severity="error">{resource.error}</Alert>}
-    {resource.data?.legacy && <Typography>This older run predates saved summary evidence. Its sources cannot be reconstructed as evidence used during generation.</Typography>}
-    {resource.data && !resource.data.legacy && !resource.data.items.length && <Typography>No source content has been captured for this run yet.</Typography>}
-    {resource.data?.items.map(item => <ContentEvidence key={item.document.external_id} item={item} />)}
+    <Typography variant="body2" color="text.secondary">Inspect the permission-checked excerpts supplied during generation. A valid passage reference does not establish claim support. Viewing or refreshing these saved inputs never fetches source content.</Typography>
+    {content.legacy && <Typography>This older run predates saved summary evidence. Its sources cannot be reconstructed as evidence used during generation.</Typography>}
+    {!content.legacy && !content.items.length && <Typography>No source content has been captured for this run yet.</Typography>}
+    {content.items.map(item => <ContentEvidence key={item.document.external_id} item={item} />)}
   </Stack>;
 }

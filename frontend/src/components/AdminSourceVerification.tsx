@@ -1,8 +1,7 @@
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip, Link, Pagination, Stack, Typography } from "@mui/material";
-import { useCallback, useRef, useState } from "react";
-import { researchQualityApi, type PaperVerification, type SourceVerification } from "../api/researchQuality";
-import { usePollingResource } from "../hooks/usePollingResource";
+import { useRef, useState } from "react";
+import { researchQualityApi, type PaperVerification, type SourceVerification, type SourceHistory, type QualitySettings } from "../api/researchQuality";
 import { runDate } from "../runHistory";
 import type { DigestRunDetail } from "../types/digest";
 
@@ -64,49 +63,42 @@ function EvidenceBatch({ batch }: { batch: SourceVerification }) {
   </Stack>;
 }
 
-export function AdminSourceVerification({ digestId, run }: { digestId: string; run: DigestRunDetail }) {
-  const [page, setPage] = useState(1);
+export function AdminSourceVerification({ digestId, run, settings, history, page, setPage, stale, refresh }: {
+  digestId: string; run: DigestRunDetail; settings: QualitySettings; history: SourceHistory;
+  page: number; setPage: (page: number) => void; stale: boolean; refresh: () => Promise<void>;
+}) {
   const [saving, setSaving] = useState(false);
   const pending = useRef(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState<SourceVerification | null>(null);
-  const load = useCallback(async () => {
-    const [settings, history] = await Promise.all([researchQualityApi.get(), researchQualityApi.sources(digestId, run.id, page)]);
-    return { settings, history };
-  }, [digestId, run.id, page]);
-  const resource = usePollingResource(load, 60000);
-  const data = resource.data;
-  const disabled = run.status !== "completed" || !data || !!resource.error || resource.loading || data.settings.config.source_verification_mode === "off";
+  const disabled = run.status !== "completed" || stale || settings.config.source_verification_mode === "off";
   async function verify() {
-    if (disabled || !data || pending.current) return;
+    if (disabled || pending.current) return;
     pending.current = true;
     setSaving(true); setError(""); setSaved(null);
     try {
-      setSaved(await researchQualityApi.verifySources(digestId, run.id, data.settings.version));
+      setSaved(await researchQualityApi.verifySources(digestId, run.id, settings.version));
       setPage(1);
-      await resource.refresh();
+      await refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Source verification failed."); }
     finally { pending.current = false; setSaving(false); }
   }
-  const batches = data?.history.items ?? [];
+  const batches = history.items;
   return <Stack spacing={2}>
-    <Typography component="h3" variant="subtitle1" fontWeight={700}>Independent source verification</Typography>
-    <Typography variant="body2" color="text.secondary">Compare saved paper details with Crossref DOI or arXiv metadata. Rechecking uses current settings and retains earlier evidence. It makes no OpenAI requests and never changes existing email decisions. Metadata is cached for up to 24 hours; temporary failures can be retried after a minute.</Typography>
+    <Typography variant="body2" color="text.secondary">Checks paper identity and metadata using external Crossref/arXiv requests, without OpenAI charges. This does not check claim accuracy or retrieve full text. Cached metadata may be reused for 24 hours; temporary failures can be retried after a minute.</Typography>
     <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-      <Button variant="outlined" disabled={disabled || saving} onClick={() => void verify()}>{saving ? "Verifying sources…" : data?.history.total ? "Recheck sources" : "Verify sources"}</Button>
-      <Button disabled={saving || resource.loading} onClick={() => void resource.refresh()}>Refresh evidence</Button>
+      <Button variant="outlined" disabled={disabled || saving} onClick={() => void verify()}>{saving ? "Verifying sources…" : history.total ? "Recheck sources (external)" : "Verify sources (external)"}</Button>
     </Stack>
-    {data?.settings.config.source_verification_mode === "off" && <Typography variant="body2">Source verification is disabled in Research quality settings.</Typography>}
+    {settings.config.source_verification_mode === "off" && <Typography variant="body2">Source verification is disabled in Research quality settings.</Typography>}
     {run.status !== "completed" && <Typography variant="body2">Manual verification requires a completed run.</Typography>}
-    {resource.loading && <Typography role="status">Loading source evidence…</Typography>}
-    {(error || resource.error) && <Alert severity="error">{error || resource.error}</Alert>}
+    {error && <Alert severity="error">{error}</Alert>}
     {saved && <Alert severity="success">Source verification saved.</Alert>}
     {saved && !batches.some(batch => batch.id === saved.id) && <EvidenceBatch batch={saved} />}
-    {!resource.loading && !batches.length && !saved && <Typography variant="body2">No source verification has been recorded for this run.</Typography>}
-    {batches.map((batch, index) => <Accordion key={batch.id} defaultExpanded={page === 1 && index === 0}>
+    {!batches.length && !saved && <Typography variant="body2">No source verification has been recorded for this run.</Typography>}
+    {batches.map((batch, index) => <Accordion key={batch.id}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{page === 1 && index === 0 ? "Latest source verification" : "Earlier source verification"} · {runDate(batch.created_at).toLocaleString()}</Typography></AccordionSummary>
       <AccordionDetails><EvidenceBatch batch={batch} /></AccordionDetails>
     </Accordion>)}
-    {!!data && data.history.total > 5 && <Pagination page={page} count={Math.ceil(data.history.total / 5)} onChange={(_, value) => setPage(value)} disabled={saving} aria-label="Source verification history pages" />}
+    {history.total > 5 && <Pagination page={page} count={Math.ceil(history.total / 5)} onChange={(_, value) => setPage(value)} disabled={saving} aria-label="Source verification history pages" />}
   </Stack>;
 }
