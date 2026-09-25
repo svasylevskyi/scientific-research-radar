@@ -397,9 +397,11 @@ export function DigestWorkspace({
                 {activeTab === "diagnostics" && (
                   <Stack spacing={2}>
                     <AdminRunQuality key={run.id} digestId={digestId} run={run} />
+                    <Typography component="h2" variant="h6">Costs</Typography>
                     <AdminCostSummary {...costs} />
                     <AdminCostDetails {...costs} />
                     <AdminDigestCostSummary digestId={digestId} />
+                    <Typography component="h2" variant="h6">Run steps</Typography>
                     <DigestRunProgress run={run} />
                     <Typography>
                       OpenAI response jobs created: {run.request_count}.
