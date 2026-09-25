@@ -80,8 +80,9 @@ User digest pages currently omit quality indicators; delivery enforcement and
 email disclosures remain active. Normal Off/legacy runs show Not evaluated until
 a manual assessment is recorded. A Pass only means these checks passed.
 
-The Research Quality tab also includes the shared [human benchmark review
-workspace](research-evaluation.md). These labels evaluate the research system;
+The next diagnostics tab, **Human Benchmark Review**, contains the shared
+[human benchmark review workspace](research-evaluation.md). These labels evaluate
+the research system;
 they do not approve or release the selected run. Reviews are also accessible from
 the admin Research quality settings page.
 

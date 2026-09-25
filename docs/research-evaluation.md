@@ -3,8 +3,9 @@
 ## Review in the application
 
 Open an admin digest's **Research output & history**, select a run, then use
-**Run Diagnostics → Research Quality → Human benchmark review**. The same shared
-review workspace is available on the admin Research quality settings page.
+**Run Diagnostics → Human Benchmark Review** (immediately after Research Quality).
+The same shared review workspace is available on the admin Research quality
+settings page.
 **Costs** and **Steps** are separate diagnostics tabs; **Run Output** contains the
 briefing, trends, paper summaries and feedback.
 
