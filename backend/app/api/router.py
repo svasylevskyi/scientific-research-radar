@@ -1,11 +1,13 @@
 from app.api.routes import admin_subscriptions, contact
 from app.api.routes import research_quality
+from app.api.routes import benchmark_review
 from fastapi import APIRouter, Depends
 from app.api.security import guard_request
 
 from app.api.routes import admin_spending, admin_pricing, admin_digests, admin_users, auth, digest_runs, digests, users
 
 api_router = APIRouter(dependencies=[Depends(guard_request)])
+api_router.include_router(benchmark_review.router, prefix="/admin/research-quality/benchmarks", tags=["administration", "research quality"])
 api_router.include_router(research_quality.router, prefix="/admin/research-quality", tags=["administration", "research quality"])
 api_router.include_router(contact.router, prefix="/contact", tags=["contact"])
 api_router.include_router(contact.admin_router, prefix="/admin/messages", tags=["administration", "contact"])

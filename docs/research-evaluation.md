@@ -1,4 +1,66 @@
-# Offline research benchmark and evaluation
+# Human benchmark review and offline evaluation
+
+## Review in the application
+
+Open an admin digest's **Research output & history**, select a run, then use
+**Run Diagnostics → Research Quality → Human benchmark review**. The same shared
+review workspace is available on the admin Research quality settings page.
+**Costs** and **Steps** are separate diagnostics tabs; **Run Output** contains the
+briefing, trends, paper summaries and feedback.
+
+Human benchmark review labels the shared evaluation cases, not the selected digest
+run. It makes no LLM calls, retrieves no additional source content and never changes
+run quality, delivery holds, billing or allowances. Ordinary admins can review;
+only super-admins can import datasets/proposals, approve criteria, resolve disputes
+and publish revisions. Regular users cannot access these endpoints.
+
+1. Choose a development case. Read the claim, original citations and supplied
+   permitted excerpts. Source attribution, licence and permission links are shown.
+2. Choose **Supported**, **Contradicted** or **Insufficient evidence**, select the
+   relevant passages and explain your decision. Save a **Draft** to resume later.
+3. To complete or exclude a case, explicitly confirm that you personally reviewed
+   the evidence and reuse permissions. The server records your signed-in identity,
+   timestamp and review version. Each save appends history; stale saves are rejected.
+4. Mark unclear decisions **Disputed**. Conflicting final decisions by different
+   reviewers also become disputed, including when an intermediate draft was saved.
+   A super-admin must explicitly resolve the dispute with a decision and rationale.
+5. Complete the reserved held-out cases for a planned evaluation. A super-admin
+   reviews/approves the comparison criteria, then **Publish benchmark revision**
+   freezes the completed/excluded labels and criteria. Every case must be resolved,
+   and at least one must be approved. Later edits only affect the working copy.
+
+Publishing freezes review inputs; it does **not** mean a candidate passed evaluation
+or that the product is ready to launch. Dataset size/diversity, verdict coverage and
+other scoring gates still apply when evaluating a saved candidate below. The seeded
+held-out set is intentionally too small for the example minimum of 20 cases.
+
+Drafts remain mounted while switching Diagnostics/Output or diagnostics tabs. Save
+before leaving the page; unsaved edits are not automatically persisted. Imports are
+limited to permission-checked benchmark inputs. Imported labels are draft proposals,
+never authenticated approvals, and cannot overwrite existing drafts or reviews.
+
+**Import and export** downloads a JSON bundle with `benchmark`, `reviews`, `criteria`
+and optional publication metadata. Download a numbered publication for a repeatable
+comparison. To use it with the existing offline CLI, split a downloaded bundle on
+your local machine (no server-file editing required):
+
+```bash
+python - radar-benchmark-published-1.json ./reviewed-benchmark <<'PY'
+import json, pathlib, sys
+bundle = json.loads(pathlib.Path(sys.argv[1]).read_text())
+folder = pathlib.Path(sys.argv[2])
+folder.mkdir(parents=True, exist_ok=False)
+for name in ("benchmark", "reviews", "criteria"):
+    (folder / f"{name}.json").write_text(json.dumps(bundle[name], indent=2))
+PY
+```
+
+Use these three files with `app.evaluation evaluate`. Candidate generation and
+comparison reports remain in the offline CLI for this increment; the application
+provides the human labeling and criteria workflow. The optional file-based workflow
+below is retained for local development and automation.
+
+## Offline framework
 
 This framework compares **saved claim-review verdicts** against human-approved
 labels. It does not generate research, call a model, fetch a source, connect to the
@@ -193,10 +255,18 @@ The sample’s computing-heavy coverage needs expansion across customer topics.
 
 ## Remaining work and deployment
 
-No migration, environment variable, admin action, production switch or outbound
-access is added. Deploy normally; production runs and the admin UI are unchanged.
-No labels are promoted to approved during deployment. Human review can happen on a
-local development checkout without starting the application.
+Normal deployment applies migration **20260925_0032**, creating the benchmark,
+append-only review/criteria history and frozen publication tables. It seeds the
+existing 36-case benchmark with all labels pending and criteria in draft. The frozen
+seed asset is included in the backend image. No additional environment variables,
+LLM credentials or outbound access are needed. Existing runs and automatic quality
+settings remain unchanged. Backups now include review history; downgrading below
+this migration deletes that history and publications, so export/back up first.
+
+Review work is ongoing: add representative cases and revisit labels/criteria as
+prompts, models, evidence or product expectations change. Import a new benchmark
+revision when changing claims/evidence; existing publications stay bound to their
+original input hashes. Keep held-out data out of tuning and candidate prompts.
 
 Next: complete human review, broaden the dataset, then add an optional bounded
 semantic reviewer in Observe mode and evaluate it through this contract. Separate

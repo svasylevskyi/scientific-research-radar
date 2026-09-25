@@ -27,12 +27,13 @@ test('date ranges enforce inclusive 93-day maximum, order, and no future dates',
   assert.equal(validSpendingRange('2026-04-04', '2026-04-04', '2026-04-03'), false);
   assert.equal(validSpendingRange('', '', '2026-04-03'), false);
 });
-test('partial research output takes precedence over diagnostics while explicit tabs remain stable', () => {
+test('admin output excludes diagnostics and details while user tabs remain available', () => {
   const partial = {briefing: false, trends: false, papers: true, diagnostics: true, details: true};
   assert.equal(resultTab('briefing', partial, true), 'papers');
-  assert.equal(resultTab('diagnostics', partial, true), 'diagnostics');
-  assert.equal(resultTab('details', partial, true), 'details');
-  assert.equal(resultTab('briefing', {}, true), 'diagnostics');
+  assert.equal(resultTab('diagnostics', partial, true), 'papers');
+  assert.equal(resultTab('details', partial, true), 'papers');
+  assert.equal(resultTab('details', partial, false), 'details');
+  assert.equal(resultTab('briefing', {}, true), 'none');
   assert.equal(resultTab('briefing', {}, false), 'steps');
 });
 test('admin history loader includes runs beyond the first page', async () => {

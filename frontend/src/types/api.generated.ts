@@ -295,6 +295,144 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/research-quality/benchmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Benchmarks */
+        get: operations["list_benchmarks_api_v1_admin_research_quality_benchmarks_get"];
+        put?: never;
+        /** Import Benchmark */
+        post: operations["import_benchmark_api_v1_admin_research_quality_benchmarks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/research-quality/benchmarks/{benchmark_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Benchmark */
+        get: operations["read_benchmark_api_v1_admin_research_quality_benchmarks__benchmark_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/research-quality/benchmarks/{benchmark_id}/cases/{case_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Case */
+        get: operations["read_case_api_v1_admin_research_quality_benchmarks__benchmark_id__cases__case_id__get"];
+        put?: never;
+        /** Save Review */
+        post: operations["save_review_api_v1_admin_research_quality_benchmarks__benchmark_id__cases__case_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/research-quality/benchmarks/{benchmark_id}/criteria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Criteria */
+        post: operations["save_criteria_api_v1_admin_research_quality_benchmarks__benchmark_id__criteria_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/research-quality/benchmarks/{benchmark_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export */
+        get: operations["export_api_v1_admin_research_quality_benchmarks__benchmark_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/research-quality/benchmarks/{benchmark_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** History */
+        get: operations["history_api_v1_admin_research_quality_benchmarks__benchmark_id__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/research-quality/benchmarks/{benchmark_id}/publications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish */
+        post: operations["publish_api_v1_admin_research_quality_benchmarks__benchmark_id__publications_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/research-quality/benchmarks/{benchmark_id}/review-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Reviews */
+        post: operations["import_reviews_api_v1_admin_research_quality_benchmarks__benchmark_id__review_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/research-quality/history": {
         parameters: {
             query?: never;
@@ -1821,6 +1959,245 @@ export interface components {
             token_type?: string;
             user: components["schemas"]["UserRead"];
         };
+        /** Benchmark */
+        Benchmark: {
+            /** Cases */
+            cases: components["schemas"]["Case"][];
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /**
+             * Schema Version
+             * @default 1
+             * @constant
+             */
+            schema_version?: "1";
+            /** Sources */
+            sources: components["schemas"]["Source"][];
+            /** Version */
+            version: string;
+        };
+        /** BenchmarkAuditRead */
+        BenchmarkAuditRead: {
+            /** Criteria */
+            criteria: components["schemas"]["BenchmarkCriteriaRead"][];
+            /** Publications */
+            publications: components["schemas"]["BenchmarkPublicationRead"][];
+        };
+        /** BenchmarkCaseRead */
+        BenchmarkCaseRead: {
+            case: components["schemas"]["Case"];
+            /** History */
+            history: components["schemas"]["BenchmarkReviewRead"][];
+            /** History Total */
+            history_total: number;
+            review: components["schemas"]["BenchmarkReviewRead"] | null;
+            /** Sources */
+            sources: components["schemas"]["Source"][];
+        };
+        /** BenchmarkCaseSummary */
+        BenchmarkCaseSummary: {
+            /** Claim */
+            claim: string;
+            /** Id */
+            id: string;
+            /** Scope */
+            scope: string;
+            /** Split */
+            split: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "draft" | "approved" | "excluded" | "disputed";
+            /** Version */
+            version: number;
+        };
+        /** BenchmarkCriteriaRead */
+        BenchmarkCriteriaRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            criteria: components["schemas"]["Criteria"];
+            /** Revision */
+            revision: number;
+        };
+        /** BenchmarkCriteriaWrite */
+        BenchmarkCriteriaWrite: {
+            /** Expected Revision */
+            expected_revision: number;
+            /** Maximum False Acceptance Rate */
+            maximum_false_acceptance_rate: number;
+            /** Maximum Regressions */
+            maximum_regressions: number;
+            /** Minimum Accuracy */
+            minimum_accuracy: number;
+            /** Minimum Prediction Coverage */
+            minimum_prediction_coverage: number;
+            /** Minimum Reviewed Cases */
+            minimum_reviewed_cases: number;
+            /** Minimum Source Families */
+            minimum_source_families: number;
+            /** Reason */
+            reason: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "approved";
+        };
+        /** BenchmarkDetail */
+        BenchmarkDetail: {
+            /** Cases */
+            cases: components["schemas"]["BenchmarkCaseSummary"][];
+            criteria: components["schemas"]["Criteria"];
+            /** Description */
+            description: string;
+            summary: components["schemas"]["BenchmarkSummary"];
+        };
+        /** BenchmarkExport */
+        BenchmarkExport: {
+            benchmark: components["schemas"]["Benchmark"];
+            criteria: components["schemas"]["Criteria"];
+            publication: components["schemas"]["BenchmarkPublicationRead"] | null;
+            reviews: components["schemas"]["Reviews"];
+        };
+        /** BenchmarkImportWrite */
+        BenchmarkImportWrite: {
+            benchmark: components["schemas"]["Benchmark"];
+            /** Permissions Checked */
+            permissions_checked: boolean;
+        };
+        /** BenchmarkPublicationRead */
+        BenchmarkPublicationRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Fingerprint */
+            fingerprint: string;
+            /** Number */
+            number: number;
+            /** Reason */
+            reason: string;
+            /** Source Revision */
+            source_revision: number;
+        };
+        /** BenchmarkPublishWrite */
+        BenchmarkPublishWrite: {
+            /** Expected Revision */
+            expected_revision: number;
+            /** Reason */
+            reason: string;
+        };
+        /** BenchmarkReviewImportWrite */
+        BenchmarkReviewImportWrite: {
+            /** Expected Revision */
+            expected_revision: number;
+            reviews: components["schemas"]["Reviews"];
+        };
+        /** BenchmarkReviewRead */
+        BenchmarkReviewRead: {
+            /** Evidence Passage Ids */
+            evidence_passage_ids: string[];
+            /** Human Reviewed */
+            human_reviewed: boolean;
+            /**
+             * Imported
+             * @default false
+             */
+            imported?: boolean;
+            /** Permissions Checked */
+            permissions_checked: boolean;
+            /** Rationale */
+            rationale: string;
+            /**
+             * Reviewed At
+             * Format: date-time
+             */
+            reviewed_at: string;
+            /** Reviewer Id */
+            reviewer_id: string | null;
+            /** Reviewer Name */
+            reviewer_name: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "draft" | "approved" | "excluded" | "disputed";
+            /** Verdict */
+            verdict: ("supported" | "contradicted" | "insufficient_evidence") | null;
+            /** Version */
+            version: number;
+        };
+        /** BenchmarkReviewWrite */
+        BenchmarkReviewWrite: {
+            /** Evidence Passage Ids */
+            evidence_passage_ids?: string[];
+            /** Expected Version */
+            expected_version: number;
+            /**
+             * Human Reviewed
+             * @default false
+             */
+            human_reviewed?: boolean;
+            /**
+             * Permissions Checked
+             * @default false
+             */
+            permissions_checked?: boolean;
+            /**
+             * Rationale
+             * @default
+             */
+            rationale?: string;
+            /**
+             * Resolve Dispute
+             * @default false
+             */
+            resolve_dispute?: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "draft" | "approved" | "excluded" | "disputed";
+            /** Verdict */
+            verdict?: ("supported" | "contradicted" | "insufficient_evidence") | null;
+        };
+        /** BenchmarkSummary */
+        BenchmarkSummary: {
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Fingerprint */
+            fingerprint: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Latest Publication */
+            latest_publication: number | null;
+            /** Name */
+            name: string;
+            /** Revision */
+            revision: number;
+            /** Total */
+            total: number;
+            /** Unpublished Changes */
+            unpublished_changes: boolean;
+            /** Version */
+            version: string;
+        };
         /** BillingAttemptRead */
         BillingAttemptRead: {
             /** Checkout Status */
@@ -1923,6 +2300,35 @@ export interface components {
             worker_healthy: boolean;
             /** Worker Last Seen At */
             worker_last_seen_at: string | null;
+        };
+        /** Case */
+        Case: {
+            /** Cited Passage Ids */
+            cited_passage_ids?: string[];
+            /** Claim */
+            claim: string;
+            /** Id */
+            id: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "summary" | "finding" | "trend" | "briefing";
+            /**
+             * Severity
+             * @default ordinary
+             * @enum {string}
+             */
+            severity?: "ordinary" | "critical";
+            /** Source Ids */
+            source_ids?: string[];
+            /**
+             * Split
+             * @enum {string}
+             */
+            split: "development" | "heldout";
+            /** Tags */
+            tags: string[];
         };
         /** ChangeOptionRead */
         ChangeOptionRead: {
@@ -2073,6 +2479,57 @@ export interface components {
         ContactMessageReview: {
             /** Reviewed */
             reviewed: boolean;
+        };
+        /** Criteria */
+        Criteria: {
+            /**
+             * Maximum False Acceptance Rate
+             * @default 0
+             */
+            maximum_false_acceptance_rate?: number;
+            /**
+             * Maximum Regressions
+             * @default 0
+             */
+            maximum_regressions?: number;
+            /**
+             * Minimum Accuracy
+             * @default 0.9
+             */
+            minimum_accuracy?: number;
+            /**
+             * Minimum Prediction Coverage
+             * @default 1
+             */
+            minimum_prediction_coverage?: number;
+            /**
+             * Minimum Reviewed Cases
+             * @default 20
+             */
+            minimum_reviewed_cases?: number;
+            /**
+             * Minimum Source Families
+             * @default 5
+             */
+            minimum_source_families?: number;
+            /** Rationale */
+            rationale?: string | null;
+            /** Reviewed At */
+            reviewed_at?: string | null;
+            /** Reviewer */
+            reviewer?: string | null;
+            /**
+             * Schema Version
+             * @default 1
+             * @constant
+             */
+            schema_version?: "1";
+            /**
+             * Status
+             * @default draft
+             * @enum {string}
+             */
+            status?: "draft" | "approved";
         };
         /** DigestChoiceRead */
         DigestChoiceRead: {
@@ -2865,6 +3322,13 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** Passage */
+        Passage: {
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+        };
         /** PasswordRecoveryRequest */
         PasswordRecoveryRequest: {
             /**
@@ -3289,6 +3753,52 @@ export interface components {
             /** Runs */
             runs: number | null;
         };
+        /** Review */
+        Review: {
+            /** Case Id */
+            case_id: string;
+            /** Case Sha256 */
+            case_sha256: string;
+            /** Evidence Passage Ids */
+            evidence_passage_ids?: string[];
+            /**
+             * Human Reviewed
+             * @default false
+             */
+            human_reviewed?: boolean;
+            /**
+             * Permissions Checked
+             * @default false
+             */
+            permissions_checked?: boolean;
+            /** Rationale */
+            rationale?: string | null;
+            /** Reviewed At */
+            reviewed_at?: string | null;
+            /** Reviewer */
+            reviewer?: string | null;
+            /**
+             * Status
+             * @default pending
+             * @enum {string}
+             */
+            status?: "pending" | "approved" | "excluded";
+            /** Verdict */
+            verdict?: ("supported" | "contradicted" | "insufficient_evidence") | null;
+        };
+        /** Reviews */
+        Reviews: {
+            /** Benchmark Sha256 */
+            benchmark_sha256: string;
+            /** Records */
+            records?: components["schemas"]["Review"][];
+            /**
+             * Schema Version
+             * @default 1
+             * @constant
+             */
+            schema_version?: "1";
+        };
         /** RunContentRead */
         RunContentRead: {
             /** Items */
@@ -3408,6 +3918,39 @@ export interface components {
             interval: "monthly" | "annual";
             /** Revision */
             revision: number;
+        };
+        /** Source */
+        Source: {
+            /** Authors */
+            authors?: string[];
+            /** Captured At */
+            captured_at?: string | null;
+            /** Family */
+            family: string;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "arxiv_abstract" | "synthetic" | "unavailable";
+            /** License Url */
+            license_url?: string | null;
+            /** Passages */
+            passages?: components["schemas"]["Passage"][];
+            /** Permission Note */
+            permission_note: string;
+            /** Permission Url */
+            permission_url?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+            /**
+             * Split
+             * @enum {string}
+             */
+            split: "development" | "heldout";
+            /** Title */
+            title: string;
         };
         /** SourceDocument */
         SourceDocument: {
@@ -4710,6 +5253,331 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QualitySettingsRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_benchmarks_api_v1_admin_research_quality_benchmarks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkSummary"][];
+                };
+            };
+        };
+    };
+    import_benchmark_api_v1_admin_research_quality_benchmarks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenchmarkImportWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_benchmark_api_v1_admin_research_quality_benchmarks__benchmark_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                benchmark_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_case_api_v1_admin_research_quality_benchmarks__benchmark_id__cases__case_id__get: {
+        parameters: {
+            query?: {
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                benchmark_id: string;
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkCaseRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_review_api_v1_admin_research_quality_benchmarks__benchmark_id__cases__case_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                benchmark_id: string;
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenchmarkReviewWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkCaseRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_criteria_api_v1_admin_research_quality_benchmarks__benchmark_id__criteria_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                benchmark_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenchmarkCriteriaWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_api_v1_admin_research_quality_benchmarks__benchmark_id__export_get: {
+        parameters: {
+            query?: {
+                publication?: number | null;
+            };
+            header?: never;
+            path: {
+                benchmark_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkExport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    history_api_v1_admin_research_quality_benchmarks__benchmark_id__history_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                benchmark_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkAuditRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_api_v1_admin_research_quality_benchmarks__benchmark_id__publications_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                benchmark_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenchmarkPublishWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkPublicationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_reviews_api_v1_admin_research_quality_benchmarks__benchmark_id__review_imports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                benchmark_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenchmarkReviewImportWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkDetail"];
                 };
             };
             /** @description Validation Error */

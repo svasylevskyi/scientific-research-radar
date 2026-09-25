@@ -69,6 +69,8 @@ files = [
   "app/services/source_content_service.py",
   "app/radar/evidence.py",
   "app/evaluation",
+  "app/services/benchmark_review_service.py",
+  "app/schemas/benchmark_review.py",
   "app/radar/lease.py",
   "app/radar/errors.py",
   "app/repositories/digest_run_repository.py",

@@ -73,11 +73,17 @@ Enforced held output and its feedback are excluded from subsequent research hist
 context, so it is not reused as accepted previous research.
 
 Admins can inspect quality decisions under **Research output & history → Run
-Diagnostics**, above costs and run steps. The quality block includes findings,
+Diagnostics → Research Quality**. Costs and Steps are separate diagnostics tabs;
+Run Output shows the research results. The quality block includes findings,
 affected paper IDs, settings/check versions, and the automatic delivery hold.
 User digest pages currently omit quality indicators; delivery enforcement and
 email disclosures remain active. Normal Off/legacy runs show Not evaluated until
 a manual assessment is recorded. A Pass only means these checks passed.
+
+The Research Quality tab also includes the shared [human benchmark review
+workspace](research-evaluation.md). These labels evaluate the research system;
+they do not approve or release the selected run. Reviews are also accessible from
+the admin Research quality settings page.
 
 ## Manual evaluation and history
 
