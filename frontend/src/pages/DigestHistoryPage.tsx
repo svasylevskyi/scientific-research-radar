@@ -1,6 +1,7 @@
 import type { AdminDigest } from "../types/digest";
 import { useCallback } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import {
   Alert,
   Box,
@@ -37,7 +38,18 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
       <AppHeader />
       <Container component="main" maxWidth="lg" sx={{ py: { xs: 3, sm: 6 } }}>
         {admin ? (
-          <AdminDigestNavigation digestId={digestId} current="runs" />
+          <>
+            <Button
+              component={Link}
+              to="/admin/digests"
+              color="inherit"
+              startIcon={<ArrowBackRoundedIcon />}
+              sx={{ mb: 2 }}
+            >
+              Back to digest management
+            </Button>
+            <AdminDigestNavigation digestId={digestId} current="runs" />
+          </>
         ) : (
           <Button component={Link} to={`/radar/digests/${digestId}`}>
             Back to digest
