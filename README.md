@@ -24,6 +24,10 @@ Research quality gates and the super-admin Off/Observe/Enforce settings are
 documented in [the research quality guide](docs/research-quality.md). New runs
 default to Observe; legacy runs remain Not evaluated.
 
+The [offline evaluation guide](docs/research-evaluation.md) explains draft benchmark
+review, human approval records, and reproducible comparisons of saved reviewer
+verdicts. It adds no automatic model calls or production delivery changes.
+
 ## Website navigation
 
 Public information pages remain at `/`, `/about`, `/plans`, `/contact`, `/privacy`, and `/terms`. User application pages live under `/radar`; admin pages retain their `/admin` URLs and access rules.
