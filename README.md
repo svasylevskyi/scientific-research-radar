@@ -29,6 +29,10 @@ admin benchmark forms, saved drafts, review history, frozen publications, and
 reproducible offline comparisons of saved reviewer verdicts. It adds no automatic
 model calls or production delivery changes.
 
+The optional [AI claim reviewer](docs/ai-claim-review.md) adds explicit paid
+observations of saved permitted evidence and comparisons against published human
+benchmarks. It starts Off, has super-admin budgets, and never changes delivery.
+
 ## Website navigation
 
 Public information pages remain at `/`, `/about`, `/plans`, `/contact`, `/privacy`, and `/terms`. User application pages live under `/radar`; admin pages retain their `/admin` URLs and access rules.

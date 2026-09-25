@@ -56,10 +56,11 @@ for name in ("benchmark", "reviews", "criteria"):
 PY
 ```
 
-Use these three files with `app.evaluation evaluate`. Candidate generation and
-comparison reports remain in the offline CLI for this increment; the application
-provides the human labeling and criteria workflow. The optional file-based workflow
-below is retained for local development and automation.
+Use these three files with `app.evaluation evaluate`. The optional
+[AI claim reviewer](ai-claim-review.md) now generates candidates and comparisons
+against numbered publications in the application. It is a separate paid action,
+Off by default. The file-based workflow below remains available for development,
+automation and baseline comparisons.
 
 ## Offline framework
 
@@ -199,7 +200,8 @@ review request, allocate totals once across its cases; do not repeat the full ba
 cost for every case. Null means unknown, not free or instantaneous. The framework
 does not independently verify these measurements. Producing candidate outputs with
 a model later will incur that model’s normal costs; evaluating saved outputs here
-does not. The framework has no model runner or API-key setting.
+does not. The offline CLI has no model runner or API-key setting; the separate application
+reviewer uses the existing server key under its own explicit controls.
 
 ## 4. Evaluate and compare
 
@@ -269,7 +271,7 @@ prompts, models, evidence or product expectations change. Import a new benchmark
 revision when changing claims/evidence; existing publications stay bound to their
 original input hashes. Keep held-out data out of tuning and candidate prompts.
 
-Next: complete human review, broaden the dataset, then add an optional bounded
-semantic reviewer in Observe mode and evaluate it through this contract. Separate
+Next: complete human review, broaden the dataset, and calibrate the optional bounded
+AI reviewer in Observe mode through this contract. Separate
 digest-level evaluation must measure discovery coverage, relevance, synthesis and
 usefulness with representative readers; a claim-review score does not measure those.

@@ -52,9 +52,15 @@ async def lifespan(_app: FastAPI):
     cleaner = asyncio.create_task(verification_cleanup_loop()) if settings.environment != "test" else None
     from app.services.billing_sync_service import worker_loop
     billing_worker = asyncio.create_task(worker_loop(SessionLocal, settings)) if settings.environment != "test" else None
+    from app.services.claim_review_worker import worker_loop as claim_review_loop
+    claim_worker = asyncio.create_task(claim_review_loop(SessionLocal, settings)) if settings.environment != "test" else None
     try:
         yield
     finally:
+        if claim_worker:
+            claim_worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await claim_worker
         if billing_worker:
             billing_worker.cancel()
             with suppress(asyncio.CancelledError):

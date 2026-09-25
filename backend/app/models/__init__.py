@@ -3,6 +3,7 @@ from app.models.subscription_plan import SubscriptionPlanRevision
 from app.models.radar_price import RadarPrice
 from app.models.source_content import RunSourceContent, SourceContentCache
 from app.models.radar_request import RadarRequest
+from app.models.claim_review import ClaimReview, ClaimReviewRequest, ClaimReviewBudget
 from app.models.auth_session import AuthSession
 from app.models.password_reset import PasswordReset, RecoveryRateLimit
 from app.models.digest_email_delivery import DigestEmailDelivery

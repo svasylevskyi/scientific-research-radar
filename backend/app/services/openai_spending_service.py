@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from app.models.digest_run import DigestRun
 from app.models.radar_request import RadarRequest
+from app.models.claim_review import ClaimReviewRequest
+from itertools import chain
 from app.services.radar_cost_service import estimate
 
 
@@ -133,8 +135,8 @@ def spending_report(db, settings, start_date, end_date):
         day = (start_date + timedelta(days=i)).isoformat()
         days[day] = {"date": day, "reported_usd": provider["daily"].get(day),
                      "known_estimated_usd": Decimal(0), "requests": 0, "unknown_requests": 0}
-    for request in db.scalars(select(RadarRequest).where(
-        RadarRequest.created_at >= start, RadarRequest.created_at < end).execution_options(yield_per=500)):
+    for request in chain(*(db.scalars(select(model).where(
+        model.created_at >= start, model.created_at < end).execution_options(yield_per=500)) for model in (RadarRequest, ClaimReviewRequest))):
         timestamp = request.created_at
         day = timestamp.replace(tzinfo=timezone.utc).date().isoformat() if timestamp.tzinfo is None else timestamp.astimezone(timezone.utc).date().isoformat()
         row = days[day]

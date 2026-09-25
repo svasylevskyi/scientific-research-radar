@@ -55,3 +55,8 @@ applies to suggestions, matches, and totals. The user-list API's optional
 `sort=name` parameter leaves its default recent-first ordering unchanged.
 
 Deploy normally. No migration or new environment variables are required.
+
+The owner field includes a search icon and a Search button. Its placeholder is
+“Digest owner” and helper text is “Search name or email”. Search applies the
+current text to all matching owners, just like Enter or the final suggestion.
+Selecting a suggested user still applies an exact-owner filter.

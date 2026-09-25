@@ -5,6 +5,10 @@ source-fetching requests and are not a factual-accuracy certification. Independe
 source verification adds bounded Crossref/arXiv metadata lookups, also without
 OpenAI. See [source verification](source-verification.md) for scope and controls.
 
+The separate [manual AI claim reviewer](ai-claim-review.md) is available, Off by
+default. It adds paid calls only when an admin explicitly requests a review in
+Observe mode. Those observations do not change the delivery decisions below.
+
 ## Settings and rollout
 
 Admin → Research quality is available to all administrators. Only super-admins
