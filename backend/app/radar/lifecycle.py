@@ -25,6 +25,7 @@ from app.radar.contracts import (
     TrendAnalysisOutput,
 )
 from app.radar.errors import RadarOutputValidationError
+from app.radar.lease import RunLease
 from app.repositories.digest_run_repository import DigestRunRepository
 from app.repositories.radar_request_repository import RadarRequestRepository
 from app.repositories.run_result_repository import RunResultRepository
@@ -32,18 +33,20 @@ from app.repositories.run_state_repository import RunStateRepository
 from app.services import subscription_access_service as access
 from app.services import subscription_observation_service as observation
 from app.services.research_quality_service import assess_run
+from app.services.source_verification_service import verify_automatically
 
 logger = logging.getLogger(__name__)
 
 
 class RunLifecycle:
-    def __init__(self, db: Session, *, worker_id: str | None = None) -> None:
+    def __init__(self, db: Session, *, worker_id: str | None = None, lease_seconds: int = 60) -> None:
         self.db = db
         self.worker_id = worker_id
         self.runs = DigestRunRepository(db)
         self.state = RunStateRepository(db)
         self.results = RunResultRepository(db)
         self.requests = RadarRequestRepository(db)
+        self.lease = RunLease(db, worker_id=worker_id, lease_seconds=lease_seconds)
 
     def running(self, run_id: UUID) -> DigestRun | None:
         run = self.runs.get(run_id)
@@ -76,7 +79,12 @@ class RunLifecycle:
 
     def complete_run(self, run_id: UUID) -> None:
         run = self.reload(run_id)
-        assess_run(run)
+        self.lease.poll(run)
+        sources = verify_automatically(self.db, run)
+        run = self.reload(run_id)
+        # Fence completion again after bounded external metadata requests.
+        self.lease.renew(run)
+        assess_run(run, sources.findings if sources else None)
         access.settle(self.db, run, success=True)
         observation.settle(self.db, run, success=True)
         self.state.mark_completed(run=run)

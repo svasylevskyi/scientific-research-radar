@@ -5,6 +5,7 @@ import { researchQualityApi, type QualityEvaluation } from "../api/researchQuali
 import { usePollingResource } from "../hooks/usePollingResource";
 import type { DigestRunDetail } from "../types/digest";
 import { QualityDetails, ResearchQualityNotice } from "./ResearchQualityNotice";
+import { AdminSourceVerification } from "./AdminSourceVerification";
 
 export function AdminRunQuality({ digestId, run }: { digestId: string; run: DigestRunDetail }) {
   const [page, setPage] = useState(1);
@@ -61,6 +62,7 @@ export function AdminRunQuality({ digestId, run }: { digestId: string; run: Dige
       {(error || resource.error) && <Alert severity="error">{error || resource.error}</Alert>}
       {saved && <Alert severity="success">Manual evaluation saved.</Alert>}
     </ResearchQualityNotice>
+    <AdminSourceVerification key={run.id} digestId={digestId} run={run} />
     {!!data?.history.total && <Accordion>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>Manual evaluation history · {data.history.total}</Typography></AccordionSummary>
       <AccordionDetails><Stack spacing={2}>

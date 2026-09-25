@@ -109,6 +109,7 @@ async function manualPanel(evaluate, resource) {
     "../api/researchQuality": { researchQualityApi: { evaluate } },
     "../hooks/usePollingResource": { usePollingResource: () => resource },
     "./ResearchQualityNotice": { ResearchQualityNotice: "QualityNotice", QualityDetails: "QualityDetails" },
+    "./AdminSourceVerification": { AdminSourceVerification: "SourceVerification" },
   });
   return (status = "completed") => {
     cursor = 0;
@@ -151,4 +152,49 @@ test("repeated clicks submit once, show failure, and allow a deliberate retry", 
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(text(panel()), /evaluation failed|Settings changed/i);
   assert.equal(action(panel()).props.disabled, false);
+});
+
+const { SourcePaperEvidence } = await load('../src/components/AdminSourceVerification.tsx', {
+  '../api/researchQuality': {}, '../hooks/usePollingResource': {}, '../runHistory': await load('../src/runHistory.ts'),
+});
+test('source evidence separates metadata verification from full-text access', () => {
+  const tree = render(SourcePaperEvidence({ paper: {
+    external_id: 'paper-a', title: 'Example paper', status: 'verified',
+    claimed: { title: 'Example paper', authors: ['A. Author'], dates: ['2020-01-01'], identifier: 'paper-a' },
+    checks: [{ field: 'title', status: 'match', message: 'Titles match.' }], notes: [],
+    evidence: { provider: 'crossref', cached: true, retrieved_at: '2026-09-25T08:00:00Z',
+      request_url: 'https://api.crossref.org/works?filter=doi:10.1234/example', identifier: '10.1234/example',
+      metadata: { title: 'Example paper', identifier: '10.1234/example', authors: ['Ada Author'], dates: ['2020-01-01'],
+        url: 'https://doi.org/10.1234/example', full_text_links: ['https://example.com/paper.pdf'], abstract: 'A short metadata excerpt.' },
+    },
+  } }));
+  assert.match(text(tree), /Verified metadata/);
+  assert.match(text(tree), /Cached response/);
+  assert.match(text(tree), /Full text was not fetched/);
+  assert.match(text(tree), /access not tested/);
+  assert.match(text(tree), /Saved:.*Example paper/);
+  assert.match(text(tree), /Source:.*Example paper/);
+});
+test('unavailable provider evidence stays unverified', () => {
+  const tree = render(SourcePaperEvidence({ paper: {
+    external_id: 'paper-a', title: 'Example paper', status: 'unverified',
+    claimed: { identifier: 'paper-a', title: 'Example paper' }, checks: [],
+    notes: ['Provider unavailable; retry later.'], evidence: null,
+  } }));
+  assert.match(text(tree), /Unable to fully verify/);
+  assert.match(text(tree), /Provider unavailable/);
+  assert.doesNotMatch(text(tree), /Verified metadata/);
+});
+test('source rechecks include the current revision and use paginated read-only history', async () => {
+  const requests = [];
+  const { researchQualityApi } = await load('../src/api/researchQuality.ts', {
+    './client': { apiRequest: async (path, options) => { requests.push({ path, options }); return {}; } },
+  });
+  await researchQualityApi.verifySources('digest-a', 'run-b', 7);
+  await researchQualityApi.sources('digest-a', 'run-b', 2);
+  assert.equal(requests[0].options.method, 'POST');
+  assert.equal(JSON.stringify(requests[0].options.body), '{"expected_settings_version":7}');
+  assert.match(requests[0].path, /source-verifications$/);
+  assert.match(requests[1].path, /offset=5&limit=5$/);
+  assert.equal(requests[1].options, undefined);
 });

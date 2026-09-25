@@ -173,6 +173,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/digests/{digest_id}/runs/{run_id}/source-verifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Source Verifications */
+        get: operations["list_source_verifications_api_v1_admin_digests__digest_id__runs__run_id__source_verifications_get"];
+        put?: never;
+        /** Verify Run Sources */
+        post: operations["verify_run_sources_api_v1_admin_digests__digest_id__runs__run_id__source_verifications_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/messages": {
         parameters: {
             query?: never;
@@ -2496,6 +2514,18 @@ export interface components {
             /** Schedule Frequencies */
             schedule_frequencies: ("daily" | "weekly" | "monthly" | "quarterly")[];
         };
+        /** FieldComparison */
+        FieldComparison: {
+            /** Field */
+            field: string;
+            /** Message */
+            message: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "match" | "conflict" | "unverified";
+        };
         /** FreeDigestChoiceRead */
         FreeDigestChoiceRead: {
             /**
@@ -2600,6 +2630,31 @@ export interface components {
         MessageResponse: {
             /** Message */
             message: string;
+        };
+        /** MetadataLookup */
+        MetadataLookup: {
+            /**
+             * Cached
+             * @default false
+             */
+            cached?: boolean;
+            /** Identifier */
+            identifier: string;
+            metadata?: components["schemas"]["SourceMetadata"] | null;
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "crossref" | "arxiv";
+            /** Reason */
+            reason?: string | null;
+            /** Request Url */
+            request_url: string;
+            /**
+             * Retrieved At
+             * Format: date-time
+             */
+            retrieved_at: string;
         };
         /** NotificationRead */
         NotificationRead: {
@@ -2757,6 +2812,24 @@ export interface components {
             title: string;
             /** Url */
             url: string;
+        };
+        /** PaperVerification */
+        PaperVerification: {
+            /** Checks */
+            checks?: components["schemas"]["FieldComparison"][];
+            claimed: components["schemas"]["SourceMetadata"];
+            evidence?: components["schemas"]["MetadataLookup"] | null;
+            /** External Id */
+            external_id: string;
+            /** Notes */
+            notes?: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "verified" | "conflict" | "unverified";
+            /** Title */
+            title: string;
         };
         /** PasswordRecoveryRequest */
         PasswordRecoveryRequest: {
@@ -2949,6 +3022,12 @@ export interface components {
              * @enum {string}
              */
             mode?: "off" | "observe" | "enforce";
+            /**
+             * Source Verification Mode
+             * @default observe
+             * @enum {string}
+             */
+            source_verification_mode?: "off" | "observe" | "enforce";
             /**
              * Sparse Paper Threshold
              * @default 3
@@ -3283,6 +3362,75 @@ export interface components {
             interval: "monthly" | "annual";
             /** Revision */
             revision: number;
+        };
+        /** SourceMetadata */
+        SourceMetadata: {
+            /** Abstract */
+            abstract?: string | null;
+            /** Authors */
+            authors?: string[];
+            /** Dates */
+            dates?: string[];
+            /** Doi */
+            doi?: string | null;
+            /** Full Text Links */
+            full_text_links?: string[];
+            /** Identifier */
+            identifier: string;
+            /**
+             * Title
+             * @default
+             */
+            title?: string;
+            /** Updated */
+            updated?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /** SourceVerificationHistory */
+        SourceVerificationHistory: {
+            /** Items */
+            items: components["schemas"]["SourceVerificationRead"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** SourceVerificationRead */
+        SourceVerificationRead: {
+            config: components["schemas"]["QualitySnapshot"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Created By Name */
+            created_by_name: string;
+            /** Engine Version */
+            engine_version: string;
+            /** Findings */
+            findings: components["schemas"]["QualityFinding"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Papers */
+            papers: components["schemas"]["PaperVerification"][];
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Trigger
+             * @enum {string}
+             */
+            trigger: "automatic" | "manual";
         };
         /** SpendingChargeRead */
         SpendingChargeRead: {
@@ -4135,6 +4283,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QualityEvaluationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_source_verifications_api_v1_admin_digests__digest_id__runs__run_id__source_verifications_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                digest_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceVerificationHistory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_run_sources_api_v1_admin_digests__digest_id__runs__run_id__source_verifications_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                digest_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QualityEvaluationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceVerificationRead"];
                 };
             };
             /** @description Validation Error */

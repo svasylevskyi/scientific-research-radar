@@ -1,0 +1,10 @@
+{
+  "status": "ok",
+  "message": {"items": [{
+    "DOI": "10.1038/nature14539", "title": ["Deep learning"],
+    "author": [{"given": "Yann", "family": "LeCun"}, {"given": "Yoshua", "family": "Bengio"}, {"given": "Geoffrey", "family": "Hinton"}],
+    "published-online": {"date-parts": [[2015, 5, 27]]},
+    "published-print": {"date-parts": [[2015, 5, 28]]},
+    "URL": "https://doi.org/10.1038/nature14539"
+  }]}
+}

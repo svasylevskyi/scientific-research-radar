@@ -11,7 +11,7 @@ from app.services.research_quality_settings import ENGINE_VERSION
 logger = logging.getLogger(__name__)
 
 
-def assess_run(run: DigestRun) -> None:
+def assess_run(run: DigestRun, source_findings: list[QualityFinding] | None = None) -> None:
     # Legacy runs retain their original behaviour, including failed-run retries.
     if run.quality_config is None or run.quality_evaluated_at is not None:
         return
@@ -23,6 +23,9 @@ def assess_run(run: DigestRun) -> None:
             raise ValueError("Unsupported quality engine version")
         decision = evaluate_quality(digest_snapshot=run.digest_snapshot,
             stages={str(stage.stage): stage.result_data for stage in run.stages}, config=snapshot.config)
+        if mode != "off" and source_findings:
+            decision.findings.extend(source_findings)
+            decision.status = "hold" if any(item.severity == "hold" for item in decision.findings) else "warning"
     except Exception:
         logger.exception("Quality assessment could not complete for run %s", run.id)
         decision = QualityDecision(status="hold", findings=[QualityFinding(

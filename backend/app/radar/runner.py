@@ -60,7 +60,7 @@ class RadarRunner:
         self.prompt_builder = prompt_builder
         self.summary_batch_size = summary_batch_size
         self.reasoning_efforts = reasoning_efforts
-        self.lifecycle = RunLifecycle(db, worker_id=worker_id)
+        self.lifecycle = RunLifecycle(db, worker_id=worker_id, lease_seconds=lease_seconds)
         self.requests = StageRequestExecutor(
             db,
             client=client,
