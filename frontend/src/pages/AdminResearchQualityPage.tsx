@@ -1,19 +1,14 @@
-import { Alert, Box, Button, Chip, CircularProgress, Container, FormControlLabel, MenuItem, Pagination, Paper, Stack, Switch, TextField, Typography } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip, CircularProgress, Container, Pagination, Paper, Stack, TextField, Typography } from "@mui/material";
 import { useEffect, useState, type FormEvent } from "react";
 import { researchQualityApi, type QualityConfig, type QualityHistory, type QualitySettings } from "../api/researchQuality";
 import { useAuth } from "../auth/AuthContext";
 import { AppHeader } from "../components/AppHeader";
 import { BenchmarkReviewPanel } from "../components/BenchmarkReviewPanel";
-import { ClaimReviewSettings, defaultClaimReview } from "../components/ClaimReviewSettings";
+import { defaultClaimReview } from "../components/ClaimReviewSettings";
+import { QualityPolicySettings } from "../components/QualityPolicySettings";
 
 const modes = { off: "Off", observe: "Observe", enforce: "Enforce" };
-const rules = [
-  ["check_reporting_dates", "Check publication dates against the reporting period"],
-  ["check_duplicates", "Check for duplicate DOIs, source URLs, and titles"],
-  ["check_source_access", "Check reported source access and summary basis"],
-  ["check_evidence_links", "Warn about missing source content or evidence links (observation only)"],
-] as const;
-
 export function AdminResearchQualityPage() {
   const { user } = useAuth();
   const [settings, setSettings] = useState<QualitySettings | null>(null);
@@ -66,48 +61,26 @@ export function AdminResearchQualityPage() {
     <Stack spacing={3}>
       <Box><Typography component="h1" variant="h3">Research quality</Typography>
         <Typography color="text.secondary" sx={{ mt: 1 }}>Configure research checks and optional AI observations. Findings help identify issues; they do not certify scientific truth.</Typography></Box>
-      {settings && <Stack direction="row" spacing={1} alignItems="center"><Chip label={`Active mode: ${modes[settings.config.mode ?? "observe"]}`} />
+      {settings && <Stack direction="row" spacing={1} alignItems="center"><Chip label={`Automatic checks: ${modes[settings.config.mode ?? "observe"]}`} />
         <Typography variant="body2">Settings version {settings.version}</Typography></Stack>}
       <Button disabled={loading || saving} onClick={() => { setSuccess(null); setReload((value) => value + 1); }} sx={{ alignSelf: "flex-start" }}>Reload settings</Button>
-      <BenchmarkReviewPanel />
       {!user?.is_super_admin && <Typography color="text.secondary">All admins can review these settings. Only super-admins can change them.</Typography>}
       {loading ? <CircularProgress aria-label="Loading quality settings" /> : config && settings && <Paper component="form" onSubmit={save} variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
         <Stack spacing={2.5}>
-          <TextField select label="Quality gate mode" value={config.mode} disabled={!editable}
-            onChange={(event) => setConfig({ ...config, mode: event.target.value as QualityConfig["mode"] })}>
-            <MenuItem value="off">Off — do not evaluate new runs</MenuItem>
-            <MenuItem value="observe">Observe — record findings without blocking delivery</MenuItem>
-            <MenuItem value="enforce">Enforce — block delivery of held output</MenuItem>
-          </TextField>
-          {config.mode === "enforce" && <Alert severity="warning">Held output remains available for review and cannot be emailed. Generated runs still count against existing allowances. Agree the customer allowance policy before enabling Enforce for paying users.</Alert>}
-          <Typography variant="body2" color="text.secondary">Each run keeps its settings snapshot, including retries. Changing modes does not release held output or re-evaluate earlier runs. Manual release and automatic correction are not included yet.</Typography>
-          <Typography component="h2" variant="h6">Optional checks</Typography>
-          <TextField select label="Independent source verification" value={config.source_verification_mode ?? "observe"} disabled={!editable}
-            onChange={(event) => setConfig({ ...config, source_verification_mode: event.target.value as QualityConfig["source_verification_mode"] })}>
-            <MenuItem value="off">Off — disable independent metadata checks</MenuItem>
-            <MenuItem value="observe">Observe — record metadata limitations as warnings</MenuItem>
-            <MenuItem value="enforce">Enforce — confirmed metadata conflicts cause Hold</MenuItem>
-          </TextField>
-          <Typography variant="body2" color="text.secondary">Checks DOI/arXiv metadata using external requests, without OpenAI. Unavailable sources and provider errors produce warnings. Conflicts block automatic delivery only when both modes are Enforce. Automatic metadata checks are skipped when the quality gate is Off; manual checks remain available unless source verification itself is Off. Retrieving permitted source content for new summaries is separate and remains active.</Typography>
-          {rules.map(([key, label]) => <FormControlLabel key={key} label={label} control={<Switch checked={!!config[key]} disabled={!editable} onChange={(_, checked) => setConfig({ ...config, [key]: checked })} />} />)}
-          <Typography variant="body2" color="text.secondary">Content reuse permissions are always required, including when quality checks are Off. This switch controls evidence warnings, not permission enforcement or content retrieval.</Typography>
-          <TextField label="Warn when fewer papers are selected" type="number" value={threshold} disabled={!editable}
-            onChange={(event) => setThreshold(event.target.value)} error={!thresholdValid}
-            helperText="0–30. Set 0 to disable this warning. Sparse results never cause a hold by themselves."
-            slotProps={{ htmlInput: { min: 0, max: 30, step: 1 } }} />
-          <Typography variant="body2">Required content, selected-paper coverage, and evidence-reference consistency are always checked in Observe and Enforce. Existing schema, security, and reference-integrity validation remains active even when quality gates are Off.</Typography>
-          <ClaimReviewSettings value={config.claim_review ?? defaultClaimReview} disabled={!editable}
-            onChange={value => setConfig({ ...config, claim_review: value })} />
+          <QualityPolicySettings config={config} onChange={setConfig} editable={editable}
+            threshold={threshold} setThreshold={setThreshold} thresholdValid={thresholdValid} />
           {user?.is_super_admin && <>
             <TextField label="Reason for change" multiline minRows={2} required value={reason} disabled={!editable}
               onChange={(event) => setReason(event.target.value)} slotProps={{ htmlInput: { maxLength: 500 } }} />
-            <Button type="submit" variant="contained" disabled={!editable || !thresholdValid || !reason.trim()} sx={{ alignSelf: "flex-start" }}>{saving ? "Saving…" : "Save settings"}</Button>
+            <Button type="submit" variant="contained" disabled={!editable || !thresholdValid || !reason.trim()} sx={{ alignSelf: "flex-start" }}>{saving ? "Saving…" : "Save all settings"}</Button>
           </>}
         </Stack>
       </Paper>}
       {error && <Alert severity="error" action={<Button disabled={saving} onClick={() => { setSuccess(null); setReload((value) => value + 1); }}>Reload</Button>}>{error}</Alert>}
       {success && <Alert severity="success">{success}</Alert>}
-      <Box><Typography component="h2" variant="h5" sx={{ mb: 2 }}>Settings history</Typography>
+      <Accordion>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography component="span" variant="h6">Settings history</Typography></AccordionSummary>
+        <AccordionDetails>
         {historyError ? <Alert severity="error" action={<Button onClick={() => setReload((value) => value + 1)}>Retry</Button>}>{historyError}</Alert> : !history ? <CircularProgress aria-label="Loading settings history" /> : <Stack spacing={2}>
           {!history.items.length && <Typography color="text.secondary">No changes yet. Built-in Observe defaults are active.</Typography>}
           {history.items.map((item) => <Paper key={item.version} variant="outlined" sx={{ p: 2, overflowWrap: "anywhere" }}>
@@ -121,7 +94,9 @@ export function AdminResearchQualityPage() {
           </Paper>)}
           {history.total > 20 && <Pagination count={Math.ceil(history.total / 20)} page={page} onChange={(_, value) => setPage(value)} />}
         </Stack>}
-      </Box>
+        </AccordionDetails>
+      </Accordion>
+      <BenchmarkReviewPanel />
     </Stack>
   </Container></Box>;
 }

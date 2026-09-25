@@ -76,13 +76,44 @@ including recovered outbox claims. Holds remain terminal for automatic delivery.
 Enforced held output and its feedback are excluded from subsequent research history
 context, so it is not reused as accepted previous research.
 
-Admins can inspect quality decisions under **Research output & history → Run
-Diagnostics → Research Quality**. Costs and Steps are separate diagnostics tabs;
-Run Output shows the research results. The quality block includes findings,
-affected paper IDs, settings/check versions, and the automatic delivery hold.
-User digest pages currently omit quality indicators; delivery enforcement and
-email disclosures remain active. Normal Off/legacy runs show Not evaluated until
-a manual assessment is recorded. A Pass only means these checks passed.
+Admins inspect **Research output & history → Run Diagnostics → Research Quality**.
+One overview separates the original delivery decision from four expandable areas:
+structural checks, source verification, evidence availability, and AI observations.
+Metadata conflicts and evidence warnings are not labelled as structural failures;
+the original automatic findings remain available in full. Local evaluation history
+retains the complete result, including evidence-link findings.
+
+**Refresh results** reloads the saved run, current settings, local evaluation
+history, source verification history, captured evidence, and AI review history.
+Expanded AI review details are reread too. These GET endpoints read the database;
+refreshing never starts a check, fetches provider content, or submits an LLM call.
+The overview refreshes together every 30 seconds while the browser page is visible.
+Older history pages keep the newest summary visible. A failed refresh retains the
+last complete result, marks it outdated, and pauses check actions until recovery.
+
+| Run action | Effect | External services / cost |
+| --- | --- | --- |
+| Refresh results | Reload saved results only | None |
+| Run local checks | Append structural and configured evidence-link findings | No external requests or LLM charges |
+| Verify sources (external) / Recheck sources (external) | Append metadata verification; may reuse cached results | Crossref/arXiv requests; no OpenAI charges |
+| Review claims with AI (paid) | Start a bounded observation job after confirmation | Paid OpenAI requests |
+
+None of these manual actions changes the original delivery decision or subscriber
+allowances. No combined check action implicitly starts paid AI review. Source
+permissions and stored attribution remain unchanged.
+
+Settings follow the same purposes: automatic checks/delivery, structural rules,
+source verification, evidence availability, and paid AI observations. One save
+records all settings with a reason and concurrency version. Saving settings runs
+no checks. History is expandable; the human benchmark workspace remains separately
+available below settings. Ordinary admins can inspect all controls; only
+super-admins can save them.
+
+Costs and Steps remain separate diagnostics tabs; Run Output shows the research.
+User digest pages omit quality indicators; enforcement and email disclosures
+remain active. Off/legacy runs show Not evaluated until manually assessed. A Pass
+only means the indicated checks passed; it is not scientific approval. “Not blocked
+by quality checks” does not claim an email was sent.
 
 The next diagnostics tab, **Human Benchmark Review**, contains the shared
 [human benchmark review workspace](research-evaluation.md). These labels evaluate
@@ -96,7 +127,7 @@ All administrators can evaluate completed runs that they can access, including
 legacy/Off runs and already evaluated runs. The existing restriction on ordinary
 admins accessing super-admin-owned digests also applies here.
 
-**Evaluate quality / Re-evaluate quality** uses the current settings and check
+**Run local checks** uses the current settings and check
 engine against the run's saved digest snapshot and stage outputs. It performs no
 OpenAI or source-fetching requests, does not regenerate output, and does not
 consume research allowances. Explicit manual evaluation runs even when automatic
@@ -106,8 +137,8 @@ silently replace the displayed revision.
 
 Each successful evaluation adds an immutable record with administrator ID/name,
 UTC time, full settings snapshot, engine version, status, and findings. The admin
-block displays the latest manual result, keeps the original automatic result
-available, and provides paginated manual history. Missing/incompatible stage data
+overview displays the latest manual structural result, keeps the original automatic
+result available, and provides paginated local evaluation history. Missing/incompatible stage data
 is reported as unavailable; it is never assigned a passing result. Active or
 failed runs cannot be evaluated manually.
 
@@ -155,3 +186,20 @@ Visual acceptance: review admin diagnostics in all modes, a long finding/ID on
 mobile, hidden quality indicators on user pages, a read-only ordinary-admin settings
 page, a super-admin settings change and audit entry, and an enforced held scheduled
 run with no delivered email.
+
+### Admin workflow acceptance
+
+- On a held run, make a passing local evaluation. Structural checks can pass while
+  the original automatic email hold remains visible. Inspect both audit records.
+- Select older pages in each history, then use Refresh results. Latest overview
+  summaries should remain current, and selected history pages should be preserved.
+- Refresh with an AI review expanded; saved details should reload. No POST requests,
+  metadata lookups, new jobs, or LLM calls should be triggered by refresh.
+- Exercise a failed read and recover using the single refresh button. Saved data
+  remains visible and actions pause while the snapshot is stale.
+- Verify ordinary-admin read-only settings, super-admin save/reason/history, and
+  keyboard/mobile access to the four overview accordions and grouped controls.
+- Paid review still requires its confirmation dialog; cancelling starts no job.
+  The existing benchmark workflow is retained; side-by-side comparison is deferred.
+
+This UI consolidation adds no migration, configuration, or provider permissions.

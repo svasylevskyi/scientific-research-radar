@@ -32,8 +32,9 @@ exports too. The settings revision, requesting admin and time are recorded.
 ## Review a run
 
 Open **Research output & history → Run Diagnostics → Research Quality**, select
-**Review claims with AI**, and confirm the paid action. The job continues if the
-browser closes. Refreshing history only reads saved results.
+**AI observations → Review claims with AI (paid)**, and confirm the paid action. The job continues if the
+browser closes. The run overview’s single **Refresh results** action reloads saved
+history and expanded review details without starting new jobs or OpenAI calls.
 
 One request assesses one saved summary statement or key finding. Results are
 **Supported**, **Contradicted**, **Insufficient evidence**, or **Abstain**, with a

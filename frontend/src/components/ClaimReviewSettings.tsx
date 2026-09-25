@@ -7,8 +7,8 @@ export const defaultClaimReview: ClaimReviewConfig = { mode: "off", model: "gpt-
 export function ClaimReviewSettings({ value, disabled, onChange }: {
   value: ClaimReviewConfig; disabled: boolean; onChange: (value: ClaimReviewConfig) => void;
 }) {
-  return <Stack spacing={2}>
-    <Typography component="h2" variant="h6">AI claim review</Typography>
+  return <Stack component="fieldset" spacing={2} sx={{ border: 0, p: 0, m: 0, minWidth: 0 }}>
+    <Typography component="legend" variant="h6">AI observations · Paid reviews</Typography>
     <Typography variant="body2" color="text.secondary">Optional, manually requested reviews of saved evidence. These add paid OpenAI calls and never change delivery, human labels, or subscriber allowances. The main quality gate mode does not enable or disable this separate reviewer.</Typography>
     <TextField select label="AI reviewer mode" value={value.mode ?? "off"} disabled={disabled}
       onChange={event => onChange({ ...value, mode: event.target.value as ClaimReviewConfig["mode"] })}>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { claimReviewsApi, type ClaimReview, type ClaimReviewStart, type ClaimReviewTarget } from "../api/claimReviews";
 import { ApiError } from "../api/client";
 import { downloadJson } from "../api/benchmarkReview";
-import { researchQualityApi } from "../api/researchQuality";
+import { researchQualityApi, type QualitySettings } from "../api/researchQuality";
 import { usePollingResource } from "../hooks/usePollingResource";
 
 type Props = { digestId: string; runId: string; completed: boolean } | { benchmarkId: string; latestPublication: number | null };
@@ -59,25 +59,43 @@ export function ClaimReviewPanel(props: Props) {
   const digestId = "digestId" in props ? props.digestId : null;
   const runId = "runId" in props ? props.runId : null;
   const benchmarkId = "benchmarkId" in props ? props.benchmarkId : null;
-  const latestPublication = "latestPublication" in props ? props.latestPublication : null;
   const [page, setPage] = useState(1);
-  const [split, setSplit] = useState<"development" | "heldout">("development");
-  const [publication, setPublication] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState(false);
-  const [error, setError] = useState("");
-  const [detail, setDetail] = useState<ClaimReview | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const pending = useRef(false);
-  // Keep an idempotency key after uncertain transport errors; Retry cannot create
-  // another paid job. A successful response consumes the key.
-  const pendingPayload = useRef<ClaimReviewStart | null>(null);
   const load = useCallback(async () => {
     const target: ClaimReviewTarget = digestId && runId ? { digest_id: digestId, run_id: runId } : { benchmark_id: benchmarkId! };
     const [settings, history] = await Promise.all([researchQualityApi.get(), claimReviewsApi.history(target, page)]);
     return { settings, history };
   }, [digestId, runId, benchmarkId, page]);
   const resource = usePollingResource(load, 15000);
+  return <ClaimReviewControls {...props} resource={resource} page={page} setPage={setPage} showRefresh />;
+}
+
+type ReviewResource = {
+  data: { settings: QualitySettings; history: Awaited<ReturnType<typeof claimReviewsApi.history>> } | null;
+  loading: boolean; error: string; refresh: () => Promise<void>;
+};
+
+/** Controls shared by the run overview and the standalone benchmark workspace. */
+export function ClaimReviewControls(props: Props & {
+  resource: ReviewResource; page: number; setPage: (page: number) => void;
+  showRefresh?: boolean; latestReview?: ClaimReview | null;
+}) {
+  const { resource, page, setPage, showRefresh = false } = props;
+  const digestId = "digestId" in props ? props.digestId : null;
+  const runId = "runId" in props ? props.runId : null;
+  const benchmarkId = "benchmarkId" in props ? props.benchmarkId : null;
+  const latestPublication = "latestPublication" in props ? props.latestPublication : null;
+  const [split, setSplit] = useState<"development" | "heldout">("development");
+  const [publication, setPublication] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [error, setError] = useState("");
+  const [detail, setDetail] = useState<ClaimReview | null>(null);
+  const [detailError, setDetailError] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const pending = useRef(false);
+  // Keep an idempotency key after uncertain transport errors; Retry cannot create
+  // another paid job. A successful response consumes the key.
+  const pendingPayload = useRef<ClaimReviewStart | null>(null);
   const config = resource.data?.settings.config.claim_review;
   const jobs = resource.data?.history.items ?? [];
   const selected = jobs.find(job => job.id === selectedId);
@@ -85,11 +103,12 @@ export function ClaimReviewPanel(props: Props) {
   useEffect(() => {
     if (!selectedId || !detailVersion) return;
     const controller = new AbortController();
+    setDetailError("");
     claimReviewsApi.detail(selectedId, controller.signal).then(value => { if (!controller.signal.aborted) setDetail(value); })
-      .catch(caught => { if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "Could not load review details."); });
+      .catch(caught => { if (!controller.signal.aborted) setDetailError(caught instanceof Error ? caught.message : "Could not load review details."); });
     return () => controller.abort();
-  }, [selectedId, detailVersion]);
-  const active = jobs.some(job => job.status === "queued" || job.status === "running");
+  }, [selectedId, detailVersion, resource.data?.history]);
+  const active = [props.latestReview, ...jobs].some(job => job?.status === "queued" || job?.status === "running");
   const number = Number(publication || latestPublication || 0);
   const canStart = !!resource.data && !resource.error && !resource.loading && !busy && !active && config?.mode === "observe"
     && ("completed" in props ? props.completed : Number.isInteger(number) && number > 0 && number <= (latestPublication ?? 0));
@@ -115,7 +134,8 @@ export function ClaimReviewPanel(props: Props) {
     finally { setBusy(false); }
   }
   return <Stack spacing={2}>
-    <Typography component="h2" variant="h6">AI claim review <Chip size="small" label={config?.mode === "observe" ? "Observe" : "Off"} /></Typography>
+    {showRefresh && <Typography component="h2" variant="h6">AI claim review</Typography>}
+    <Chip sx={{ alignSelf: "flex-start" }} size="small" label={config?.mode === "observe" ? "Manual reviewer enabled · Paid OpenAI calls" : "Manual reviewer off"} />
     <Typography variant="body2" color="text.secondary">{benchmarkId ? "Compare the AI reviewer with a published human benchmark. Human labels are never sent to the model." : "Assess paper summaries and key findings against their saved permitted excerpts. Trends and the complete briefing are not assessed in this increment."} These are AI observations, not human approval; delivery and allowances remain unchanged.</Typography>
     {benchmarkId && <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
       <TextField type="number" label="Published revision" value={publication || latestPublication || ""} disabled={busy || active || !!pendingPayload.current}
@@ -128,14 +148,16 @@ export function ClaimReviewPanel(props: Props) {
     {config?.mode === "off" && <Typography variant="body2">A super-admin can enable this reviewer in Research quality settings.</Typography>}
     {active && <Typography role="status">Review in progress. You can leave this page; results will be saved.</Typography>}
     <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-      <Button variant="outlined" disabled={!canStart} onClick={() => setConfirm(true)}>{benchmarkId ? "Compare AI with benchmark" : "Review claims with AI"}</Button>
-      <Button disabled={busy || resource.loading} onClick={() => void resource.refresh()}>Refresh AI reviews</Button>
+      <Button variant="outlined" disabled={!canStart} onClick={() => setConfirm(true)}>{benchmarkId ? "Compare AI with benchmark (paid)" : "Review claims with AI (paid)"}</Button>
+      {showRefresh && <Button disabled={busy || resource.loading} onClick={() => void resource.refresh()}>Refresh AI reviews</Button>}
     </Stack>
-    {(error || resource.error) && <Alert severity="error">{error || resource.error}</Alert>}
+    {(error || (showRefresh && resource.error)) && <Alert severity="error">{error || resource.error}</Alert>}
+    {!resource.loading && !jobs.length && <Typography variant="body2">No AI reviews have been recorded.</Typography>}
     {jobs.map(job => <Accordion key={job.id} expanded={selectedId === job.id} onChange={(_, expanded) => { setError(""); setSelectedId(expanded ? job.id : null); }}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{new Date(job.created_at).toLocaleString()} · {title(job.status)} · {job.completed_claims}/{job.selected_claims} claims{job.publication ? ` · Publication ${job.publication} / ${job.split}` : ""}</Typography></AccordionSummary>
       <AccordionDetails><Stack spacing={2}>
-        {(!detail || detail.id !== job.id || detail.status !== job.status || detail.completed_claims !== job.completed_claims) && <Typography role="status">Loading review details…</Typography>}
+        {selectedId === job.id && detailError && <Alert severity="error">{detailError}</Alert>}
+        {(!detail || detail.id !== job.id || detail.status !== job.status || detail.completed_claims !== job.completed_claims) && !detailError && <Typography role="status">Loading review details…</Typography>}
         <ReviewDetails review={detail?.id === job.id && detail.status === job.status && detail.completed_claims === job.completed_claims ? detail : job} />
         <Button disabled={busy} onClick={() => void exportReview(job.id)} sx={{ alignSelf: "flex-start" }}>Download review and comparison</Button>
       </Stack></AccordionDetails>

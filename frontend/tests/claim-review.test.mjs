@@ -51,19 +51,22 @@ const field = (tree, label) => elements(tree).find(item => item.props.label === 
 const button = (tree, label) => elements(tree).find(item => item.type === 'Button' && text(item) === label);
 class ApiError extends Error { constructor(status, message) { super(message); this.status = status; } }
 async function panel(props = {digestId: 'digest', runId: 'run', completed: true}) {
-  const runtime = hooks(); const submitted = []; let implementation = async () => ({id: 'review'});
+  const runtime = hooks(); const submitted = []; const detailReads = []; let implementation = async () => ({id: 'review'});
   const resource = {loading: false, error: '', refresh: async () => {}, data: {
     settings: {version: 3, config: {claim_review: {mode: 'observe', max_claims: 10, max_review_usd: '1'}}},
     history: {items: [], total: 0},
   }};
-  const {ClaimReviewPanel} = await load('../src/components/ClaimReviewPanel.tsx', {
+  const {ClaimReviewControls} = await load('../src/components/ClaimReviewPanel.tsx', {
     react: runtime.react,
-    '../api/claimReviews': {claimReviewsApi: {start: async payload => { submitted.push(payload); return implementation(payload); }}},
+    '../api/claimReviews': {claimReviewsApi: {
+      start: async payload => { submitted.push(payload); return implementation(payload); },
+      detail: async id => {detailReads.push(id); return {...resource.data.history.items.find(job => job.id === id), cases: []};},
+    }},
     '../api/client': {ApiError}, '../api/researchQuality': {researchQualityApi: {}},
     '../api/benchmarkReview': {downloadJson: () => {}},
     '../hooks/usePollingResource': {usePollingResource: () => resource},
   });
-  return {resource, props, submitted, failWith: fn => {implementation = fn;}, render: () => runtime.render(() => ClaimReviewPanel(props))};
+  return {resource, props, submitted, detailReads, failWith: fn => {implementation = fn;}, render: () => runtime.render(() => ClaimReviewControls({...props, resource, page: 1, setPage() {}}))};
 }
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
@@ -71,8 +74,8 @@ test('AI review requires explicit paid-action confirmation and never starts duri
   const form = await panel();
   const first = form.render();
   assert.equal(form.submitted.length, 0);
-  assert.equal(button(first, 'Review claims with AI').props.disabled, false);
-  button(first, 'Review claims with AI').props.onClick();
+  assert.equal(button(first, 'Review claims with AI (paid)').props.disabled, false);
+  button(first, 'Review claims with AI (paid)').props.onClick();
   const dialog = elements(form.render()).find(item => item.type === 'Dialog');
   assert.equal(dialog.props.open, true);
   assert.match(text(dialog), /OpenAI calls/);
@@ -88,14 +91,14 @@ test('AI review requires explicit paid-action confirmation and never starts duri
 test('off, stale, unfinished and already-running states block paid review actions', async () => {
   const form = await panel();
   form.resource.data.settings.config.claim_review.mode = 'off';
-  assert.equal(button(form.render(), 'Review claims with AI').props.disabled, true);
+  assert.equal(button(form.render(), 'Review claims with AI (paid)').props.disabled, true);
   form.resource.data.settings.config.claim_review.mode = 'observe'; form.resource.error = 'Settings could not refresh';
-  assert.equal(button(form.render(), 'Review claims with AI').props.disabled, true);
+  assert.equal(button(form.render(), 'Review claims with AI (paid)').props.disabled, true);
   form.resource.error = ''; form.props.completed = false;
-  assert.equal(button(form.render(), 'Review claims with AI').props.disabled, true);
+  assert.equal(button(form.render(), 'Review claims with AI (paid)').props.disabled, true);
   form.props.completed = true;
   form.resource.data.history.items = [{id: 'x', status: 'queued', selected_claims: 2, completed_claims: 0, cases: [], created_at: '2026-09-25T10:00:00Z', known_estimated_usd: '0', reserved_usd: '1'}];
-  assert.equal(button(form.render(), 'Review claims with AI').props.disabled, true);
+  assert.equal(button(form.render(), 'Review claims with AI (paid)').props.disabled, true);
   assert.match(text(form.render()), /Review in progress/);
 });
 
@@ -124,9 +127,9 @@ test('definite preflight rejection permits a fresh request with refreshed policy
 
 test('benchmark comparison requires publication and keeps heldout selection explicit', async () => {
   const form = await panel({benchmarkId: 'benchmark', latestPublication: null});
-  assert.equal(button(form.render(), 'Compare AI with benchmark').props.disabled, true);
+  assert.equal(button(form.render(), 'Compare AI with benchmark (paid)').props.disabled, true);
   form.props.latestPublication = 2;
-  assert.equal(button(form.render(), 'Compare AI with benchmark').props.disabled, false);
+  assert.equal(button(form.render(), 'Compare AI with benchmark (paid)').props.disabled, false);
   field(form.render(), 'Comparison split').props.onChange({target: {value: 'heldout'}});
   field(form.render(), 'Published revision').props.onChange({target: {value: '1'}});
   assert.match(text(form.render()), /planned evaluation/);
@@ -145,4 +148,34 @@ test('AI reviewer settings offer off and observe with explicit cost controls', a
   assert.deepEqual(modes.map(item => item.props.value), ['off', 'observe']);
   assert.equal(field(tree, 'Daily USD reservation budget').props.disabled, true);
   assert.match(text(tree), /paid OpenAI calls/);
+});
+
+
+test('expanded AI details reload with saved history even when job counters are unchanged', async () => {
+  const form = await panel();
+  form.resource.data.history.items = [{id: 'review', status: 'completed', completed_claims: 1, selected_claims: 1,
+    total_claims: 1, cases: [], created_at: '2026-09-25T10:00:00Z', known_estimated_usd: '0.01', reserved_usd: '1'}];
+  const accordion = elements(form.render()).find(item => item.type === 'Accordion');
+  accordion.props.onChange(null, true); form.render(); await flush();
+  assert.deepEqual(form.detailReads, ['review']);
+  form.render(); await flush();
+  assert.equal(form.detailReads.length, 1, 'Local rerender must not issue another read');
+  form.resource.data = {...form.resource.data, history: {...form.resource.data.history}};
+  form.render(); await flush();
+  assert.deepEqual(form.detailReads, ['review', 'review']);
+  assert.equal(form.submitted.length, 0);
+});
+
+test('the latest active review blocks paid duplicates while viewing an older history page', async () => {
+  const form = await panel();
+  form.props.latestReview = {id: 'newest', status: 'running'};
+  assert.equal(button(form.render(), 'Review claims with AI (paid)').props.disabled, true);
+  assert.match(text(form.render()), /Review in progress/);
+});
+
+test('embedded AI controls rely on the overview refresh; standalone benchmark retains its own', async () => {
+  const form = await panel();
+  assert.equal(button(form.render(), 'Refresh AI reviews'), undefined);
+  form.props.showRefresh = true;
+  assert.ok(button(form.render(), 'Refresh AI reviews'));
 });
