@@ -129,7 +129,7 @@ def test_re_evaluation_preserves_history_delivery_and_run_state(client, db_sessi
         allowed = delivery_allowed(run)
     first = submit(client, completed)
     assert first.status_code == 201 and first.json()["status"] == "hold"
-    publish(db_session_factory, "off", check_reporting_dates=False, check_source_access=False, sparse_paper_threshold=0)
+    publish(db_session_factory, "off", check_reporting_dates=False, check_source_access=False, check_evidence_links=False, sparse_paper_threshold=0)
     stale = submit(client, completed)
     assert stale.status_code == 409 and "settings changed" in stale.json()["detail"]
     second = submit(client, completed, 1)

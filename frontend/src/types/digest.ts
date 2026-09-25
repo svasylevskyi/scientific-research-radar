@@ -138,7 +138,17 @@ export interface PaperRelevanceData {
   next_step_recommendations: string[];
 }
 
+export interface SourceAttributionData {
+  title: string;
+  authors: string[];
+  source_url: string;
+  license_url: string;
+  rights_notice: string;
+  changes: string;
+}
+
 export interface PaperSummaryData {
+  source_attribution?: SourceAttributionData | null;
   summary_basis:
     | "metadata_only"
     | "abstract_only"
@@ -275,6 +285,7 @@ export interface RecommendedAction {
 }
 
 export interface DigestBriefingData {
+  source_attributions?: SourceAttributionData[];
   highlights: string[];
   main_signal: BriefingMainSignal | null;
   top_paper_external_ids: string[];

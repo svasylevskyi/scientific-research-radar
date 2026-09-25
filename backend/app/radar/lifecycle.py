@@ -34,6 +34,9 @@ from app.services import subscription_access_service as access
 from app.services import subscription_observation_service as observation
 from app.services.research_quality_service import assess_run
 from app.services.source_verification_service import verify_automatically
+from app.services.source_content_service import prepare_content, stored_documents
+from app.schemas.source_content import SourceDocument
+from app.radar.evidence import evidence_findings
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +87,18 @@ class RunLifecycle:
         run = self.reload(run_id)
         # Fence completion again after bounded external metadata requests.
         self.lease.renew(run)
-        assess_run(run, sources.findings if sources else None)
+        findings = list(sources.findings) if sources else []
+        if (run.quality_config or {}).get("config", {}).get("check_evidence_links", False):
+            summaries = PaperSummariesOutput.model_validate(self.stage(run, DigestRunStageType.PAPER_SUMMARIES).result_data)
+            findings.extend(evidence_findings(stored_documents(self.db, run.id), summaries))
+        assess_run(run, findings)
         access.settle(self.db, run, success=True)
         observation.settle(self.db, run, success=True)
         self.state.mark_completed(run=run)
         self.db.commit()
+
+    def prepare_source_content(self, run: DigestRun, discovery: DiscoveryRelevanceOutput) -> dict[str, SourceDocument]:
+        return prepare_content(self.db, run=run, discovery=discovery, renew=lambda: self.lease.poll(run))
 
     def fail(
         self, *, run_id: UUID, active_stage: DigestRunStageType | None, error: Exception

@@ -55,6 +55,8 @@ def briefing_email(run, recipient, base_url):
     section("Recommended actions", [f"{r['action']} ({r['priority']})\n{r['reason']}" for r in data.get("recommendations", [])])
     section("Recommended searches", [f"{r['query']} ({r['priority']})\n{r['reason']}" for r in data.get("recommended_next_searches", [])])
     section("Transparency and limitations", [f"Source basis: {data.get('source_basis', 'unknown')}", data.get("transparency_note", ""), *data.get("quality_warnings", [])])
+    if data.get("source_attributions"):
+        section("Source attribution", [f"{item['title']} — {', '.join(item['authors'])}\n{item['source_url']}\nLicence: {item['license_url']}\n{item['rights_notice']}\n{item['changes']}" for item in data["source_attributions"]])
     plain.extend(["View this digest on Radar:", link, "Manage email delivery in this digest's schedule settings. AI-assisted research: consult original sources."])
     html = f'''<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:20px 8px;background:#f5f8fa;color:#102333;font-family:Arial,sans-serif">

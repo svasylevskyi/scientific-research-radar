@@ -19,6 +19,7 @@ class QualityConfig(BaseModel):
     check_source_access: bool = True
     sparse_paper_threshold: int = Field(default=3, ge=0, le=30)
     source_verification_mode: QualityMode = "observe"
+    check_evidence_links: bool = True
 
 
 class QualitySettingsUpdate(BaseModel):
@@ -61,8 +62,8 @@ class QualitySnapshot(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def preserve_legacy_source_mode(cls, value):
-        if isinstance(value, dict) and isinstance(value.get("config"), dict) and "source_verification_mode" not in value["config"]:
-            return {**value, "config": {**value["config"], "source_verification_mode": "off"}}
+        if isinstance(value, dict) and isinstance(value.get("config"), dict):
+            return {**value, "config": {"source_verification_mode": "off", "check_evidence_links": False, **value["config"]}}
         return value
 
 

@@ -26,6 +26,11 @@ These are conservative operational safeguards, not a determination that a use is
 10. Attribute papers through authors, title, stable identifier, and canonical link when available. Keep warnings about incomplete access or uncertain rights.
 11. This output is research intelligence, not legal, medical, safety-critical, or formal scientific advice. Readers must verify original sources before consequential reliance.
 12. Avoid promotional labels such as “breakthrough” unless the evidence clearly warrants them.
+13. Discovery is for bibliographic identification. In subsequent stages use only
+    permission-checked source evidence and the summaries built from it. A licence
+    guessed by a model, a search snippet, or a public URL is not reuse permission.
+    Carry abstract-only/selected-section limitations into trends and briefing;
+    do not turn unavailable-content notes into findings or evidence of a trend.
 
 ## Audience priorities
 

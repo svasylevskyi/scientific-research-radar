@@ -42,7 +42,7 @@ export function SourcePaperEvidence({ paper }: { paper: PaperVerification }) {
       </Typography>)}
       {(paper.notes ?? []).map((note, index) => <Typography key={index} variant="body2" color="text.secondary">{note}</Typography>)}
       {actual && <>
-        <Typography variant="body2">Source availability: metadata retrieved{actual.abstract ? "; abstract included in metadata" : "; no abstract returned"}. Full text was not fetched.</Typography>
+        <Typography variant="body2">Source availability: metadata retrieved{actual.abstract ? "; reusable abstract retained" : "; no reusable abstract retained"}. Full text was not fetched by this metadata check.</Typography>
         {actual.url && <Link href={actual.url} target="_blank" rel="noopener noreferrer">Source record</Link>}
         {!!actual.full_text_links?.length && <Box>
           <Typography variant="body2">Provider-reported full-text links (access not tested):</Typography>

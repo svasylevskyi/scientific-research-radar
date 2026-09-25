@@ -856,7 +856,7 @@ def test_stage_prompts_are_versioned_compact_and_compliant() -> None:
         papers=[],
     )
 
-    assert discovery.version == "2026-09-10.1"
+    assert discovery.version == "2026-09-25.1"
     assert "untrusted data" in discovery.system
     assert "Public accessibility does not establish" in discovery.system
     assert "could substitute for a source" in discovery.system

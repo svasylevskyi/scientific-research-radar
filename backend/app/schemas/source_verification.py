@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.research_quality import QualityFinding, QualitySnapshot
 
@@ -28,6 +28,12 @@ class MetadataLookup(BaseModel):
     metadata: SourceMetadata | None = None
     reason: str | None = None
     cached: bool = False
+
+    @model_validator(mode="after")
+    def discard_unlicensed_abstract(self):
+        if self.provider == "crossref" and self.metadata and self.metadata.abstract:
+            self.metadata = self.metadata.model_copy(update={"abstract": None})
+        return self
 
 
 class FieldComparison(BaseModel):

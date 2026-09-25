@@ -7,12 +7,15 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.digest_run import DigestRun, DigestRunStageStatus, DigestRunStatus, RADAR_STAGE_ORDER
+from app.models.digest_run import DigestRun, DigestRunStageStatus, DigestRunStageType, DigestRunStatus, RADAR_STAGE_ORDER
 from app.models.research_quality import ResearchQualityEvaluation
 from app.models.user import User
 from app.radar.quality import evaluate_quality
 from app.schemas.research_quality import QualityEvaluationHistory, QualityEvaluationRead, QualitySnapshot
 from app.services.research_quality_settings import ENGINE_VERSION, current_settings
+from app.services.source_content_service import stored_documents
+from app.radar.evidence import evidence_findings
+from app.radar.contracts import PaperSummariesOutput
 
 
 class ManualQualityUnavailableError(ValueError):
@@ -46,6 +49,12 @@ def evaluate_manually(
             "Saved research data is incomplete or incompatible with the current checks. No evaluation was recorded."
         ) from exc
 
+    if settings.config.check_evidence_links:
+        summaries = PaperSummariesOutput.model_validate(stages[DigestRunStageType.PAPER_SUMMARIES].result_data)
+        findings = evidence_findings(stored_documents(db, run.id), summaries)
+        decision.findings.extend(findings)
+        if findings and decision.status == "pass":
+            decision.status = "warning"
     row = ResearchQualityEvaluation(
         id=uuid4(), run_id=run.id, created_by=actor.id, created_by_name=actor.full_name,
         created_at=datetime.now(timezone.utc), config=snapshot.model_dump(mode="json"),

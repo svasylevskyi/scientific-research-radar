@@ -110,6 +110,7 @@ async function manualPanel(evaluate, resource) {
     "../hooks/usePollingResource": { usePollingResource: () => resource },
     "./ResearchQualityNotice": { ResearchQualityNotice: "QualityNotice", QualityDetails: "QualityDetails" },
     "./AdminSourceVerification": { AdminSourceVerification: "SourceVerification" },
+    "./AdminSourceContent": { AdminSourceContent: "SourceContent" },
   });
   return (status = "completed") => {
     cursor = 0;
@@ -197,4 +198,48 @@ test('source rechecks include the current revision and use paginated read-only h
   assert.match(requests[0].path, /source-verifications$/);
   assert.match(requests[1].path, /offset=5&limit=5$/);
   assert.equal(requests[1].options, undefined);
+});
+
+const { ContentEvidence } = await load('../src/components/AdminSourceContent.tsx', {
+  '../api/researchQuality': {}, '../hooks/usePollingResource': {}, '../runHistory': await load('../src/runHistory.ts'),
+});
+test('summary evidence shows source passages and licence without claiming semantic verification', () => {
+  const tree = render(ContentEvidence({ item: {
+    document: { external_id: 'paper-a', title: 'Example', basis: 'abstract_only', authors: ['Author'],
+      retrieved_at: '2026-09-25T08:00:00Z', source_version: 'v1', policy_version: '1', cached: true,
+      source_url: 'https://arxiv.org/abs/1706.03762', license_url: 'https://creativecommons.org/publicdomain/zero/1.0/',
+      permission_source: 'https://info.arxiv.org/help/api/tou.html', rights_notice: 'Metadata permission', notes: [],
+      passages: [{ id: 'p-one', section: 'Abstract', text: 'The observed result is limited to this experiment.' }] },
+    statements: [{ text: 'An example finding.', passage_ids: ['p-one'], references_valid: true }], warnings: [],
+  } }));
+  assert.match(text(tree), /abstract only/);
+  assert.match(text(tree), /Cached content/);
+  assert.match(text(tree), /The observed result is limited/);
+  assert.match(text(tree), /An example finding/);
+  assert.doesNotMatch(text(tree), /Verified claim|Scientific accuracy confirmed/i);
+  assert.equal(elements(tree).find(item => item.type === 'Link' && text(item).includes('Reuse licence')).props.href,
+    'https://creativecommons.org/publicdomain/zero/1.0/');
+});
+test('missing evidence references remain explicit and source content reads do not trigger generation', async () => {
+  const tree = render(ContentEvidence({ item: {
+    document: { title: 'Example', authors: [], retrieved_at: '2026-09-25T08:00:00Z', passages: [], notes: [] },
+    statements: [{ text: 'Unverified claim', passage_ids: ['unknown'], references_valid: false }], warnings: ['Source unavailable'],
+  } }));
+  assert.match(text(tree), /Human review required/);
+  assert.match(text(tree), /Unknown passage/);
+  const requests = [];
+  const { researchQualityApi } = await load('../src/api/researchQuality.ts', {
+    './client': { apiRequest: async (...args) => { requests.push(args); return {}; } },
+  });
+  await researchQualityApi.content('digest-a', 'run-b');
+  assert.deepEqual(requests[0], ['/admin/digests/digest-a/runs/run-b/source-content']);
+});
+test('source attribution retains the notice, licence link, and modification statement', async () => {
+  const { SourceAttribution } = await load('../src/components/SourceAttribution.tsx');
+  const tree = render(SourceAttribution({ value: { title: 'Original title', authors: ['Author One'],
+    source_url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC123/', license_url: 'https://creativecommons.org/licenses/by/4.0/',
+    rights_notice: 'Copyright Authors', changes: 'Formatting normalized; original AI summary.' } }));
+  assert.match(text(tree), /Original title.*Author One/);
+  assert.match(text(tree), /Copyright Authors/);
+  assert.match(text(tree), /Formatting normalized/);
 });

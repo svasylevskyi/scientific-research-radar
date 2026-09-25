@@ -173,6 +173,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/digests/{digest_id}/runs/{run_id}/source-content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Source Content */
+        get: operations["get_run_source_content_api_v1_admin_digests__digest_id__runs__run_id__source_content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/digests/{digest_id}/runs/{run_id}/source-verifications": {
         parameters: {
             query?: never;
@@ -2514,6 +2531,15 @@ export interface components {
             /** Schedule Frequencies */
             schedule_frequencies: ("daily" | "weekly" | "monthly" | "quarterly")[];
         };
+        /** EvidenceStatement */
+        EvidenceStatement: {
+            /** Passage Ids */
+            passage_ids: string[];
+            /** References Valid */
+            references_valid: boolean;
+            /** Text */
+            text: string;
+        };
         /** FieldComparison */
         FieldComparison: {
             /** Field */
@@ -2789,6 +2815,14 @@ export interface components {
              */
             id: string;
         };
+        /** PaperContentRead */
+        PaperContentRead: {
+            document: components["schemas"]["SourceDocument"];
+            /** Statements */
+            statements: components["schemas"]["EvidenceStatement"][];
+            /** Warnings */
+            warnings: string[];
+        };
         /** PaperRead */
         PaperRead: {
             /** Abstract */
@@ -3006,6 +3040,11 @@ export interface components {
              * @default true
              */
             check_duplicates?: boolean;
+            /**
+             * Check Evidence Links
+             * @default true
+             */
+            check_evidence_links?: boolean;
             /**
              * Check Reporting Dates
              * @default true
@@ -3250,6 +3289,13 @@ export interface components {
             /** Runs */
             runs: number | null;
         };
+        /** RunContentRead */
+        RunContentRead: {
+            /** Items */
+            items: components["schemas"]["PaperContentRead"][];
+            /** Legacy */
+            legacy: boolean;
+        };
         /** SandboxAttemptRead */
         SandboxAttemptRead: {
             /** Cancel At Period End */
@@ -3363,6 +3409,59 @@ export interface components {
             /** Revision */
             revision: number;
         };
+        /** SourceDocument */
+        SourceDocument: {
+            /** Authors */
+            authors?: string[];
+            /**
+             * Basis
+             * @default metadata_only
+             * @enum {string}
+             */
+            basis?: "abstract_only" | "extracted_sections" | "metadata_only";
+            /**
+             * Cached
+             * @default false
+             */
+            cached?: boolean;
+            /** Content Sha256 */
+            content_sha256?: string | null;
+            /** External Id */
+            external_id: string;
+            /** License Url */
+            license_url?: string | null;
+            /** Notes */
+            notes?: string[];
+            /** Passages */
+            passages?: components["schemas"]["SourcePassage"][];
+            /** Permission Source */
+            permission_source?: string | null;
+            /**
+             * Policy Version
+             * @default 1
+             */
+            policy_version?: string;
+            /** Request Url */
+            request_url?: string | null;
+            /**
+             * Retrieved At
+             * Format: date-time
+             */
+            retrieved_at: string;
+            /** Rights Notice */
+            rights_notice?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+            /** Source Version */
+            source_version?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "available" | "unavailable" | "rights_unconfirmed";
+            /** Title */
+            title: string;
+        };
         /** SourceMetadata */
         SourceMetadata: {
             /** Abstract */
@@ -3386,6 +3485,15 @@ export interface components {
             updated?: string | null;
             /** Url */
             url?: string | null;
+        };
+        /** SourcePassage */
+        SourcePassage: {
+            /** Id */
+            id: string;
+            /** Section */
+            section: string;
+            /** Text */
+            text: string;
         };
         /** SourceVerificationHistory */
         SourceVerificationHistory: {
@@ -4283,6 +4391,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QualityEvaluationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_source_content_api_v1_admin_digests__digest_id__runs__run_id__source_content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                digest_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunContentRead"];
                 };
             };
             /** @description Validation Error */

@@ -76,7 +76,8 @@ def crossref_record(item: dict[str, Any]) -> SourceMetadata:
         title=plain(" ".join(item.get("title", [])))[:3000],
         authors=[plain(author.get("name") or " ".join(filter(None, [author.get("given"), author.get("family")])))[:300] for author in item.get("author", [])[:500]],
         dates=sorted(set(dates)), url=safe_url(item.get("URL")),
-        abstract=plain(item["abstract"])[:10000] if item.get("abstract") else None,
+        # Crossref does not grant reuse rights to deposited abstracts.
+        abstract=None,
         full_text_links=[url for link in item.get("link", [])[:10] if (url := safe_url(link.get("URL")))],
     )
 
