@@ -122,6 +122,10 @@ outages, compression bounds, retained retries, API permissions, attribution, and
 unchanged model-request counts. See that directory's review guide before treating
 the fixture set as a human-approved scientific benchmark.
 
+The [offline evaluation framework](research-evaluation.md) builds on these excerpts
+with draft claim cases, human review packets, and saved-verdict comparison reports.
+It adds no production model calls or automatic scientific approval.
+
 After deployment, run a digest that selects an arXiv paper. Verify its summary is
 labelled abstract-only and its evidence/CC0 provenance is visible to admins. For
 a PMC paper with an approved licence, verify selected sections and attribution in

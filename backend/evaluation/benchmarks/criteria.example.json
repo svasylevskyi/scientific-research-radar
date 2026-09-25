@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "status": "draft",
+  "reviewer": null,
+  "reviewed_at": null,
+  "rationale": null,
+  "minimum_reviewed_cases": 20,
+  "minimum_source_families": 5,
+  "minimum_prediction_coverage": 1.0,
+  "minimum_accuracy": 0.9,
+  "maximum_false_acceptance_rate": 0.0,
+  "maximum_regressions": 0
+}

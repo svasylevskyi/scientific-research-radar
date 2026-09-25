@@ -68,6 +68,7 @@ files = [
   "app/sources/pmc_content.py",
   "app/services/source_content_service.py",
   "app/radar/evidence.py",
+  "app/evaluation",
   "app/radar/lease.py",
   "app/radar/errors.py",
   "app/repositories/digest_run_repository.py",

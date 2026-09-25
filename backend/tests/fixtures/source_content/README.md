@@ -13,6 +13,12 @@ factuality score, or release-quality threshold is claimed. The synthetic asserti
 in tests demonstrate reference validity, not semantic entailment. The constructed
 PMC XML in tests is original synthetic test content, not a publisher's article.
 
+The [offline evaluation guide](../../../../docs/research-evaluation.md) now provides
+a readable review packet, explicit approval records, and comparison reports using
+these excerpts. Its 36 claim cases remain drafts until reviewed by a human. The
+GPT-3 author list was completed from its versioned metadata page; the LIGO excerpt
+ends before a malformed source-page link rather than reconstructing its wording.
+
 For each fixture, a reviewer should add an original supported summary, a supported
 finding and a deliberately unsupported variant (wrong number, changed population,
 missing qualification or conclusion beyond the abstract). Record the relevant
