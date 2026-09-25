@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { researchQualityApi, type QualityConfig, type QualityHistory, type QualitySettings } from "../api/researchQuality";
 import { useAuth } from "../auth/AuthContext";
 import { AppHeader } from "../components/AppHeader";
+import { BenchmarkReviewPanel } from "../components/BenchmarkReviewPanel";
 
 const modes = { off: "Off", observe: "Observe", enforce: "Enforce" };
 const rules = [
@@ -67,6 +68,7 @@ export function AdminResearchQualityPage() {
       {settings && <Stack direction="row" spacing={1} alignItems="center"><Chip label={`Active mode: ${modes[settings.config.mode ?? "observe"]}`} />
         <Typography variant="body2">Settings version {settings.version}</Typography></Stack>}
       <Button disabled={loading || saving} onClick={() => { setSuccess(null); setReload((value) => value + 1); }} sx={{ alignSelf: "flex-start" }}>Reload settings</Button>
+      <BenchmarkReviewPanel />
       {!user?.is_super_admin && <Typography color="text.secondary">All admins can review these settings. Only super-admins can change them.</Typography>}
       {loading ? <CircularProgress aria-label="Loading quality settings" /> : config && settings && <Paper component="form" onSubmit={save} variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
         <Stack spacing={2.5}>

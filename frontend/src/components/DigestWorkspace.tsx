@@ -1,10 +1,4 @@
 import { startPagePolling } from "../pagePolling";
-import {
-  AdminCostDetails,
-  AdminCostSummary,
-  useAdminRunCosts,
-} from "./AdminRunCosts";
-import { AdminDigestCostSummary } from "./AdminDigestCostSummary";
 import { RetryRunButton } from "./RetryRunButton";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
@@ -32,7 +26,7 @@ import { useAuth } from "../auth/AuthContext";
 import type { DigestRunDetail, DigestRunSummary } from "../types/digest";
 import { DigestRunFeedback } from "./DigestRunFeedback";
 import { DigestRunProgress } from "./DigestRunProgress";
-import { AdminRunQuality } from "./AdminRunQuality";
+import { AdminRunDiagnostics } from "./AdminRunDiagnostics";
 import {
   DigestBriefingResult,
   PaperSummariesResult,
@@ -85,6 +79,7 @@ export function DigestWorkspace({
   const from = fromOverride ?? runDays[0] ?? "";
   const to = toOverride ?? runDays.at(-1) ?? "";
   const [tab, setTab] = useState("briefing");
+  const [adminSection, setAdminSection] = useState("diagnostics");
   const [loadedRun, setLoadedRun] = useState<DigestRunDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +128,7 @@ export function DigestWorkspace({
 
   useEffect(() => {
     setTab("briefing");
+    setAdminSection("diagnostics");
   }, [selectedId]);
 
   // Semantic tab values keep selection stable when available outputs change.
@@ -143,17 +139,11 @@ export function DigestWorkspace({
       run &&
         (run.search_data || run.relevance_data || run.paper_results.length),
     ),
-    diagnostics: admin,
     steps: !admin,
     feedback: run?.status === "completed",
-    details: true,
+    details: !admin,
   };
   const activeTab = resultTab(tab, available, admin);
-  const costs = useAdminRunCosts(
-    admin && activeTab === "diagnostics",
-    digestId,
-    run,
-  );
   const invalidRange = Boolean(from && to && from > to);
   const filtered = filterRuns(runs, from, to).filter((item) => {
     if (item.status === "queued" || item.status === "running")
@@ -335,6 +325,14 @@ export function DigestWorkspace({
             Run: {runDate(run.started_at).toLocaleString()} · {run.status}
           </Typography>
         )}
+        {admin && <Stack component="nav" aria-label="Run sections" direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 3 }}>
+          <Button variant={adminSection === "diagnostics" ? "contained" : "text"}
+            aria-pressed={adminSection === "diagnostics"} aria-controls="admin-run-diagnostics"
+            onClick={() => setAdminSection("diagnostics")}>Run Diagnostics</Button>
+          <Button variant={adminSection === "output" ? "contained" : "text"}
+            aria-pressed={adminSection === "output"} aria-controls="admin-run-output"
+            onClick={() => setAdminSection("output")}>Run Output</Button>
+        </Stack>}
         {selectionOutsideFilter && (
           <Alert severity="info" sx={{ mb: 2 }}>
             The displayed run is outside the current filters. Adjust the filters
@@ -346,69 +344,60 @@ export function DigestWorkspace({
             {error}
           </Alert>
         )}
+        {admin && <AdminRunDiagnostics digestId={digestId} selectedId={selectedId} run={run} visible={adminSection === "diagnostics"} />}
+        <Box id={admin ? "admin-run-output" : undefined} hidden={admin && adminSection !== "output"}>
         <Paper
           variant="outlined"
           sx={{ borderRadius: 3, overflow: "hidden", mb: 3 }}
         >
           <Tabs
-            value={activeTab}
+            value={activeTab === "none" ? false : activeTab}
             onChange={(_event, value) => setTab(value)}
             variant="scrollable"
             scrollButtons="auto"
-            aria-label="Digest results and settings"
+            aria-label={admin ? "Run output" : "Digest results and settings"}
           >
             <Tab
               value="briefing"
+              id="output-tab-briefing" aria-controls="digest-output-panel"
               label="Digest Briefing"
               disabled={!available.briefing}
             />
             <Tab
               value="trends"
+              id="output-tab-trends" aria-controls="digest-output-panel"
               label="Trend Analysis"
               disabled={!available.trends}
             />
             <Tab
               value="papers"
+              id="output-tab-papers" aria-controls="digest-output-panel"
               label="Paper Summaries"
               disabled={!available.papers}
             />
-            {!admin && <Tab value="steps" label="Run Steps" />}
+            {!admin && <Tab value="steps" label="Run Steps" id="output-tab-steps" aria-controls="digest-output-panel" />}
             <Tab
               value="feedback"
+              id="output-tab-feedback" aria-controls="digest-output-panel"
               label="Feedback"
               disabled={!available.feedback}
             />
-            <Tab value="details" label="Digest Details" />
-            {admin && <Tab value="diagnostics" label="Run Diagnostics" />}
+            {!admin && <Tab value="details" label="Digest Details" id="output-tab-details" aria-controls="digest-details-panel" />}
           </Tabs>
         </Paper>
-        <Box role="tabpanel" hidden={activeTab !== "details"}>
+        {!admin && <Box role="tabpanel" id="digest-details-panel" aria-labelledby="output-tab-details" hidden={activeTab !== "details"}>
           {details}
-        </Box>
+        </Box>}
         {activeTab !== "details" &&
           (loading && !run ? (
             <CircularProgress aria-label="Loading run" />
           ) : (
             run && (
-              <Box role="tabpanel">
+              <Box role="tabpanel" id="digest-output-panel" aria-labelledby={activeTab === "none" ? undefined : `output-tab-${activeTab}`}>
+                {activeTab === "none" && <Alert severity="info">No research output is available for this run. Check Run Diagnostics for execution details.</Alert>}
                 {activeTab === "briefing" && <DigestBriefingResult run={run} />}
                 {activeTab === "trends" && <TrendAnalysisResult run={run} />}
                 {activeTab === "papers" && <PaperSummariesResult run={run} />}
-                {activeTab === "diagnostics" && (
-                  <Stack spacing={2}>
-                    <AdminRunQuality key={run.id} digestId={digestId} run={run} />
-                    <Typography component="h2" variant="h6">Costs</Typography>
-                    <AdminCostSummary {...costs} />
-                    <AdminCostDetails {...costs} />
-                    <AdminDigestCostSummary digestId={digestId} />
-                    <Typography component="h2" variant="h6">Run steps</Typography>
-                    <DigestRunProgress run={run} />
-                    <Typography>
-                      OpenAI response jobs created: {run.request_count}.
-                      Paper-summary batches may create multiple jobs.
-                    </Typography>
-                  </Stack>
-                )}
                 {activeTab === "steps" && (
                   <Stack spacing={2}>
                     <DigestRunProgress run={run} />
@@ -464,6 +453,7 @@ export function DigestWorkspace({
               </Box>
             )
           ))}
+        </Box>
       </Box>
     </Stack>
   );

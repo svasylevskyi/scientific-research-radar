@@ -31,6 +31,7 @@ export function filterRuns(runs: DigestRunSummary[], from: string, to: string) {
 
 /** Prefer available research output before falling back to technical execution details. */
 export function resultTab(requested: string, available: Record<string, boolean>, admin: boolean) {
-  if (available[requested]) return requested;
-  return ["briefing", "trends", "papers"].find(key => available[key]) ?? (admin ? "diagnostics" : "steps");
+  const output = ["briefing", "trends", "papers", "feedback"];
+  if (available[requested] && (!admin || output.includes(requested))) return requested;
+  return (admin ? output : output.slice(0, 3)).find(key => available[key]) ?? (admin ? "none" : "steps");
 }

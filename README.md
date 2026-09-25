@@ -24,9 +24,10 @@ Research quality gates and the super-admin Off/Observe/Enforce settings are
 documented in [the research quality guide](docs/research-quality.md). New runs
 default to Observe; legacy runs remain Not evaluated.
 
-The [offline evaluation guide](docs/research-evaluation.md) explains draft benchmark
-review, human approval records, and reproducible comparisons of saved reviewer
-verdicts. It adds no automatic model calls or production delivery changes.
+The [human review and evaluation guide](docs/research-evaluation.md) explains the
+admin benchmark forms, saved drafts, review history, frozen publications, and
+reproducible offline comparisons of saved reviewer verdicts. It adds no automatic
+model calls or production delivery changes.
 
 ## Website navigation
 

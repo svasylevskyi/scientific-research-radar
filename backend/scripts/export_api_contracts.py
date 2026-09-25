@@ -12,6 +12,7 @@ CONTRACT_MODULES = frozenset(
     {
         "contact",
         "research_quality",
+        "benchmark_review",
         "admin_pricing",
         "admin_spending",
         "admin_subscriptions",
