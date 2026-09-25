@@ -1,11 +1,12 @@
-import { Autocomplete, Box, CircularProgress, TextField, Typography } from "@mui/material";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import { Autocomplete, Box, Button, CircularProgress, InputAdornment, Stack, TextField, Typography } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { adminApi } from "../api/admin";
 import type { User } from "../types/auth";
 
 type OwnerOption = { kind: "user"; user: Pick<User, "id" | "full_name" | "email"> } | { kind: "query"; query: string };
 const label = (option: OwnerOption | string) => typeof option === "string" ? option
-  : option.kind === "query" ? option.query : `${option.user.full_name} · ${option.user.email}`;
+  : option.kind === "query" ? option.query : option.user.full_name || option.user.email;
 
 export function DigestOwnerFilter({ ownerId, query, onChange }: {
   ownerId: string; query: string; onChange: (filter: { ownerId?: string; query?: string }) => void;
@@ -50,7 +51,9 @@ export function DigestOwnerFilter({ ownerId, query, onChange }: {
   }, [input, open, selected, term]);
 
   const options: OwnerOption[] = term.length >= 3 ? [...matches, { kind: "query", query: term }] : [];
-  return <Autocomplete<OwnerOption, false, false, true>
+  const search = () => { setOpen(false); setInput(term); setSelected(term ? { kind: "query", query: term } : null); onChange(term ? { query: term } : {}); };
+  return <Stack direction="row" spacing={1} sx={{ width: { xs: "100%", sm: 420 }, maxWidth: "100%", alignItems: "flex-start" }}>
+    <Autocomplete<OwnerOption, false, false, true>
     freeSolo selectOnFocus clearOnBlur={false} open={open} onOpen={() => setOpen(true)} onClose={() => setOpen(false)}
     value={selected} inputValue={input} options={options} loading={loading} filterOptions={values => values}
     getOptionLabel={label} getOptionKey={option => typeof option === "string" ? `text:${option}`
@@ -77,10 +80,13 @@ export function DigestOwnerFilter({ ownerId, query, onChange }: {
           : <Typography>Search all owners matching “{option.query}”</Typography>}
       </Box>;
     }}
-    renderInput={params => <TextField {...params} size="small" label="Digest owner" placeholder="Search name or email"
-      helperText={error || "Type 3 characters for suggestions. Press Enter to search all matches."}
-      slotProps={{ htmlInput: { ...params.inputProps, maxLength: 120 }, input: { ...params.InputProps,
+    renderInput={params => <TextField {...params} size="small" placeholder="Digest owner"
+      helperText={error || "Search name or email"}
+      slotProps={{ htmlInput: { ...params.inputProps, "aria-label": "Digest owner", maxLength: 120 }, input: { ...params.InputProps,
+        startAdornment: <><InputAdornment position="start"><SearchRoundedIcon /></InputAdornment>{params.InputProps.startAdornment}</>,
         endAdornment: <>{loading && <CircularProgress size={16} aria-label="Loading owner suggestions" />}{params.InputProps.endAdornment}</> } }} />}
-    sx={{ width: { xs: "100%", sm: 340 }, maxWidth: "100%", flexShrink: 0 }}
-  />;
+    sx={{ flex: 1, minWidth: 0 }}
+  />
+    <Button variant="contained" onClick={search} sx={{ minHeight: 40 }}>Search</Button>
+  </Stack>;
 }

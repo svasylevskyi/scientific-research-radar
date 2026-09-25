@@ -116,7 +116,7 @@ def test_no_results_and_rejected_old_papers_do_not_cause_a_hold():
 def publish(factory, mode, **options):
     with factory() as db:
         previous = db.scalar(select(ResearchQualitySettings.version).order_by(ResearchQualitySettings.version.desc())) or 0
-        db.add(ResearchQualitySettings(version=previous + 1, config=QualityConfig(mode=mode, **options).model_dump(),
+        db.add(ResearchQualitySettings(version=previous + 1, config=QualityConfig(mode=mode, **options).model_dump(mode="json"),
             created_by_name="Test operator", change_reason="Fixture policy"))
         db.commit()
 

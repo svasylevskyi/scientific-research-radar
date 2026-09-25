@@ -4,6 +4,7 @@ import { researchQualityApi, type QualityConfig, type QualityHistory, type Quali
 import { useAuth } from "../auth/AuthContext";
 import { AppHeader } from "../components/AppHeader";
 import { BenchmarkReviewPanel } from "../components/BenchmarkReviewPanel";
+import { ClaimReviewSettings, defaultClaimReview } from "../components/ClaimReviewSettings";
 
 const modes = { off: "Off", observe: "Observe", enforce: "Enforce" };
 const rules = [
@@ -56,7 +57,7 @@ export function AdminResearchQualityPage() {
       const value = await researchQualityApi.save({ expected_version: settings.version,
         config: { ...config, sparse_paper_threshold: Number(threshold) }, change_reason: reason.trim() });
       setSettings(value); setConfig(value.config); setReason(""); setPage(1);
-      setSuccess(`Version ${value.version} saved. These settings apply to new runs.`);
+      setSuccess(`Version ${value.version} saved. Run settings apply to new runs; AI reviewer controls apply to new manual reviews. Switching the AI reviewer Off also stops further queued requests.`);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not save settings."); }
     finally { setSaving(false); }
   }
@@ -64,7 +65,7 @@ export function AdminResearchQualityPage() {
   return <Box><AppHeader /><Container component="main" maxWidth="md" sx={{ py: { xs: 4, sm: 6 } }}>
     <Stack spacing={3}>
       <Box><Typography component="h1" variant="h3">Research quality</Typography>
-        <Typography color="text.secondary" sx={{ mt: 1 }}>Deterministic checks of research output. These checks do not verify whether scientific claims are true.</Typography></Box>
+        <Typography color="text.secondary" sx={{ mt: 1 }}>Configure research checks and optional AI observations. Findings help identify issues; they do not certify scientific truth.</Typography></Box>
       {settings && <Stack direction="row" spacing={1} alignItems="center"><Chip label={`Active mode: ${modes[settings.config.mode ?? "observe"]}`} />
         <Typography variant="body2">Settings version {settings.version}</Typography></Stack>}
       <Button disabled={loading || saving} onClick={() => { setSuccess(null); setReload((value) => value + 1); }} sx={{ alignSelf: "flex-start" }}>Reload settings</Button>
@@ -95,6 +96,8 @@ export function AdminResearchQualityPage() {
             helperText="0–30. Set 0 to disable this warning. Sparse results never cause a hold by themselves."
             slotProps={{ htmlInput: { min: 0, max: 30, step: 1 } }} />
           <Typography variant="body2">Required content, selected-paper coverage, and evidence-reference consistency are always checked in Observe and Enforce. Existing schema, security, and reference-integrity validation remains active even when quality gates are Off.</Typography>
+          <ClaimReviewSettings value={config.claim_review ?? defaultClaimReview} disabled={!editable}
+            onChange={value => setConfig({ ...config, claim_review: value })} />
           {user?.is_super_admin && <>
             <TextField label="Reason for change" multiline minRows={2} required value={reason} disabled={!editable}
               onChange={(event) => setReason(event.target.value)} slotProps={{ htmlInput: { maxLength: 500 } }} />
@@ -112,6 +115,8 @@ export function AdminResearchQualityPage() {
             <Typography variant="body2" color="text.secondary">{item.created_by_name} · {item.created_at ? new Date(/[Zz]|[+-]\d\d:\d\d$/.test(item.created_at) ? item.created_at : `${item.created_at}Z`).toLocaleString() : "Built-in defaults"}</Typography>
             <Typography sx={{ my: 1 }}>{item.change_reason}</Typography>
             <Typography variant="body2">Source verification: {modes[item.config.source_verification_mode ?? "observe"]}</Typography>
+            <Typography variant="body2">AI reviewer: {item.config.claim_review?.mode ?? "off"} · {item.config.claim_review?.model ?? defaultClaimReview.model} · Per-review limit ${item.config.claim_review?.max_review_usd ?? defaultClaimReview.max_review_usd} · Daily reservation budget ${item.config.claim_review?.daily_budget_usd ?? defaultClaimReview.daily_budget_usd}</Typography>
+            <Typography variant="body2">AI limits: {item.config.claim_review?.max_claims ?? defaultClaimReview.max_claims} claims per review · {item.config.claim_review?.max_output_tokens ?? defaultClaimReview.max_output_tokens} output tokens per claim · {item.config.claim_review?.daily_call_limit ?? defaultClaimReview.daily_call_limit} calls per UTC day</Typography>
             <Typography variant="body2">Dates: {item.config.check_reporting_dates ? "on" : "off"} · Duplicates: {item.config.check_duplicates ? "on" : "off"} · Source access: {item.config.check_source_access ? "on" : "off"} · Sparse warning below {item.config.sparse_paper_threshold} papers</Typography>
           </Paper>)}
           {history.total > 20 && <Pagination count={Math.ceil(history.total / 20)} page={page} onChange={(_, value) => setPage(value)} />}

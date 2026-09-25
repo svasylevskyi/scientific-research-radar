@@ -2,6 +2,7 @@
 from decimal import Decimal
 from sqlalchemy import select
 from app.models.radar_request import RadarRequest
+from app.models.claim_review import ClaimReview, ClaimReviewRequest
 
 
 def unknown_cost_reason(request):
@@ -42,19 +43,20 @@ def estimate(request):
     ) / Decimal(1000000) + request.web_search_calls * Decimal(p["web_search_per_call"])
 
 
-def run_costs(db, run, requests=None):
+def run_costs(db, run, requests=None, review_requests=None):
     requests = requests if requests is not None else list(db.scalars(select(RadarRequest).where(RadarRequest.run_id == run.id).order_by(RadarRequest.created_at, RadarRequest.id)))
+    review_requests = review_requests if review_requests is not None else list(db.scalars(select(ClaimReviewRequest).join(ClaimReview).where(ClaimReview.run_id == run.id).order_by(ClaimReviewRequest.created_at)))
     rows = []
     total = Decimal(0)
     unknown = 0
-    for request in requests:
+    for request in [*requests, *review_requests]:
         cost = estimate(request)
         if cost is None:
             unknown += 1
         else:
             total += cost
         rows.append({
-            "id": str(request.id), "stage_id": str(request.stage_id),
+            "id": str(request.id), "stage_id": str(request.stage_id) if isinstance(request, RadarRequest) else "claim_review",
             "response_id": request.response_id, "model": request.model_name,
             "reasoning_effort": request.reasoning_effort, "status": request.status,
             "outcome": request.outcome, "usage": request.usage,
@@ -72,10 +74,13 @@ def run_costs(db, run, requests=None):
         stage_rows = [row for row in rows if row["stage_id"] == str(stage.id)]
         stages.append({"stage": stage.stage, "requests": stage_rows,
                        "legacy_accepted_usage": stage.usage_data if not stage_rows else None})
+    if review_requests:
+        stages.append({"stage": "ai_claim_review", "requests": [row for row in rows if row["stage_id"] == "claim_review"], "legacy_accepted_usage": None})
+    review_active = db.scalar(select(ClaimReview.id).where(ClaimReview.run_id == run.id, ClaimReview.active_key.is_not(None))) is not None
     return {"run_id": str(run.id), "currency": "USD", "known_estimated_usd": str(total),
-            "complete": not unknown and not historical_gap and run.status in {"completed", "failed"},
+            "complete": not unknown and not historical_gap and not review_active and run.status in {"completed", "failed"},
             "unknown_requests": unknown, "historical_gap": historical_gap,
-            "request_count": len(requests), "stages": stages}
+            "request_count": len(requests) + len(review_requests), "stages": stages}
 
 
 def digest_costs(db, digest_id):
@@ -90,7 +95,10 @@ def digest_costs(db, digest_id):
     requests = defaultdict(list)
     for request in db.scalars(select(RadarRequest).join(DigestRun).where(DigestRun.digest_id == digest_id)):
         requests[request.run_id].append(request)
-    totals = [run_costs(db, run, requests[run.id]) for run in runs]
+    reviews = defaultdict(list)
+    for review_request, run_id in db.execute(select(ClaimReviewRequest, ClaimReview.run_id).join(ClaimReview).join(DigestRun).where(DigestRun.digest_id == digest_id)):
+        reviews[run_id].append(review_request)
+    totals = [run_costs(db, run, requests[run.id], reviews[run.id]) for run in runs]
     return {"digest_id": str(digest_id), "currency": "USD", "run_count": len(runs),
             "known_estimated_usd": str(sum((Decimal(t["known_estimated_usd"]) for t in totals), Decimal(0))),
             "complete": all(t["complete"] for t in totals),

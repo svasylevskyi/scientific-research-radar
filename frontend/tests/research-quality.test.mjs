@@ -111,6 +111,7 @@ async function manualPanel(evaluate, resource) {
     "./ResearchQualityNotice": { ResearchQualityNotice: "QualityNotice", QualityDetails: "QualityDetails" },
     "./AdminSourceVerification": { AdminSourceVerification: "SourceVerification" },
     "./AdminSourceContent": { AdminSourceContent: "SourceContent" },
+    "./ClaimReviewPanel": { ClaimReviewPanel: "ClaimReviewPanel" },
   });
   return (status = "completed") => {
     cursor = 0;

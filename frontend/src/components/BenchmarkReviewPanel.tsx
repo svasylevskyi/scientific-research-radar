@@ -6,10 +6,11 @@ import { benchmarkApi, downloadJson, type BenchmarkAudit, type BenchmarkCase, ty
 import { runDate } from "../runHistory";
 import { BenchmarkCaseForm } from "./BenchmarkCaseForm";
 import { BenchmarkCriteriaForm } from "./BenchmarkCriteriaForm";
+import { ClaimReviewPanel } from "./ClaimReviewPanel";
 
 export function BenchmarkReviewPanel({ standalone = false }: { standalone?: boolean }) {
   const [opened, setOpened] = useState(false);
-  const introduction = <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Review shared calibration cases against their permitted evidence. These cases are separate from the selected digest run. No LLM calls are made; reviews do not change run quality, delivery, or allowances.</Typography>;
+  const introduction = <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Review shared calibration cases against their permitted evidence. These cases are separate from the selected digest run. Saving human reviews makes no LLM calls and does not change run quality, delivery, or allowances. The optional AI comparison below is a separate paid action.</Typography>;
   if (standalone) return <Box>
     <Typography component="h2" variant="h6" sx={{ mb: 2 }}>Human benchmark review</Typography>
     {introduction}
@@ -154,6 +155,9 @@ export function BenchmarkReviewWorkspace() {
         {Object.entries(data.summary.counts).map(([state, count]) => <Chip key={state} size="small" variant="outlined" label={`${state}: ${count}`} />)}
       </Stack>
       <Typography variant="body2" color="text.secondary">{data.description}</Typography>
+      <Accordion><AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>AI benchmark comparison</Typography></AccordionSummary>
+        <AccordionDetails><ClaimReviewPanel key={benchmarkId} benchmarkId={benchmarkId} latestPublication={data.summary.latest_publication ?? null} /></AccordionDetails>
+      </Accordion>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
         <TextField select fullWidth label="Dataset split" value={split} disabled={busy} onChange={event => { if (mayChangeCase()) { setSplit(event.target.value); setCaseId(""); } }}>
           <MenuItem value="development">Development</MenuItem><MenuItem value="heldout">Held-out</MenuItem><MenuItem value="all">All cases</MenuItem>

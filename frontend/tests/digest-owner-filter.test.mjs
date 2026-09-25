@@ -32,7 +32,8 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 async function filter(api, props = {}) {
   const runtime = hooks(); const changes = [];
   const {DigestOwnerFilter} = await load('../src/components/DigestOwnerFilter.tsx', {react: runtime.react, '../api/admin': {adminApi: api}});
-  return {changes, render: () => runtime.render(() => DigestOwnerFilter({ownerId: '', query: '', onChange: value => changes.push(value), ...props}))};
+  const root = () => runtime.render(() => DigestOwnerFilter({ownerId: '', query: '', onChange: value => changes.push(value), ...props}));
+  return {changes, root, render: () => root().props.children[0]};
 }
 
 test('owner suggestions debounce at three characters and end with a full-text filter action', async t => {
@@ -97,4 +98,22 @@ test('Enter supports a text filter and owner APIs encode search terms and cancel
   assert.equal(params.get('owner_query'), 'some+name@example.com');
   assert.equal(params.get('owner_id'), null);
   assert.equal(params.get('offset'), '20');
+});
+
+
+test('owner search button searches typed text and has the requested hints and icon', async () => {
+  const form = await filter({});
+  form.render().props.onInputChange(null, '  owner@example.com  ', 'input');
+  let root = form.root();
+  assert.equal(root.props.children[1].props.children, 'Search');
+  root.props.children[1].props.onClick();
+  assert.equal(form.changes.at(-1).query, 'owner@example.com');
+  const input = form.render().props.renderInput({inputProps: {}, InputProps: {}});
+  assert.equal(input.props.placeholder, 'Digest owner');
+  assert.equal(input.props.helperText, 'Search name or email');
+  assert.equal(input.props.slotProps.htmlInput['aria-label'], 'Digest owner');
+  assert.ok(input.props.slotProps.input.startAdornment);
+  form.render().props.onInputChange(null, '', 'input');
+  form.root().props.children[1].props.onClick();
+  assert.equal(Object.keys(form.changes.at(-1)).length, 0);
 });

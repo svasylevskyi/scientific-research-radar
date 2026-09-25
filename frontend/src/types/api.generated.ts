@@ -433,6 +433,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/research-quality/claim-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** History */
+        get: operations["history_api_v1_admin_research_quality_claim_reviews_get"];
+        put?: never;
+        /** Start */
+        post: operations["start_api_v1_admin_research_quality_claim_reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/research-quality/claim-reviews/{review_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read */
+        get: operations["read_api_v1_admin_research_quality_claim_reviews__review_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/research-quality/claim-reviews/{review_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export */
+        get: operations["export_api_v1_admin_research_quality_claim_reviews__review_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/research-quality/history": {
         parameters: {
             query?: never;
@@ -2301,6 +2353,32 @@ export interface components {
             /** Worker Last Seen At */
             worker_last_seen_at: string | null;
         };
+        /** Candidate */
+        Candidate: {
+            /** Benchmark Sha256 */
+            benchmark_sha256: string;
+            /** Candidate Id */
+            candidate_id: string;
+            /** Evaluator Version */
+            evaluator_version: string;
+            /** Judgments */
+            judgments?: components["schemas"]["Judgment"][];
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "human" | "saved_model_output" | "test_fixture";
+            /** Model */
+            model?: string | null;
+            /** Prompt Version */
+            prompt_version?: string | null;
+            /**
+             * Schema Version
+             * @default 1
+             * @constant
+             */
+            schema_version?: "1";
+        };
         /** Case */
         Case: {
             /** Cited Passage Ids */
@@ -2425,6 +2503,207 @@ export interface components {
             interval: "monthly" | "annual";
             /** Revision */
             revision: number;
+        };
+        /** ClaimReviewCaseRead */
+        ClaimReviewCaseRead: {
+            /** Case Id */
+            case_id: string;
+            /** Claim */
+            claim: string;
+            /** Estimated Usd */
+            estimated_usd?: string | null;
+            /** Evidence Passage Ids */
+            evidence_passage_ids?: string[];
+            /** Latency Seconds */
+            latency_seconds?: number | null;
+            /** Paper Id */
+            paper_id?: string | null;
+            /** Rationale */
+            rationale?: string | null;
+            /** Scope */
+            scope: string;
+            /** Sources */
+            sources?: {
+                [key: string]: unknown;
+            }[];
+            /** Status */
+            status: string;
+            /** Verdict */
+            verdict?: ("supported" | "contradicted" | "insufficient_evidence" | "abstain") | null;
+        };
+        /** ClaimReviewConfig */
+        "ClaimReviewConfig-Input": {
+            /**
+             * Daily Budget Usd
+             * @default 5
+             */
+            daily_budget_usd?: number | string;
+            /**
+             * Daily Call Limit
+             * @default 100
+             */
+            daily_call_limit?: number;
+            /**
+             * Max Claims
+             * @default 40
+             */
+            max_claims?: number;
+            /**
+             * Max Output Tokens
+             * @default 1500
+             */
+            max_output_tokens?: number;
+            /**
+             * Max Review Usd
+             * @default 1
+             */
+            max_review_usd?: number | string;
+            /**
+             * Mode
+             * @default off
+             * @enum {string}
+             */
+            mode?: "off" | "observe";
+            /**
+             * Model
+             * @default gpt-6-astra
+             */
+            model?: string;
+        };
+        /** ClaimReviewConfig */
+        "ClaimReviewConfig-Output": {
+            /**
+             * Daily Budget Usd
+             * @default 5
+             */
+            daily_budget_usd?: string;
+            /**
+             * Daily Call Limit
+             * @default 100
+             */
+            daily_call_limit?: number;
+            /**
+             * Max Claims
+             * @default 40
+             */
+            max_claims?: number;
+            /**
+             * Max Output Tokens
+             * @default 1500
+             */
+            max_output_tokens?: number;
+            /**
+             * Max Review Usd
+             * @default 1
+             */
+            max_review_usd?: string;
+            /**
+             * Mode
+             * @default off
+             * @enum {string}
+             */
+            mode?: "off" | "observe";
+            /**
+             * Model
+             * @default gpt-6-astra
+             */
+            model?: string;
+        };
+        /** ClaimReviewExport */
+        ClaimReviewExport: {
+            candidate: components["schemas"]["Candidate"] | null;
+            review: components["schemas"]["ClaimReviewRead"];
+        };
+        /** ClaimReviewHistory */
+        ClaimReviewHistory: {
+            /** Items */
+            items: components["schemas"]["ClaimReviewRead"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** ClaimReviewRead */
+        ClaimReviewRead: {
+            /** Cases */
+            cases: components["schemas"]["ClaimReviewCaseRead"][];
+            /** Completed Claims */
+            completed_claims: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Input Sha256 */
+            input_sha256: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "run" | "benchmark";
+            /** Known Estimated Usd */
+            known_estimated_usd: string;
+            /** Model */
+            model: string;
+            /** Prompt Version */
+            prompt_version: string;
+            /** Publication */
+            publication: number | null;
+            /** Report */
+            report: {
+                [key: string]: unknown;
+            } | null;
+            /** Reserved Usd */
+            reserved_usd: string;
+            /** Selected Claims */
+            selected_claims: number;
+            /** Settings Version */
+            settings_version: number;
+            /** Split */
+            split: ("development" | "heldout") | null;
+            /** Status */
+            status: string;
+            /** Total Claims */
+            total_claims: number;
+            /** Unknown Requests */
+            unknown_requests: number;
+        };
+        /** ClaimReviewStart */
+        ClaimReviewStart: {
+            /** Benchmark Id */
+            benchmark_id?: string | null;
+            /** Digest Id */
+            digest_id?: string | null;
+            /** Expected Settings Version */
+            expected_settings_version: number;
+            /** Publication */
+            publication?: number | null;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * Split
+             * @default development
+             * @enum {string}
+             */
+            split?: "development" | "heldout";
         };
         /** ContactMessageCreate */
         ContactMessageCreate: {
@@ -3099,6 +3378,26 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** Judgment */
+        Judgment: {
+            /** Case Id */
+            case_id: string;
+            /** Case Sha256 */
+            case_sha256: string;
+            /** Cost Usd */
+            cost_usd?: number | null;
+            /** Evidence Passage Ids */
+            evidence_passage_ids?: string[];
+            /** Latency Seconds */
+            latency_seconds?: number | null;
+            /** Rationale */
+            rationale: string;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "supported" | "contradicted" | "insufficient_evidence" | "abstain";
+        };
         /** LoginRequest */
         LoginRequest: {
             /**
@@ -3498,7 +3797,7 @@ export interface components {
             sandbox: boolean;
         };
         /** QualityConfig */
-        QualityConfig: {
+        "QualityConfig-Input": {
             /**
              * Check Duplicates
              * @default true
@@ -3519,6 +3818,48 @@ export interface components {
              * @default true
              */
             check_source_access?: boolean;
+            claim_review?: components["schemas"]["ClaimReviewConfig-Input"];
+            /**
+             * Mode
+             * @default observe
+             * @enum {string}
+             */
+            mode?: "off" | "observe" | "enforce";
+            /**
+             * Source Verification Mode
+             * @default observe
+             * @enum {string}
+             */
+            source_verification_mode?: "off" | "observe" | "enforce";
+            /**
+             * Sparse Paper Threshold
+             * @default 3
+             */
+            sparse_paper_threshold?: number;
+        };
+        /** QualityConfig */
+        "QualityConfig-Output": {
+            /**
+             * Check Duplicates
+             * @default true
+             */
+            check_duplicates?: boolean;
+            /**
+             * Check Evidence Links
+             * @default true
+             */
+            check_evidence_links?: boolean;
+            /**
+             * Check Reporting Dates
+             * @default true
+             */
+            check_reporting_dates?: boolean;
+            /**
+             * Check Source Access
+             * @default true
+             */
+            check_source_access?: boolean;
+            claim_review?: components["schemas"]["ClaimReviewConfig-Output"];
             /**
              * Mode
              * @default observe
@@ -3612,7 +3953,7 @@ export interface components {
         QualitySettingsRead: {
             /** Change Reason */
             change_reason: string;
-            config: components["schemas"]["QualityConfig"];
+            config: components["schemas"]["QualityConfig-Output"];
             /** Created At */
             created_at: string | null;
             /** Created By Name */
@@ -3624,13 +3965,13 @@ export interface components {
         QualitySettingsUpdate: {
             /** Change Reason */
             change_reason: string;
-            config: components["schemas"]["QualityConfig"];
+            config: components["schemas"]["QualityConfig-Input"];
             /** Expected Version */
             expected_version: number;
         };
         /** QualitySnapshot */
         QualitySnapshot: {
-            config: components["schemas"]["QualityConfig"];
+            config: components["schemas"]["QualityConfig-Output"];
             /** Engine Version */
             engine_version: string;
             /** Version */
@@ -5579,6 +5920,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BenchmarkDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    history_api_v1_admin_research_quality_claim_reviews_get: {
+        parameters: {
+            query?: {
+                benchmark_id?: string | null;
+                digest_id?: string | null;
+                limit?: number;
+                offset?: number;
+                run_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimReviewHistory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_api_v1_admin_research_quality_claim_reviews_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimReviewStart"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimReviewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_api_v1_admin_research_quality_claim_reviews__review_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimReviewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_api_v1_admin_research_quality_claim_reviews__review_id__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimReviewExport"];
                 };
             };
             /** @description Validation Error */

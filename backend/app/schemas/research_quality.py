@@ -5,6 +5,7 @@ from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from app.schemas.claim_review_config import ClaimReviewConfig
 
 QualityMode = Literal["off", "observe", "enforce"]
 QualityStatus = Literal["not_evaluated", "pass", "warning", "hold"]
@@ -20,6 +21,7 @@ class QualityConfig(BaseModel):
     sparse_paper_threshold: int = Field(default=3, ge=0, le=30)
     source_verification_mode: QualityMode = "observe"
     check_evidence_links: bool = True
+    claim_review: ClaimReviewConfig = Field(default_factory=ClaimReviewConfig)
 
 
 class QualitySettingsUpdate(BaseModel):
