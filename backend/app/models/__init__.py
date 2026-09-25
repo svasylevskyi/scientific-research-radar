@@ -21,6 +21,7 @@ from app.models.digest_run import (
 )
 from app.models.contact_message import ContactMessage
 from app.models.research_quality import ResearchQualityEvaluation, ResearchQualitySettings
+from app.models.source_verification import SourceMetadataCache, SourceProviderState, SourceVerification
 from app.models.user import User, UserRole
 from app.models.email_verification import EmailVerification
 

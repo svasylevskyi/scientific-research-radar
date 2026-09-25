@@ -11,6 +11,8 @@ from app.schemas.digest import (
 )
 from app.schemas.digest_run import DigestRunDetailRead, DigestRunListResponse
 from app.schemas.research_quality import QualityEvaluationHistory, QualityEvaluationRead, QualityEvaluationRequest
+from app.schemas.source_verification import SourceVerificationHistory, SourceVerificationRead
+from app.services.source_verification_service import source_history, verify_manually
 from app.services.manual_quality_service import ManualQualityUnavailableError, evaluate_manually, evaluation_history
 from app.services.digest_service import (
     DigestNotFoundError,
@@ -113,6 +115,34 @@ def evaluate_run_quality(
     try:
         run = service.get_for_admin(actor=current_admin, digest_id=digest_id, run_id=run_id)
         return evaluate_manually(db, run=run, actor=current_admin,
+            expected_settings_version=payload.expected_settings_version)
+    except (DigestNotFoundError, DigestRunNotFoundError) as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ManualQualityUnavailableError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.get("/{digest_id}/runs/{run_id}/source-verifications", response_model=SourceVerificationHistory)
+def list_source_verifications(
+    digest_id: UUID, run_id: UUID, current_admin: CurrentAdmin,
+    service: RunHistoryServiceDep, db: DbSession,
+    offset: int = Query(0, ge=0), limit: int = Query(5, ge=1, le=20),
+) -> SourceVerificationHistory:
+    try:
+        run = service.get_for_admin(actor=current_admin, digest_id=digest_id, run_id=run_id)
+        return source_history(db, run=run, offset=offset, limit=limit)
+    except (DigestNotFoundError, DigestRunNotFoundError) as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.post("/{digest_id}/runs/{run_id}/source-verifications", status_code=201, response_model=SourceVerificationRead)
+def verify_run_sources(
+    digest_id: UUID, run_id: UUID, payload: QualityEvaluationRequest,
+    current_admin: CurrentAdmin, service: RunHistoryServiceDep, db: DbSession,
+) -> SourceVerificationRead:
+    try:
+        run = service.get_for_admin(actor=current_admin, digest_id=digest_id, run_id=run_id)
+        return verify_manually(db, run=run, actor=current_admin,
             expected_settings_version=payload.expected_settings_version)
     except (DigestNotFoundError, DigestRunNotFoundError) as exc:
         raise HTTPException(404, str(exc)) from exc

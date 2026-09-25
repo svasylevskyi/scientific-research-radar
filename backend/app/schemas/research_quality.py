@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 QualityMode = Literal["off", "observe", "enforce"]
 QualityStatus = Literal["not_evaluated", "pass", "warning", "hold"]
@@ -18,6 +18,7 @@ class QualityConfig(BaseModel):
     check_duplicates: bool = True
     check_source_access: bool = True
     sparse_paper_threshold: int = Field(default=3, ge=0, le=30)
+    source_verification_mode: QualityMode = "observe"
 
 
 class QualitySettingsUpdate(BaseModel):
@@ -56,6 +57,13 @@ class QualitySnapshot(BaseModel):
     version: int
     engine_version: str
     config: QualityConfig
+
+    @model_validator(mode="before")
+    @classmethod
+    def preserve_legacy_source_mode(cls, value):
+        if isinstance(value, dict) and isinstance(value.get("config"), dict) and "source_verification_mode" not in value["config"]:
+            return {**value, "config": {**value["config"], "source_verification_mode": "off"}}
+        return value
 
 
 class QualityFinding(BaseModel):

@@ -78,6 +78,13 @@ export function AdminResearchQualityPage() {
           {config.mode === "enforce" && <Alert severity="warning">Held output remains available for review and cannot be emailed. Generated runs still count against existing allowances. Agree the customer allowance policy before enabling Enforce for paying users.</Alert>}
           <Typography variant="body2" color="text.secondary">Each run keeps its settings snapshot, including retries. Changing modes does not release held output or re-evaluate earlier runs. Manual release and automatic correction are not included yet.</Typography>
           <Typography component="h2" variant="h6">Optional checks</Typography>
+          <TextField select label="Independent source verification" value={config.source_verification_mode ?? "observe"} disabled={!editable}
+            onChange={(event) => setConfig({ ...config, source_verification_mode: event.target.value as QualityConfig["source_verification_mode"] })}>
+            <MenuItem value="off">Off — no external metadata lookups</MenuItem>
+            <MenuItem value="observe">Observe — record metadata limitations as warnings</MenuItem>
+            <MenuItem value="enforce">Enforce — confirmed metadata conflicts cause Hold</MenuItem>
+          </TextField>
+          <Typography variant="body2" color="text.secondary">Checks DOI/arXiv metadata using external requests, without OpenAI. Unavailable sources and provider errors produce warnings. Conflicts block automatic delivery only when both modes are Enforce. Automatic lookups are skipped when the quality gate is Off; manual source checks remain available unless source verification itself is Off.</Typography>
           {rules.map(([key, label]) => <FormControlLabel key={key} label={label} control={<Switch checked={!!config[key]} disabled={!editable} onChange={(_, checked) => setConfig({ ...config, [key]: checked })} />} />)}
           <TextField label="Warn when fewer papers are selected" type="number" value={threshold} disabled={!editable}
             onChange={(event) => setThreshold(event.target.value)} error={!thresholdValid}
@@ -100,6 +107,7 @@ export function AdminResearchQualityPage() {
             <Typography fontWeight={700}>Version {item.version} · {modes[item.config.mode ?? "observe"]}</Typography>
             <Typography variant="body2" color="text.secondary">{item.created_by_name} · {item.created_at ? new Date(/[Zz]|[+-]\d\d:\d\d$/.test(item.created_at) ? item.created_at : `${item.created_at}Z`).toLocaleString() : "Built-in defaults"}</Typography>
             <Typography sx={{ my: 1 }}>{item.change_reason}</Typography>
+            <Typography variant="body2">Source verification: {modes[item.config.source_verification_mode ?? "observe"]}</Typography>
             <Typography variant="body2">Dates: {item.config.check_reporting_dates ? "on" : "off"} · Duplicates: {item.config.check_duplicates ? "on" : "off"} · Source access: {item.config.check_source_access ? "on" : "off"} · Sparse warning below {item.config.sparse_paper_threshold} papers</Typography>
           </Paper>)}
           {history.total > 20 && <Pagination count={Math.ceil(history.total / 20)} page={page} onChange={(_, value) => setPage(value)} />}

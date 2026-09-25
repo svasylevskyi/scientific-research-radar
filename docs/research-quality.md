@@ -1,7 +1,9 @@
 # Research quality foundation
 
-New runs default to **Observe**. The new deterministic checks make no OpenAI or
-source-fetching requests and are not a factual-accuracy certification.
+New runs default to **Observe**. Local consistency checks make no OpenAI or
+source-fetching requests and are not a factual-accuracy certification. Independent
+source verification adds bounded Crossref/arXiv metadata lookups, also without
+OpenAI. See [source verification](source-verification.md) for scope and controls.
 
 ## Settings and rollout
 

@@ -16,6 +16,21 @@ from app.main import app
 from app.services.email_service import EmailService
 
 
+@pytest.fixture(autouse=True)
+def no_live_metadata_requests(monkeypatch):
+    """Research tests never contact external metadata providers."""
+    from datetime import datetime, timezone
+    from app.schemas.source_verification import MetadataLookup
+    from app.sources.metadata import request_url
+
+    def offline(provider, identifiers):
+        return {identifier: MetadataLookup(provider=provider, identifier=identifier,
+            request_url=request_url(provider, identifiers), retrieved_at=datetime.now(timezone.utc),
+            reason="Metadata transport is stubbed in tests.") for identifier in identifiers}, 0
+
+    monkeypatch.setattr("app.sources.metadata.fetch_metadata", offline)
+
+
 class VerifiedTestClient(TestClient):
     """Explicit account setup helper that completes the real verification API flow."""
     outbox: list
