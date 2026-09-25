@@ -32,7 +32,7 @@ import { useAuth } from "../auth/AuthContext";
 import type { DigestRunDetail, DigestRunSummary } from "../types/digest";
 import { DigestRunFeedback } from "./DigestRunFeedback";
 import { DigestRunProgress } from "./DigestRunProgress";
-import { ResearchQualityNotice } from "./ResearchQualityNotice";
+import { AdminRunQuality } from "./AdminRunQuality";
 import {
   DigestBriefingResult,
   PaperSummariesResult,
@@ -304,9 +304,9 @@ export function DigestWorkspace({
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Chip
                         size="small"
-                        label={item.quality_delivery_blocked ? "generated · held" : item.status}
+                        label={admin && item.quality_delivery_blocked ? "generated · held" : item.status}
                         color={
-                          item.quality_delivery_blocked ? "warning" : item.status === "completed"
+                          admin && item.quality_delivery_blocked ? "warning" : item.status === "completed"
                             ? "success"
                             : item.status === "failed"
                               ? "error"
@@ -330,7 +330,6 @@ export function DigestWorkspace({
         )}
       </Paper>
       <Box sx={{ minWidth: 0, width: "100%", flex: 1 }}>
-        {run && <ResearchQualityNotice run={run} admin={admin} />}
         {run && (
           <Typography color="text.secondary" sx={{ mb: 2 }}>
             Run: {runDate(run.started_at).toLocaleString()} · {run.status}
@@ -380,7 +379,7 @@ export function DigestWorkspace({
               disabled={!available.feedback}
             />
             <Tab value="details" label="Digest Details" />
-            {admin && <Tab value="diagnostics" label="Run diagnostics" />}
+            {admin && <Tab value="diagnostics" label="Run Diagnostics" />}
           </Tabs>
         </Paper>
         <Box role="tabpanel" hidden={activeTab !== "details"}>
@@ -397,14 +396,15 @@ export function DigestWorkspace({
                 {activeTab === "papers" && <PaperSummariesResult run={run} />}
                 {activeTab === "diagnostics" && (
                   <Stack spacing={2}>
+                    <AdminRunQuality key={run.id} digestId={digestId} run={run} />
+                    <AdminCostSummary {...costs} />
+                    <AdminCostDetails {...costs} />
+                    <AdminDigestCostSummary digestId={digestId} />
                     <DigestRunProgress run={run} />
                     <Typography>
                       OpenAI response jobs created: {run.request_count}.
                       Paper-summary batches may create multiple jobs.
                     </Typography>
-                    <AdminCostSummary {...costs} />
-                    <AdminCostDetails {...costs} />
-                    <AdminDigestCostSummary digestId={digestId} />
                   </Stack>
                 )}
                 {activeTab === "steps" && (

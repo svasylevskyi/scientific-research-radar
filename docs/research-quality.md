@@ -28,8 +28,9 @@ then enable Enforce after accepting the results and customer allowance policy.
 
 **Allowances are unchanged:** generation completes and settles the existing run
 allowance even if the quality decision is Hold. Checks add no extra run or paid
-request. Automatic corrections, manual release, refunds of research allowances,
-and retrospective re-evaluation are not implemented in this increment. A held
+request. Automatic corrections, manual release, and refunds of research allowances
+are not implemented. Manual re-evaluation is available to administrators as a
+separate assessment (see below). A held
 run is not an execution failure and cannot use the failed-stage retry endpoint.
 Agree the treatment of permanently held output before enforcing for paying users.
 
@@ -69,10 +70,45 @@ including recovered outbox claims. Holds remain terminal for automatic delivery.
 Enforced held output and its feedback are excluded from subsequent research history
 context, so it is not reused as accepted previous research.
 
-Owners and admins can inspect held output with a visible delivery-blocked notice;
-completed generation is not described as quality approval. Admin run views expose
-the detailed findings, affected paper IDs, mode, and settings/check versions.
-Normal Off/legacy runs show Not evaluated. A Pass only means these checks passed.
+Admins can inspect quality decisions under **Research output & history → Run
+Diagnostics**, above costs and run steps. The quality block includes findings,
+affected paper IDs, settings/check versions, and the automatic delivery hold.
+User digest pages currently omit quality indicators; delivery enforcement and
+email disclosures remain active. Normal Off/legacy runs show Not evaluated until
+a manual assessment is recorded. A Pass only means these checks passed.
+
+## Manual evaluation and history
+
+All administrators can evaluate completed runs that they can access, including
+legacy/Off runs and already evaluated runs. The existing restriction on ordinary
+admins accessing super-admin-owned digests also applies here.
+
+**Evaluate quality / Re-evaluate quality** uses the current settings and check
+engine against the run's saved digest snapshot and stage outputs. It performs no
+OpenAI or source-fetching requests, does not regenerate output, and does not
+consume research allowances. Explicit manual evaluation runs even when automatic
+mode is Off; configured optional checks and thresholds still apply. A settings
+revision mismatch requires refresh before evaluating, so a changed policy cannot
+silently replace the displayed revision.
+
+Each successful evaluation adds an immutable record with administrator ID/name,
+UTC time, full settings snapshot, engine version, status, and findings. The admin
+block displays the latest manual result, keeps the original automatic result
+available, and provides paginated manual history. Missing/incompatible stage data
+is reported as unavailable; it is never assigned a passing result. Active or
+failed runs cannot be evaluated manually.
+
+Manual assessments **never change the original automatic decision, delivery
+eligibility, historical research context, or email outbox**. A new Pass does not
+release an existing hold, and a new Hold does not revoke an earlier delivery
+decision. No emails are sent or resent by this action. Releasing held output is a
+separate, future workflow.
+
+Manual acceptance: select a completed historical run and evaluate it. Inspect
+the result, settings version, reviewer and timestamp. Adjust the sparse threshold
+as super-admin, refresh the quality block and re-evaluate; both assessments should
+remain in history. Repeat on held output and confirm its email remains held. Check
+that an ordinary user sees no quality block and cannot call the admin endpoints.
 
 ## Deployment and verification
 
@@ -82,6 +118,11 @@ and scheduler together using the regular maintenance deployment procedure. Older
 code does not enforce these rules; do not run it alongside quality-aware services.
 The migration refuses downgrade while delivery-blocked runs exist. Retain a
 quality-aware release for rollback.
+
+Migration `20260925_0029` adds the manual evaluation history table and index; normal
+deployment applies it automatically. It does not backfill or alter existing run
+decisions. Its downgrade removes manual audit history but preserves automatic
+quality fields and delivery holds.
 
 `tests/fixtures/research_quality_baseline.json` is a synthetic contract fixture.
 `tests/test_research_quality.py` seeds date, duplicate, missing-content, source,
@@ -93,10 +134,11 @@ Validation commands:
 
 ```bash
 cd backend
-python -m pytest tests/test_research_quality.py tests/test_digest_runs.py tests/test_scheduler_delivery.py tests/test_research_boundaries.py
+python -m pytest tests/test_research_quality.py tests/test_manual_quality.py tests/test_digest_runs.py tests/test_scheduler_delivery.py tests/test_research_boundaries.py
 python -m mypy
 ```
 
-Visual acceptance: review owner/admin results in all modes, a long finding/ID on
-mobile, a read-only ordinary-admin settings page, a super-admin settings change
-and audit entry, and an enforced held scheduled run with no delivered email.
+Visual acceptance: review admin diagnostics in all modes, a long finding/ID on
+mobile, hidden quality indicators on user pages, a read-only ordinary-admin settings
+page, a super-admin settings change and audit entry, and an enforced held scheduled
+run with no delivered email.

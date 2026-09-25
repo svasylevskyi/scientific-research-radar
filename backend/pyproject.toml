@@ -59,6 +59,7 @@ files = [
   "app/radar/quality.py",
   "app/services/research_quality_service.py",
   "app/services/research_quality_settings.py",
+  "app/services/manual_quality_service.py",
   "app/radar/lease.py",
   "app/radar/errors.py",
   "app/repositories/digest_run_repository.py",

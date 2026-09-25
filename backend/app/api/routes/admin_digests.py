@@ -10,6 +10,8 @@ from app.schemas.digest import (
     DigestUpdate,
 )
 from app.schemas.digest_run import DigestRunDetailRead, DigestRunListResponse
+from app.schemas.research_quality import QualityEvaluationHistory, QualityEvaluationRead, QualityEvaluationRequest
+from app.services.manual_quality_service import ManualQualityUnavailableError, evaluate_manually, evaluation_history
 from app.services.digest_service import (
     DigestNotFoundError,
     DigestRunActiveError,
@@ -88,6 +90,34 @@ def get_digest_run(
         )
     except (DigestNotFoundError, DigestRunNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/{digest_id}/runs/{run_id}/quality-evaluations", response_model=QualityEvaluationHistory)
+def list_quality_evaluations(
+    digest_id: UUID, run_id: UUID, current_admin: CurrentAdmin,
+    service: RunHistoryServiceDep, db: DbSession,
+    offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100),
+) -> QualityEvaluationHistory:
+    try:
+        run = service.get_for_admin(actor=current_admin, digest_id=digest_id, run_id=run_id)
+        return evaluation_history(db, run=run, offset=offset, limit=limit)
+    except (DigestNotFoundError, DigestRunNotFoundError) as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.post("/{digest_id}/runs/{run_id}/quality-evaluations", status_code=201, response_model=QualityEvaluationRead)
+def evaluate_run_quality(
+    digest_id: UUID, run_id: UUID, payload: QualityEvaluationRequest,
+    current_admin: CurrentAdmin, service: RunHistoryServiceDep, db: DbSession,
+) -> QualityEvaluationRead:
+    try:
+        run = service.get_for_admin(actor=current_admin, digest_id=digest_id, run_id=run_id)
+        return evaluate_manually(db, run=run, actor=current_admin,
+            expected_settings_version=payload.expected_settings_version)
+    except (DigestNotFoundError, DigestRunNotFoundError) as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ManualQualityUnavailableError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @router.get("/{digest_id}/runs/{run_id}/costs")
