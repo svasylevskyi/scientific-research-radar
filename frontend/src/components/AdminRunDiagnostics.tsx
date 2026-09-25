@@ -9,6 +9,7 @@ import { DigestRunProgress } from "./DigestRunProgress";
 
 export const diagnosticTabs = [
   { value: "quality", label: "Research Quality" },
+  { value: "benchmark", label: "Human Benchmark Review" },
   { value: "costs", label: "Costs" },
   { value: "steps", label: "Steps" },
 ] as const;
@@ -17,19 +18,25 @@ export function AdminRunDiagnostics({ digestId, selectedId, run, visible }: {
   digestId: string; selectedId: string; run: DigestRunDetail | null; visible: boolean;
 }) {
   const [tab, setTab] = useState("quality");
+  const [benchmarkOpened, setBenchmarkOpened] = useState(false);
   useEffect(() => setTab("quality"), [selectedId]);
   const costs = useAdminRunCosts(visible && tab === "costs", digestId, run);
   return <Box hidden={!visible} id="admin-run-diagnostics">
     <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden", mb: 3 }}>
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" aria-label="Run diagnostics">
+      <Tabs value={tab} onChange={(_, value) => {
+        setTab(value);
+        if (value === "benchmark") setBenchmarkOpened(true);
+      }} variant="scrollable" scrollButtons="auto" aria-label="Run diagnostics">
         {diagnosticTabs.map(item => <Tab key={item.value} value={item.value} label={item.label}
           id={`diagnostic-tab-${item.value}`} aria-controls={`diagnostic-panel-${item.value}`} />)}
       </Tabs>
     </Paper>
     <Stack id="diagnostic-panel-quality" role="tabpanel" aria-labelledby="diagnostic-tab-quality" hidden={tab !== "quality"} sx={{ display: tab === "quality" ? "flex" : "none" }} spacing={3}>
       {run ? <AdminRunQuality key={run.id} digestId={digestId} run={run} /> : <CircularProgress aria-label="Loading run quality" />}
-      <BenchmarkReviewPanel />
     </Stack>
+    <Box id="diagnostic-panel-benchmark" role="tabpanel" aria-labelledby="diagnostic-tab-benchmark" hidden={tab !== "benchmark"}>
+      {benchmarkOpened && <BenchmarkReviewPanel standalone />}
+    </Box>
     {tab === "costs" && <Stack id="diagnostic-panel-costs" role="tabpanel" aria-labelledby="diagnostic-tab-costs" spacing={2}>
       <Typography component="h2" variant="h6">Costs</Typography>
       <AdminCostSummary {...costs} /><AdminCostDetails {...costs} />

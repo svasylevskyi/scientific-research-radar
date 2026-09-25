@@ -7,12 +7,18 @@ import { runDate } from "../runHistory";
 import { BenchmarkCaseForm } from "./BenchmarkCaseForm";
 import { BenchmarkCriteriaForm } from "./BenchmarkCriteriaForm";
 
-export function BenchmarkReviewPanel() {
+export function BenchmarkReviewPanel({ standalone = false }: { standalone?: boolean }) {
   const [opened, setOpened] = useState(false);
+  const introduction = <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Review shared calibration cases against their permitted evidence. These cases are separate from the selected digest run. No LLM calls are made; reviews do not change run quality, delivery, or allowances.</Typography>;
+  if (standalone) return <Box>
+    <Typography component="h2" variant="h6" sx={{ mb: 2 }}>Human benchmark review</Typography>
+    {introduction}
+    <BenchmarkReviewWorkspace />
+  </Box>;
   return <Accordion onChange={(_, expanded) => { if (expanded) setOpened(true); }}>
     <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography component="h2" variant="h6">Human benchmark review</Typography></AccordionSummary>
     <AccordionDetails>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Review shared calibration cases against their permitted evidence. These cases are separate from the selected digest run. No LLM calls are made; reviews do not change run quality, delivery, or allowances.</Typography>
+      {introduction}
       {opened && <BenchmarkReviewWorkspace />}
     </AccordionDetails>
   </Accordion>;
