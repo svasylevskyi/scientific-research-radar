@@ -137,6 +137,9 @@ deployment only reads Actions artifacts and no longer writes packages.
 - Type checking and benchmark structure validation run once in `backend-static`.
   PostgreSQL regressions run with two isolated test workers. The job summary and
   JUnit artifact record elapsed and fixture timings; SQLite has been retired.
+  PRs select checks by changed files; main pushes retain full validation and
+  publication gates. Require the aggregate **CI passed** check in branch rules;
+  see [selection rules and the one-time setup](../docs/testing.md#ci-and-github-actions).
 - Buildx caches backend and web layers separately. The backend dependency layer
   changes with `pyproject.toml`, not with every application edit. A cache miss
   performs a normal build; cached images still pass the full smoke checks.

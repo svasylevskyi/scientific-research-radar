@@ -73,9 +73,54 @@ environments already use PostgreSQL and need no data migration or new settings.
 
 ## CI and GitHub Actions
 
-The required database job remains named **backend (postgres)**; remove an old
-**backend (sqlite)** requirement from branch rules if one was configured. Both
-database migrations and the container backup/restore checks remain release gates.
+### PR check selection
+
+CI starts for every PR update. A small `Select CI checks` job reads the complete
+Git diff between the PR's merge base and head, including deletions and both paths
+of renames. Selection does not use workflow-level path filters or a truncated
+GitHub file-list response.
+
+| Changed files | Required PR jobs |
+| --- | --- |
+| Allowlisted documentation only | Deployment/configuration tests and local Compose validation |
+| Frontend source, public assets, tests, or `index.html`, optionally with documentation | Deployment/configuration checks, frontend tests/build and API contract verification, container smoke/backup/restore checks |
+| Backend, dependencies, build configuration, infrastructure, workflows, or unknown paths | All validation jobs, including PostgreSQL regressions, migrations, type checks, and benchmark validation |
+
+Documentation means `docs/**/*.md`, root `README.md` and `SECURITY_REVIEW.md`,
+`backend/EMAIL.md`, and `infra/README.md`. Runtime prompts and test fixtures are
+not documentation exemptions. Frontend package manifests, lockfiles, scripts,
+Docker/Caddy files and build configuration require full checks. Empty diffs,
+unavailable history, and malformed event data also choose full validation.
+The job summary explains the selected profile and required jobs.
+
+Every push to `main` runs **all** validation jobs regardless of changed files.
+The `CI passed` gate verifies the selector succeeded, every required job
+succeeded, and every excluded job was explicitly skipped. Missing results,
+unexpected skips, failures, and cancellations cannot produce a passing gate.
+The gate runs even when a prerequisite fails or is skipped.
+
+Image publication on `main` depends on this gate and the tested container images.
+Deployment still requires the entire successful main CI run, including
+publication, for the exact commit and run attempt. A green PR gate alone does
+not authorize a deployment.
+
+### Required-check configuration (one-time repository setting)
+
+After this PR has a successful **CI passed** check, update the ruleset or branch
+protection for `main`: require **CI passed** from GitHub Actions and remove the
+old individual CI check requirements (`backend (postgres)`, `backend-static`,
+`frontend`, `containers`, and `deployment-config`, if present). Remove the retired
+`backend (sqlite)` check if it is still listed. Keep unrelated required checks,
+review rules, and other protections. This repository setting is not changed by
+merging a workflow file. Existing job names remain visible for diagnostics.
+
+The policy and gate regression tests run with
+`python3 -m unittest discover -s infra/tests -v` from the repository root and need
+neither PostgreSQL nor third-party Python packages.
+When adding a validation job, update the policy's job list, the profiles that
+require it, and the aggregate gate's `needs` list together.
+
+### Action runtimes
 
 All JavaScript Actions in CI and deployment use releases declaring `node24`.
 This is the Actions runner runtime, independent of the application's Node 22
