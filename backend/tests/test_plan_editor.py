@@ -4,8 +4,7 @@ from threading import Barrier
 import httpx
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from app.models.subscription_plan import StripeProductClaim, SubscriptionPlanRevision
 from app.services.stripe_catalogue_service import list_products, StripeCatalogueError
@@ -106,15 +105,13 @@ def test_price_preview_includes_free_latest_revisions_and_all_pages(client, db_s
     assert client.post(URL + '/price-warnings', headers=admin, json=body).json()['warnings'] == []
 
 
-def test_concurrent_product_claims_have_one_owner(tmp_path):
-    engine = create_engine(f'sqlite:///{tmp_path}/claims.db', connect_args={'check_same_thread': False})
-    StripeProductClaim.__table__.create(engine)
-    factory = sessionmaker(engine)
+def test_concurrent_product_claims_have_one_owner(db_session_factory):
+    factory = db_session_factory
     barrier = Barrier(2)
     def writer(code):
         with factory() as db:
             assert db.get(StripeProductClaim, 'prod_race') is None
-            barrier.wait()
+            barrier.wait(timeout=10)
             db.add(StripeProductClaim(product_id='prod_race', plan_code=code))
             try:
                 db.commit()
@@ -124,4 +121,3 @@ def test_concurrent_product_claims_have_one_owner(tmp_path):
                 return False
     with ThreadPoolExecutor(2) as pool:
         assert sorted(pool.map(writer, ['a', 'b'])) == [False, True]
-    engine.dispose()

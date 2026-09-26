@@ -76,7 +76,12 @@ node --test tests/session-client.test.mjs
 npm run build
 ```
 
-Backend concurrency tests use independent sessions/connections on a file-backed SQLite database. Frontend tests exercise the actual API-client code with mocked HTTP and browser primitives; they are not a real multi-browser end-to-end test. Migration checks cover upgrade/downgrade/upgrade with existing records on SQLite. No SMTP or OpenAI calls are made. PostgreSQL concurrency and production proxy behavior still need validation in the chosen deployment environment.
+Backend concurrency tests now use independent PostgreSQL sessions/connections,
+and each test worker has an isolated schema. CI checks PostgreSQL migration
+upgrade/downgrade/upgrade and container backup/restore behavior. Frontend tests
+exercise the actual API client with mocked HTTP and browser primitives; they
+are not a real multi-browser end-to-end test. No SMTP or OpenAI calls are made.
+Production proxy behavior and operational load still need deployment validation.
 
 Future work: session/device management UI, MFA, security-event monitoring/alerts, dedicated edge abuse protection, account-risk controls and paid-plan quotas. This review does not change paper retrieval or radar output quality gates.
 

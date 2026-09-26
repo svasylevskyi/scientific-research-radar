@@ -10,7 +10,6 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 from sqlalchemy import and_, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from app.models.billing_sync import BillingSyncHeartbeat, BillingSyncJob as Job
 from app.models.stripe_sandbox import SandboxCheckout
 from app.models.user import User
@@ -25,7 +24,7 @@ def now():
 
 
 def insert(db, model):
-    return (pg_insert if db.bind.dialect.name == 'postgresql' else sqlite_insert)(model)
+    return pg_insert(model)
 
 
 def job_values(checkout, job_id, kind, stamp, *, event_type=None, payload=None):

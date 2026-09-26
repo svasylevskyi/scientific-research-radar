@@ -3,8 +3,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY pyproject.toml ./
 # Keep dependencies cached when only application code changes. pyproject.toml
-# remains the single dependency list, including the PostgreSQL extra.
-RUN python -c 'import subprocess, tomllib; p = tomllib.load(open("pyproject.toml", "rb"))["project"]; subprocess.check_call(["pip", "install", *p["dependencies"], *p["optional-dependencies"]["postgres"]])'
+# remains the single dependency list, including the PostgreSQL driver.
+RUN python -c 'import subprocess, tomllib; p = tomllib.load(open("pyproject.toml", "rb"))["project"]; subprocess.check_call(["pip", "install", *p["dependencies"]])'
 COPY app ./app
 RUN pip install --no-deps . && useradd --uid 10001 --create-home radar
 COPY alembic.ini ./

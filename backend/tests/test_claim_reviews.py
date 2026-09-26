@@ -285,26 +285,15 @@ def test_provider_disables_retries_tools_storage_and_retains_usage(monkeypatch):
         validate_verdict('{"verdict":"supported","evidence_passage_ids":[],"rationale":"Unsupported"}', case)
 
 
-def test_parallel_admission_reserves_budget_once(db_session_factory, review_run, tmp_path):
+def test_parallel_admission_reserves_budget_once(db_session_factory, review_run):
     """Two real database connections contend for the same daily budget/active slot."""
-    import sqlite3
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
     from fastapi import HTTPException
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
     from app.schemas.claim_review import ClaimReviewStart
     from app.services.claim_review_service import start_review
 
     factory = db_session_factory
-    file_engine = None
-    engine = factory.kw["bind"]
-    if engine.dialect.name == "sqlite":
-        path = tmp_path / "concurrent-reviews.db"
-        with engine.connect() as connection, sqlite3.connect(path) as target:
-            connection.connection.driver_connection.backup(target)
-        file_engine = create_engine(f"sqlite:///{path}", connect_args={"check_same_thread": False, "timeout": 10})
-        factory = sessionmaker(bind=file_engine, expire_on_commit=False, autoflush=False)
     barrier = Barrier(2)
     def admit(index):
         with factory() as db:
@@ -316,15 +305,11 @@ def test_parallel_admission_reserves_budget_once(db_session_factory, review_run,
                 return 202
             except HTTPException as error:
                 return error.status_code
-    try:
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            assert sorted(pool.map(admit, range(2))) == [202, 409]
-        with factory() as db:
-            assert db.scalar(select(func.count()).select_from(ClaimReview)) == 1
-            assert db.get(ClaimReviewBudget, 1).reserved_calls == 2
-    finally:
-        if file_engine:
-            file_engine.dispose()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(admit, range(2))) == [202, 409]
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(ClaimReview)) == 1
+        assert db.get(ClaimReviewBudget, 1).reserved_calls == 2
 
 
 def test_active_worker_lease_prevents_duplicate_provider_call(client, db_session_factory, review_run):

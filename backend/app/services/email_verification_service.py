@@ -107,8 +107,8 @@ class EmailVerificationService:
                      EmailVerification.expires_at > now]
         if consume_attempt:
             condition.append(EmailVerification.attempts < 50)
-        # A database write serializes concurrent confirmation/resend requests on SQLite
-        # as well as PostgreSQL. Re-read after obtaining the lock.
+        # A database write serializes concurrent confirmation/resend requests.
+        # Re-read after obtaining the PostgreSQL row lock.
         result = self.db.execute(update(EmailVerification).where(*condition).values(
             attempts=EmailVerification.attempts + (1 if consume_attempt else 0)
         ))

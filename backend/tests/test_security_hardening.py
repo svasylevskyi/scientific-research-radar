@@ -1,4 +1,3 @@
-import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from threading import Barrier
@@ -6,12 +5,9 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.orm import sessionmaker
 
 from app.core.config import Settings
 from app.core.security import create_access_token, decode_token, hash_password, hash_token
-from app.db.base import Base
-from app.db.session import build_engine
 from app.models.auth_session import AuthSession
 from app.models.rate_limit import RateLimitBucket
 from app.models.user import User
@@ -26,20 +22,12 @@ def bearer(token):
 
 
 @pytest.fixture
-def file_sessions(tmp_path, db_session_factory):
-    engine = None
-    if os.environ.get("TEST_DATABASE_URL"):
-        factory = db_session_factory
-    else:
-        engine = build_engine(f"sqlite:///{tmp_path}/security.db")
-        Base.metadata.create_all(engine)
-        factory = sessionmaker(bind=engine, expire_on_commit=False)
+def security_sessions(db_session_factory):
+    factory = db_session_factory
     with factory() as db:
         db.add(User(id=uuid4(), email=REGISTER_PAYLOAD["email"], full_name="Security Test", password_hash=hash_password(REGISTER_PAYLOAD["password"])))
         db.commit()
     yield factory
-    if engine is not None:
-        engine.dispose()
 
 
 def login_service(factory):
@@ -164,11 +152,11 @@ def test_validation_does_not_echo_passwords_and_responses_are_not_cached(client)
     assert response.headers["Cache-Control"] == "no-store"
 
 
-def test_concurrent_refresh_has_one_winner(file_sessions):
-    initial = login_service(file_sessions)
+def test_concurrent_refresh_has_one_winner(security_sessions):
+    initial = login_service(security_sessions)
     barrier = Barrier(2)
     def refresh(_):
-        with file_sessions() as db:
+        with security_sessions() as db:
             barrier.wait()
             try:
                 return AuthService(db, Settings()).refresh(initial.refresh_token)
@@ -178,19 +166,19 @@ def test_concurrent_refresh_has_one_winner(file_sessions):
         results = list(pool.map(refresh, range(2)))
     winner = [r for r in results if r is not None]
     assert len(winner) == 1
-    with file_sessions() as db:
+    with security_sessions() as db:
         session = db.scalar(select(AuthSession))
         assert session.token_hash == hash_token(winner[0].refresh_token)
         assert session.revoked_at is None
-    with file_sessions() as db:
+    with security_sessions() as db:
         assert AuthService(db, Settings()).refresh(winner[0].refresh_token)
 
 
-def test_concurrent_logout_and_refresh_cannot_resurrect_session(file_sessions):
-    initial = login_service(file_sessions)
+def test_concurrent_logout_and_refresh_cannot_resurrect_session(security_sessions):
+    initial = login_service(security_sessions)
     barrier = Barrier(2)
     def execute(kind):
-        with file_sessions() as db:
+        with security_sessions() as db:
             barrier.wait()
             try:
                 service = AuthService(db, Settings())
@@ -199,14 +187,14 @@ def test_concurrent_logout_and_refresh_cannot_resurrect_session(file_sessions):
                 return None
     with ThreadPoolExecutor(max_workers=2) as pool:
         list(pool.map(execute, range(2)))
-    with file_sessions() as db:
+    with security_sessions() as db:
         assert db.scalar(select(AuthSession)).revoked_at is not None
 
 
-def test_concurrent_password_changes_only_one_wins(file_sessions):
+def test_concurrent_password_changes_only_one_wins(security_sessions):
     barrier = Barrier(2)
     def change(index):
-        with file_sessions() as db:
+        with security_sessions() as db:
             user = db.scalar(select(User))
             barrier.wait()
             try:
@@ -218,35 +206,35 @@ def test_concurrent_password_changes_only_one_wins(file_sessions):
         assert sum(pool.map(change, range(2))) == 1
 
 
-def test_atomic_rate_limit_across_independent_sessions(file_sessions):
+def test_atomic_rate_limit_across_independent_sessions(security_sessions):
     def attempt(_):
-        with file_sessions() as db:
+        with security_sessions() as db:
             return allowed(db, Settings(), "test", "user@example.com", 5, 3600)
     with ThreadPoolExecutor(max_workers=8) as pool:
         assert sum(pool.map(attempt, range(24))) == 5
-    with file_sessions() as db:
+    with security_sessions() as db:
         bucket = db.scalar(select(RateLimitBucket))
         assert bucket.count == 5 and "user" not in bucket.key
         assert allowed(db, Settings(), "test", "other@example.com", 5, 3600)
 
 
-def test_rate_budget_rolls_back_with_failed_enqueue(file_sessions):
-    with file_sessions() as db:
+def test_rate_budget_rolls_back_with_failed_enqueue(security_sessions):
+    with security_sessions() as db:
         enforce(db, Settings(), "radar-hour", "owner", 1, 3600, commit=False)
         db.rollback()
-    with file_sessions() as db:
+    with security_sessions() as db:
         assert allowed(db, Settings(), "radar-hour", "owner", 1, 3600)
         assert not allowed(db, Settings(), "radar-hour", "owner", 1, 3600)
 
 
-def test_expired_rate_window_allows_retry(file_sessions, monkeypatch):
+def test_expired_rate_window_allows_retry(security_sessions, monkeypatch):
     import app.services.rate_limit_service as limits
     fixed = datetime(2030, 1, 1, 12, tzinfo=UTC)
     class Clock(datetime):
         @classmethod
         def now(cls, tz=None): return fixed
     monkeypatch.setattr(limits, "datetime", Clock)
-    with file_sessions() as db:
+    with security_sessions() as db:
         assert allowed(db, Settings(), "window", "owner", 1, 60)
         assert not allowed(db, Settings(), "window", "owner", 1, 60)
         fixed += timedelta(seconds=60)
@@ -284,14 +272,14 @@ def test_run_limits_cover_manual_retries_and_schedules(client, db_session_factor
     assert fake.calls == []
 
 
-def test_concurrent_retry_only_enqueues_and_charges_once(file_sessions):
+def test_concurrent_retry_only_enqueues_and_charges_once(security_sessions):
     from app.schemas.digest import DigestCreate
     from app.services.digest_service import DigestService
     from app.models.digest_run import DigestRun, DigestRunStatus, DigestRunStageStatus
     from app.radar.runner import RadarRunNotRetryableError, RadarRunAlreadyActiveError
     from test_digests import _digest_payload
     from test_digest_runs import _runner, RecordingRadarClient
-    with file_sessions() as db:
+    with security_sessions() as db:
         owner = db.scalar(select(User))
         owner_id = owner.id
         digest = DigestService(db).create(owner=owner, values=DigestCreate.model_validate(_digest_payload()))
@@ -303,7 +291,7 @@ def test_concurrent_retry_only_enqueues_and_charges_once(file_sessions):
         db.commit()
     barrier = Barrier(2)
     def retry(_):
-        with file_sessions() as db:
+        with security_sessions() as db:
             runner = _runner(db, RecordingRadarClient())
             # Admission now locks the subscription account before reading the run.
             # Synchronize callers before that lock, not inside the critical section.
@@ -315,7 +303,7 @@ def test_concurrent_retry_only_enqueues_and_charges_once(file_sessions):
                 return False
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sum(pool.map(retry, range(2))) == 1
-    with file_sessions() as db:
+    with security_sessions() as db:
         assert db.get(DigestRun, run_id).status == DigestRunStatus.QUEUED
         assert sorted(db.scalars(select(RateLimitBucket.count))) == [2, 2]
 

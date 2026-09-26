@@ -76,9 +76,8 @@ class DigestRun(Base):
             "uq_digest_runs_owner_active",
             "owner_id",
             unique=True,
-            sqlite_where=text("status IN ('queued', 'running')"),
             postgresql_where=text("status IN ('queued', 'running')"),
-        ).ddl_if(dialect=("sqlite", "postgresql")),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True)

@@ -11,11 +11,9 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func, select
 
 from app.core.config import Settings, get_settings
-from app.db.base import Base
 from app.models.stripe_sandbox import SandboxCheckout, SandboxStripeEvent
 from app.models.subscription_plan import SubscriptionPlanRevision
 from app.models.user import User
@@ -317,10 +315,8 @@ def test_admin_apis_ownership_and_public_signed_webhook(client, account, db_sess
     assert client.post(URL + '/refresh', headers={**account[1], 'Origin': 'https://hostile.example'}).status_code == 403
 
 
-def test_concurrent_checkout_and_duplicate_webhooks_use_one_attempt(tmp_path):
-    engine = create_engine(f'sqlite:///{tmp_path / "billing.db"}', connect_args={'check_same_thread': False, 'timeout': 30})
-    Base.metadata.create_all(engine)
-    sessions = sessionmaker(engine, autoflush=False, expire_on_commit=False)
+def test_concurrent_checkout_and_duplicate_webhooks_use_one_attempt(db_session_factory):
+    sessions = db_session_factory
     with sessions() as db:
         user = User(id=uuid4(), email='race@example.com', full_name='Admin', password_hash='unused')
         db.add(user); db.flush()
@@ -343,7 +339,6 @@ def test_concurrent_checkout_and_duplicate_webhooks_use_one_attempt(tmp_path):
     with sessions() as db:
         assert db.scalar(select(func.count()).select_from(SandboxCheckout)) == 1
         assert db.scalar(select(func.count()).select_from(SandboxStripeEvent)) == 1
-    engine.dispose()
 
 
 @pytest.mark.parametrize('url', ['http://checkout.stripe.com/pay', 'https://checkout.stripe.com.attacker.test/',

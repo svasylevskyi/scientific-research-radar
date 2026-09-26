@@ -120,15 +120,10 @@ def test_completed_run_email_uses_profile_and_retries_without_regeneration(clien
         assert job.status == "sent" and job.attempts == 2 and job.sent_at
 
 
-def test_parallel_dispatchers_create_only_one_run(tmp_path):
+def test_parallel_dispatchers_create_only_one_run(db_session_factory):
     from concurrent.futures import ThreadPoolExecutor
-    from sqlalchemy.orm import sessionmaker
-    from app.db.base import Base
-    from app.db.session import build_engine
     from datetime import date
-    engine = build_engine(f"sqlite:///{tmp_path}/dispatch.db")
-    Base.metadata.create_all(engine)
-    sessions = sessionmaker(bind=engine, expire_on_commit=False)
+    sessions = db_session_factory
     with sessions() as db:
         owner = User(id=uuid4(), email="parallel@example.com", full_name="Owner", password_hash="fixture")
         db.add(owner)
@@ -144,7 +139,6 @@ def test_parallel_dispatchers_create_only_one_run(tmp_path):
     with sessions() as db:
         assert db.scalar(select(func.count()).select_from(DigestRun)) == 1
         assert db.scalar(select(func.count()).select_from(DigestEmailDelivery)) == 1
-    engine.dispose()
 
 
 def test_expired_schedule_stops_without_catchup(client, db_session_factory):

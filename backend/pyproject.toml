@@ -17,16 +17,17 @@ dependencies = [
   "pwdlib[argon2]>=0.2,<1",
   "PyJWT>=2.10,<3",
   "SQLAlchemy>=2.0.36,<3",
+  "psycopg[binary]>=3.2,<4",
   "tzdata>=2025.1",
   "uvicorn[standard]>=0.34,<1",
 ]
 
 [project.optional-dependencies]
-postgres = ["psycopg[binary]>=3.2,<4"]
 dev = [
   "httpx>=0.28,<1",
   "pytest>=8.3,<9",
   "pytest-cov>=6,<7",
+  "pytest-xdist>=3.8,<4",
   "mypy>=1.15,<3",
 ]
 

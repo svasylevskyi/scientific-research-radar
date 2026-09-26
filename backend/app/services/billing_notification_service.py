@@ -8,7 +8,6 @@ import hashlib
 import logging
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from app.models.subscription_change import BillingNotification as Notice
 from app.models.user import User
 from app.services.email_service import EmailService, OutgoingEmail
@@ -21,7 +20,7 @@ def now():
 
 
 def enqueue(db, uid, key, subject, text):
-    insert = pg_insert if db.bind.dialect.name == 'postgresql' else sqlite_insert
+    insert = pg_insert
     db.execute(insert(Notice).values(id=key, user_id=uid, subject=subject, text=text,
         state='pending', attempts=0, next_attempt_at=now(), created_at=now()).on_conflict_do_nothing(index_elements=['id']))
 

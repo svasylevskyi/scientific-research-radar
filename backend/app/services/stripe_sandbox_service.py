@@ -1,7 +1,7 @@
 """Checkout commands and canonical billing reconciliation.
 
-Account-row writes serialize checkout creation and provider observations on SQLite
-and PostgreSQL. An attempt and its exact parameters are committed BEFORE Stripe
+Account-row writes serialize checkout creation and provider observations on
+PostgreSQL. An attempt and its exact parameters are committed BEFORE Stripe
 is called so that ambiguous failures can only resume the same idempotent request.
 """
 
@@ -14,7 +14,6 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from app.models.stripe_sandbox import (
     SandboxBillingAccount,
@@ -59,7 +58,7 @@ EVENTS = {"checkout.session.completed", "checkout.session.expired", "customer.su
 
 
 def lock_account(db, user_id):
-    insert = pg_insert if db.bind.dialect.name == "postgresql" else sqlite_insert
+    insert = pg_insert
     db.execute(insert(SandboxBillingAccount).values(user_id=user_id, lock_version=0).on_conflict_do_nothing())
     db.execute(update(SandboxBillingAccount).where(SandboxBillingAccount.user_id == user_id)
                .values(lock_version=SandboxBillingAccount.lock_version + 1))

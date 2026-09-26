@@ -1,0 +1,32 @@
+# Disposable local tooling only. Deployment continues to use compose.yaml.
+name: radar-local
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: radar
+      POSTGRES_USER: radar
+      POSTGRES_PASSWORD: radar-local-only
+    ports: ['127.0.0.1:5433:5432']
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U radar -d radar']
+      interval: 2s
+      timeout: 5s
+      retries: 20
+  test-db:
+    image: postgres:17-bookworm
+    profiles: [tests]
+    environment:
+      POSTGRES_DB: radar_test
+      POSTGRES_USER: radar
+      POSTGRES_PASSWORD: radar-local-only
+    ports: ['127.0.0.1:5434:5432']
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U radar -d radar_test']
+      interval: 2s
+      timeout: 5s
+      retries: 20
+volumes:
+  postgres_data:
