@@ -41,6 +41,12 @@ time and `--durations` output. CI uploads the JUnit report and summarizes setup,
 test-call and cleanup costs. Summed phase times overlap across parallel workers;
 the report's elapsed time is the useful end-to-end test measurement.
 
+The rollout comparison on GitHub-hosted runners measured 234.08s for the previous
+723-test PostgreSQL suite, 156.01s for the updated 730-test suite sequentially, and
+110.90s with two workers. The latter two ran consecutively in the same job. These
+are pytest elapsed times, not total CI/deployment durations; runner load and
+caches vary. Two workers remain the conservative default, with no tests removed.
+
 ## Isolation and concurrency
 
 Each pytest process, including each of the two xdist workers, creates its own

@@ -15,6 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - run: python3 -m unittest discover -s infra/tests -v
+      - name: Validate local PostgreSQL Compose configuration
+        run: docker compose -f infra/compose.local.yaml --profile tests config --quiet
   backend-static:
     runs-on: ubuntu-latest
     defaults:
@@ -68,12 +70,6 @@ jobs:
           alembic upgrade head
           alembic downgrade base
           alembic upgrade head
-      # Temporary rollout comparison; removed after sequential/parallel validation.
-      - name: PostgreSQL regression tests (sequential baseline)
-        run: python -m pytest --durations=20 --junitxml=sequential-results.xml
-      - name: Summarize sequential baseline
-        if: always()
-        run: python scripts/summarize_tests.py sequential-results.xml "$GITHUB_STEP_SUMMARY"
       - name: PostgreSQL regression tests (two isolated workers)
         run: python -m pytest -n 2 --dist=loadscope --durations=20 --junitxml=test-results.xml
       - name: Summarize test and fixture timings

@@ -71,7 +71,11 @@ def pytest_runtest_makereport(item, call):
     """Include setup/call/cleanup costs in JUnit, including xdist workers."""
     outcome = yield
     report = outcome.get_result()
-    item.user_properties.append((f"{report.when}_seconds", report.duration))
+    timing = (f"{report.when}_seconds", report.duration)
+    item.user_properties.append(timing)
+    # Reports copy item properties before this hook resumes; include this phase
+    # in the current report too, particularly the final teardown report.
+    report.user_properties.append(timing)
 
 
 @pytest.fixture
