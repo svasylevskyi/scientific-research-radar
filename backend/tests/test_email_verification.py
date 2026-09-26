@@ -192,16 +192,11 @@ def test_missing_smtp_configuration_is_an_explicit_error():
 
 
 @pytest.mark.parametrize("action", ["confirm", "resend"])
-def test_concurrent_requests_only_apply_once(tmp_path, monkeypatch, action):
+def test_concurrent_requests_only_apply_once(db_session_factory, monkeypatch, action):
     from concurrent.futures import ThreadPoolExecutor
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    from app.db.base import Base
     from app.services.email_verification_service import EmailVerificationService, VerificationError
 
-    engine = create_engine(f"sqlite:///{tmp_path / 'concurrent.db'}", connect_args={"check_same_thread": False})
-    Base.metadata.create_all(engine)
-    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    factory = db_session_factory
     messages = []
     monkeypatch.setattr(EmailService, "send", lambda self, message: messages.append(message))
     settings = Settings()
@@ -229,4 +224,3 @@ def test_concurrent_requests_only_apply_once(tmp_path, monkeypatch, action):
         results = list(pool.map(lambda _: execute(), range(2)))
     assert sorted(results) == [200, 410 if action == "confirm" else 429]
     assert len(messages) == (1 if action == "confirm" else 2)
-    engine.dispose()

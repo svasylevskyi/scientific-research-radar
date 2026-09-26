@@ -57,7 +57,8 @@ does not reset an already-created super-admin account's password.
 Leave OPENAI_API_KEY unset initially. Mailpit captures account verification and
 recovery messages, so no SMTP credentials are needed. All actual model names are
 configured in the environment; no model-access assumption is made by deployment.
-The local SQLite database is untouched; this is a fresh PostgreSQL database.
+Deployment uses its own PostgreSQL database. Local development and tests use
+separate PostgreSQL instances; see [the testing guide](../docs/testing.md).
 
 ## 2. Build and deploy manually
 
@@ -134,7 +135,8 @@ deployment only reads Actions artifacts and no longer writes packages.
   but never publish release images. Superseded PR runs are cancelled. Main runs
   and deployments are not cancelled by newer commits.
 - Type checking and benchmark structure validation run once in `backend-static`.
-  Both SQLite and PostgreSQL regression suites remain enabled.
+  PostgreSQL regressions run with two isolated test workers. The job summary and
+  JUnit artifact record elapsed and fixture timings; SQLite has been retired.
 - Buildx caches backend and web layers separately. The backend dependency layer
   changes with `pyproject.toml`, not with every application edit. A cache miss
   performs a normal build; cached images still pass the full smoke checks.

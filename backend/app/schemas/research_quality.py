@@ -102,7 +102,7 @@ class QualityEvaluationRead(BaseModel):
     @field_validator("created_at")
     @classmethod
     def utc_timestamp(cls, value: datetime) -> datetime:
-        # SQLite drops timezone information; audit timestamps are always UTC.
+        # Normalize legacy naive timestamps; audit timestamps are always UTC.
         return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 

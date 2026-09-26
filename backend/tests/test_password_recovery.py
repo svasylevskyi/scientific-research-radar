@@ -6,12 +6,9 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import sessionmaker
 
 from app.core.config import get_settings
 from app.core.security import hash_password, hash_token
-from app.db.base import Base
-from app.db.session import build_engine
 from app.models.password_reset import PasswordReset, RecoveryRateLimit
 from app.models.user import User
 from app.services.email_service import EmailService, EmailDeliveryError
@@ -129,10 +126,8 @@ def test_reset_rate_limit_and_request_ip_budget(client, db_session_factory):
     assert reset(client, "x" * 43).status_code == 429
 
 
-def test_concurrent_redemption_only_changes_password_once(tmp_path):
-    engine = build_engine(f"sqlite:///{tmp_path}/recovery.db")
-    Base.metadata.create_all(engine)
-    sessions = sessionmaker(bind=engine, expire_on_commit=False)
+def test_concurrent_redemption_only_changes_password_once(db_session_factory):
+    sessions = db_session_factory
     token = "x" * 43
     with sessions() as db:
         user = User(id=uuid4(), full_name="Owner", email="owner@example.com", password_hash=hash_password(PASSWORD))
@@ -147,4 +142,3 @@ def test_concurrent_redemption_only_changes_password_once(tmp_path):
             except HTTPException as exc: return exc.status_code
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sorted(pool.map(redeem, range(2))) == [200, 400]
-    engine.dispose()

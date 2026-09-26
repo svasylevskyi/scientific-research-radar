@@ -1,7 +1,6 @@
 """Deployment mode binding. Never convert a billing database between Stripe modes."""
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -25,7 +24,7 @@ def ensure_database_mode(db: Session, settings: Settings) -> None:
     if mode is None:
         legacy = db.scalar(select(SandboxCheckout.id).limit(1))
         selected = "sandbox" if legacy else settings.stripe_mode
-        insert = pg_insert if db.get_bind().dialect.name == "postgresql" else sqlite_insert
+        insert = pg_insert
         db.execute(insert(StripeEnvironment).values(id=1, mode=selected).on_conflict_do_nothing(index_elements=["id"]))
         mode = db.scalar(select(StripeEnvironment.mode).where(StripeEnvironment.id == 1))
     if mode != settings.stripe_mode:

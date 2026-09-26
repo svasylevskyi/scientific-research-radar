@@ -7,7 +7,6 @@ No Stripe state is consumed or changed by this module.
 from datetime import date, datetime, timezone
 from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from app.models.subscription_observation import ObservationAccount, ObservationAssignment, ObservedRunUsage
 from app.models.subscription_plan import SubscriptionPlanRevision
 from app.models.digest import Digest
@@ -37,7 +36,7 @@ def next_month(value):
 
 
 def lock(db, user_id):
-    insert = pg_insert if db.bind.dialect.name == 'postgresql' else sqlite_insert
+    insert = pg_insert
     db.execute(insert(ObservationAccount).values(user_id=user_id, version=0, lock_version=0, tracking_since=now()).on_conflict_do_nothing())
     db.execute(update(ObservationAccount).where(ObservationAccount.user_id == user_id)
                .values(lock_version=ObservationAccount.lock_version + 1))

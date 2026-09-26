@@ -114,8 +114,8 @@ def start_review(db: Session, *, actor: User, payload: ClaimReviewStart, setting
         raise HTTPException(409, f"This review needs a conservative ${ceiling} reservation, above its ${config.max_review_usd} limit. Adjust the claim limit or budget before trying again.")
     now = datetime.now(timezone.utc)
     try:
-        # The singleton serial update is the cross-process admission lock on both
-        # SQLite and PostgreSQL. Reservations survive deletions and uncertain costs.
+        # The singleton serial update is the cross-process admission lock on
+        # PostgreSQL. Reservations survive deletions and uncertain costs.
         if db.get(ClaimReviewBudget, 1) is None:
             with db.begin_nested():
                 db.add(ClaimReviewBudget(id=1, day=now.date(), serial=0, reserved_usd=0, reserved_calls=0))

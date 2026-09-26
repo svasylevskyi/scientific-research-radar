@@ -3,9 +3,6 @@ from datetime import timedelta
 from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.orm import sessionmaker
-from app.db.base import Base
-from app.db.session import build_engine
 from app.models.billing_sync import BillingSyncJob as Job, BillingSyncHeartbeat
 from app.models.stripe_sandbox import SandboxCheckout, SandboxStripeEvent
 from app.models.user import User
@@ -209,10 +206,8 @@ def test_missing_identifier_is_actionable_and_never_creates_checkout(account, db
         assert 'Resume the original checkout' in db.get(Job, 'reconcile:' + str(cid)).last_error
 
 
-def test_concurrent_delivery_and_claim_have_one_winner(tmp_path):
-    engine = build_engine(f'sqlite:///{tmp_path / "billing-sync.db"}')
-    Base.metadata.create_all(engine)
-    factory = sessionmaker(engine, autoflush=False, expire_on_commit=False)
+def test_concurrent_delivery_and_claim_have_one_winner(db_session_factory):
+    factory = db_session_factory
     uid = uuid4()
     with factory() as db:
         db.add(User(id=uid, email='race@example.com', full_name='Race', password_hash='unused')); db.flush()
@@ -234,4 +229,3 @@ def test_concurrent_delivery_and_claim_have_one_winner(tmp_path):
     with factory() as db:
         assert db.scalar(select(func.count()).select_from(Job)) == 1
         assert db.scalar(select(func.count()).select_from(SandboxStripeEvent)) == 1
-    engine.dispose()

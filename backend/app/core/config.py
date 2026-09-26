@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import EmailStr, Field, SecretStr, model_validator, field_validator
 from urllib.parse import urlsplit
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from app.db.url import validate_database_url
 
 
 class Settings(BaseSettings):
@@ -16,7 +17,12 @@ class Settings(BaseSettings):
 
     app_name: str = "Scientific Research Radar API"
     environment: Literal["development", "test", "production"] = "development"
-    database_url: str = "sqlite:///./data/research_radar.db"
+    database_url: str = "postgresql+psycopg://radar:radar-local-only@127.0.0.1:5433/radar"
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database(cls, value: str) -> str:
+        return validate_database_url(value)
 
     smtp_host: str | None = None
     smtp_port: int = Field(default=587, ge=1, le=65535)

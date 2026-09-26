@@ -9,7 +9,7 @@ from app.models.subscription_access import SubscriptionRunUsage as Usage
 from app.models.digest_run import DigestRun
 from app.services import subscription_access_service as access
 from app.services import stripe_sandbox_service as billing
-from test_subscription_observation import setup, start, enforce_database_foreign_keys
+from test_subscription_observation import setup, start
 from test_digest_runs import RecordingRadarClient, _override_runner, _execute_next
 from test_stripe_sandbox import Provider, settings as stripe_settings, account
 
@@ -242,16 +242,11 @@ def test_protected_admin_account_and_expired_history(client, enrolled, db_sessio
     assert client.get(f"/api/v1/digests/{setup[4]['id']}", headers=setup[1]).status_code == 200
 
 
-def test_concurrent_access_policy_versions(tmp_path):
+def test_concurrent_access_policy_versions(db_session_factory):
     from concurrent.futures import ThreadPoolExecutor
-    from sqlalchemy.orm import sessionmaker
-    from app.db.base import Base
-    from app.db.session import build_engine
     from app.models.user import User
     from uuid import uuid4
-    engine = build_engine(f'sqlite:///{tmp_path / "access-race.db"}')
-    Base.metadata.create_all(engine)
-    factory = sessionmaker(engine, expire_on_commit=False, autoflush=False)
+    factory = db_session_factory
     uid = uuid4()
     with factory() as db:
         db.add(User(id=uid, email='race@example.com', full_name='Race', password_hash='unused')); db.commit()
@@ -266,17 +261,13 @@ def test_concurrent_access_policy_versions(tmp_path):
                 return 'conflict'
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sorted(pool.map(save, range(2))) == ['conflict', 'saved']
-    engine.dispose()
 
 
 @pytest.mark.parametrize("billing_type", ["stripe", "free"])
-def test_concurrent_reservations_cannot_overspend(tmp_path, monkeypatch, billing_type):
+def test_concurrent_reservations_cannot_overspend(db_session_factory, monkeypatch, billing_type):
     from concurrent.futures import ThreadPoolExecutor
     from datetime import date
     from uuid import uuid4
-    from sqlalchemy.orm import sessionmaker
-    from app.db.base import Base
-    from app.db.session import build_engine
     from app.models.user import User
     from app.models.digest import Digest
     from app.models.subscription_plan import SubscriptionPlanRevision
@@ -286,9 +277,7 @@ def test_concurrent_reservations_cannot_overspend(tmp_path, monkeypatch, billing
     from test_subscription_catalogue import payload
     from test_digests import _digest_payload
     monkeypatch.setattr(access, 'now', lambda: STAMP)
-    engine = build_engine(f'sqlite:///{tmp_path / "usage-race.db"}')
-    Base.metadata.create_all(engine)
-    sessions = sessionmaker(engine, expire_on_commit=False, autoflush=False)
+    sessions = db_session_factory
     uid, did = uuid4(), uuid4()
     with sessions() as db:
         db.add(User(id=uid, email='usage@example.com', full_name='Usage', password_hash='unused')); db.flush()
@@ -328,7 +317,6 @@ def test_concurrent_reservations_cannot_overspend(tmp_path, monkeypatch, billing
         assert sorted(pool.map(reserve, ids)) == ['blocked', 'reserved']
     with sessions() as db:
         assert access.overview(db, uid)['usage']['reserved_runs'] == 1
-    engine.dispose()
 
 
 def test_legacy_scheduled_retry_keeps_email_intent(client, enrolled, db_session_factory):

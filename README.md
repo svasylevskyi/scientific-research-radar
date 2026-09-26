@@ -13,10 +13,10 @@ backend (FastAPI)
     ├── API routes and dependencies
     ├── application services
     ├── repositories
-    └── SQLAlchemy models ──► SQLite (development)
+    └── SQLAlchemy models ──► PostgreSQL
 ```
 
-The API, service, repository, and persistence layers are separate. SQLite is selected only through `DATABASE_URL`, so PostgreSQL can replace it later without changing the API contract or frontend. The frontend reads its API location from `VITE_API_URL`.
+The API, service, repository, and persistence layers are separate. PostgreSQL is used in development, tests, and deployments through `DATABASE_URL` and the psycopg driver. The frontend reads its API location from `VITE_API_URL`.
 
 ## Research quality
 
@@ -80,11 +80,13 @@ Public and workspace headers share responsive menu behavior. Radar links include
 
 ## Run locally
 
-Prerequisites: Python 3.12+ and Node.js 20+.
+Prerequisites: Python 3.12+, Node.js 22+, and PostgreSQL 17 (or Docker for the local database helper).
 
 ### 1. Backend
 
 ```bash
+# From the repository root; database listens on localhost:5433.
+docker compose -f infra/compose.local.yaml up -d --wait db
 cd backend
 python -m venv .venv
 source .venv/bin/activate        # Windows PowerShell: .venv\Scripts\Activate.ps1
@@ -147,12 +149,18 @@ Open `http://localhost:5173`. Vite proxies `/api` to the FastAPI server in devel
 ## Verify
 
 ```bash
+# From the repository root; disposable test database listens on localhost:5434.
+docker compose -f infra/compose.local.yaml --profile tests up -d --wait test-db
 cd backend
-pytest
+export TEST_DATABASE_URL='postgresql+psycopg://radar:radar-local-only@127.0.0.1:5434/radar_test'
+python -m pytest -n 2 --dist=loadscope --durations=20
 
 cd ../frontend
 npm run build
 ```
+
+See [development and test setup](docs/testing.md) for PowerShell, sequential
+runs, isolation, timing reports, and moving an existing local SQLite setup.
 
 ## API contract
 
@@ -209,7 +217,7 @@ The super-admin can manage every account, including editing their own account de
 
 - Set `ENVIRONMENT=production`, a long random `JWT_SECRET`, a unique super-admin password, the real `CORS_ORIGINS`, and HTTPS.
 - Set `REFRESH_COOKIE_SECURE=true` and consider `REFRESH_COOKIE_SAMESITE=none` only if the frontend and API are truly cross-site.
-- Move to PostgreSQL by changing `DATABASE_URL` and installing its SQLAlchemy driver.
+- Configure the deployment PostgreSQL `DATABASE_URL`, credentials, and backups.
 - Put the API behind a reverse proxy or managed platform with TLS, rate limiting, request-size limits, and centralized logs.
 - Configure OpenAI project spend/rate limits and monitor radar request duration, failures, and token usage.
 - Add password reset, MFA/passkeys, broader abuse protection, audit events, and key rotation when product requirements reach those areas.

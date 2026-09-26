@@ -15,7 +15,7 @@ class SourceVerification(Base):
         CheckConstraint("trigger IN ('automatic', 'manual')", name="ck_source_verification_trigger"),
         Index("idx_source_verifications_run_created", "run_id", "created_at"),
         Index("uq_source_verification_automatic", "run_id", unique=True,
-              sqlite_where=text("trigger = 'automatic'"), postgresql_where=text("trigger = 'automatic'")),
+              postgresql_where=text("trigger = 'automatic'")),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True)
     run_id: Mapped[UUID] = mapped_column(ForeignKey("digest_runs.id", ondelete="CASCADE"), nullable=False)

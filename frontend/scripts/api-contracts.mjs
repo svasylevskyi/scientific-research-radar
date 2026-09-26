@@ -8,7 +8,8 @@ const backend = fileURLToPath(new URL('../../backend/', import.meta.url));
 const output = new URL('../src/types/api.generated.ts', import.meta.url);
 const exported = spawnSync(process.env.PYTHON || 'python', ['scripts/export_api_contracts.py'], {
   cwd: backend,
-  env: { ...process.env, ENVIRONMENT: 'test', DATABASE_URL: 'sqlite://', PYTHONPATH: backend },
+  // Schema export creates an engine but never opens a database connection.
+  env: { ...process.env, ENVIRONMENT: 'test', DATABASE_URL: 'postgresql+psycopg://unused:unused@127.0.0.1:1/contracts', PYTHONPATH: backend },
   encoding: 'utf8',
   maxBuffer: 16 * 1024 * 1024,
 });

@@ -5,9 +5,7 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import create_engine, event, func, select
-from sqlalchemy.orm import sessionmaker
-from app.db.base import Base
+from sqlalchemy import func, select
 from app.models.user import User
 from app.models.digest import Digest
 from app.models.digest_run import DigestRun, DigestRunStageType
@@ -22,14 +20,6 @@ from test_subscription_catalogue import payload
 from test_scheduler_delivery import setup_schedule, NOW
 
 URL = '/api/v1/admin/subscription-observation'
-
-
-@pytest.fixture(autouse=True)
-def enforce_database_foreign_keys(db_session_factory):
-    engine = db_session_factory.kw['bind']
-    if engine.dialect.name == 'sqlite':
-        with engine.connect() as connection:
-            connection.exec_driver_sql('PRAGMA foreign_keys=ON')
 
 
 @pytest.fixture
@@ -192,10 +182,8 @@ def test_enqueue_rollback_has_no_usage(client, setup, db_session_factory):
         assert db.scalar(select(func.count()).select_from(DigestRun)) == 0
 
 
-def test_concurrent_assignment_versions_have_one_winner(tmp_path):
-    engine = create_engine(f'sqlite:///{tmp_path / "observation.db"}', connect_args={'check_same_thread': False, 'timeout': 20})
-    Base.metadata.create_all(engine)
-    factory = sessionmaker(engine, expire_on_commit=False, autoflush=False)
+def test_concurrent_assignment_versions_have_one_winner(db_session_factory):
+    factory = db_session_factory
     uid = uuid4()
     with factory() as db:
         db.add(User(id=uid, email='race@example.com', full_name='Race', password_hash='unused')); db.commit()
@@ -212,15 +200,11 @@ def test_concurrent_assignment_versions_have_one_winner(tmp_path):
         assert sorted(pool.map(save, range(2))) == ['conflict', 'saved']
     with factory() as db:
         assert db.scalar(select(func.count()).select_from(ObservationAssignment)) == 1
-    engine.dispose()
 
 
-def test_concurrent_reservations_do_not_double_count(tmp_path):
+def test_concurrent_reservations_do_not_double_count(db_session_factory):
     from app.repositories.digest_run_repository import DigestRunRepository
-    from app.db.session import build_engine
-    engine = build_engine(f'sqlite:///{tmp_path / "reservations.db"}')
-    Base.metadata.create_all(engine)
-    factory = sessionmaker(engine, expire_on_commit=False, autoflush=False)
+    factory = db_session_factory
     uid, did = uuid4(), uuid4()
     with factory() as db:
         db.add(User(id=uid, email='reserve@example.com', full_name='Reserve', password_hash='unused')); db.flush()
@@ -246,4 +230,3 @@ def test_concurrent_reservations_do_not_double_count(tmp_path):
         # Removing the whole user also removes private observation records.
         db.delete(db.get(User, uid)); db.commit()
         assert db.scalar(select(func.count()).select_from(ObservedRunUsage)) == 0
-    engine.dispose()
