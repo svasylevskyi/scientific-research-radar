@@ -61,9 +61,12 @@ The local SQLite database is untouched; this is a fresh PostgreSQL database.
 
 ## 2. Build and deploy manually
 
-In GitHub Actions select **Deploy development**, branch **main**, mode **base**.
-The workflow re-runs CI, then builds/publishes images for that exact commit. The
-workflow must be on main before GitHub displays its manual trigger.
+Every push to **main** runs CI and publishes the tested backend/web images only
+after all checks pass. In GitHub Actions, wait for that commit's **CI** workflow
+to succeed, then select **Deploy development**, branch **main**, mode **base**.
+Deployment retrieves that exact CI run's release manifest and uses its immutable
+image digests. It does not repeat tests, build images, or publish packages.
+The workflow must be on main before GitHub displays its manual trigger.
 
 The first publication may create private GHCR packages. Either make the two
 container packages public (they contain code and prompts, never environment
@@ -76,17 +79,25 @@ sudo docker login ghcr.io
 Do not place a registry token on a command line. Use the password prompt. Package
 access must be granted to the repository's GITHUB_TOKEN if publication is denied.
 
-The workflow summary prints a command using the full 40-character commit SHA:
+The workflow summary prints a complete command using the full 40-character
+commit SHA and the two verified `sha256:...` image digests. Copy its actual values:
 
 ```bash
 cd /opt/radar/source
 sudo git pull --ff-only
-sudo bash infra/scripts/deploy.sh FULL_COMMIT_SHA base
+sudo bash infra/scripts/deploy.sh FULL_COMMIT_SHA base BACKEND_DIGEST WEB_DIGEST
 ```
 
 This uses published images; it does not build on the server. Images must exist
 before deployment. Only commits already merged into origin/main are accepted.
 The source checkout is root-owned because its scripts execute with sudo.
+
+Successful releases save both digests in `/opt/radar/releases/FULL_COMMIT_SHA/image-digests`.
+Status, backup, restore, and subsequent operations reuse those pins. Existing
+releases without this file still use their SHA tags. The older two-argument
+manual command remains available for legacy releases; use the manifest command
+for new ones. A previously pinned release cannot be replaced with different
+images under the same SHA. Make a new commit for a rebuilt release.
 
 Deployment checks configuration and pulls images before interrupting services.
 For updates it stops web/API/scheduler, checks for queued/running research, and
@@ -94,6 +105,52 @@ restores the prior services if any remain. It then stops research, creates a
 backup, migrates once, and starts the selected mode. Migration or startup failure
 leaves services stopped/unhealthy for inspection; no automatic database downgrade
 or old-image restart occurs. Brief downtime during development deployment is expected.
+
+### One-time update for existing servers
+
+After merging the CI image-reuse change, update the trusted checkout and installed
+restricted SSH command **before the first Deploy development run**:
+
+```bash
+cd /opt/radar/source
+sudo git pull --ff-only
+sudo install -o root -g root -m 755 infra/scripts/ssh-deploy-command.sh /usr/local/sbin/radar-deploy-command
+```
+
+The updated command accepts the two image digests as well as the existing
+SHA/mode syntax. The SSH entrypoint, authorized key, sudoers rule, WireGuard,
+application environment, database, and secrets need no changes. Servers that
+only deploy manually need the checkout update but not the installed SSH command.
+Do not dispatch deployment until main CI finishes its publication step.
+
+Repository rules that explicitly require named status checks should include
+the new **backend-static** check alongside the existing checks. Image publication
+is restricted to main and needs the existing GHCR package write permission;
+deployment only reads Actions artifacts and no longer writes packages.
+
+### CI artifacts, caching, and recovery
+
+- PRs run the same application, database, migration, and container smoke checks,
+  but never publish release images. Superseded PR runs are cancelled. Main runs
+  and deployments are not cancelled by newer commits.
+- Type checking and benchmark structure validation run once in `backend-static`.
+  Both SQLite and PostgreSQL regression suites remain enabled.
+- Buildx caches backend and web layers separately. The backend dependency layer
+  changes with `pyproject.toml`, not with every application edit. A cache miss
+  performs a normal build; cached images still pass the full smoke checks.
+- The tested image archive is retained for 7 days. The small verified release
+  manifest is retained for 90 days (subject to repository retention policy);
+  retain the corresponding GHCR images for releases you may redeploy.
+- Dispatching before CI succeeds fails before any server connection. Retry after
+  the exact commit's CI is green. A newer failed/running CI attempt is not bypassed
+  by an older successful attempt, and PR results cannot authorize deployment.
+- Missing/expired manifests or missing registry images fail rather than trigger
+  a rebuild during deployment. For a new release, push a new commit and wait for
+  CI. To recover an already deployed release, use its saved local image pins and
+  the normal operator procedures; keep the registry images available.
+- The container job tests the same images later published, including the actual
+  PostgreSQL backup/restore scripts and readiness failure check. No server-side
+  backup, migration, or active-work checks are removed by this optimization.
 
 A successful first deploy must pass:
 
@@ -223,7 +280,8 @@ Use `visudo -f /etc/sudoers.d/radar-deploy` to grant only:
 radar-deploy ALL=(root) NOPASSWD: /usr/local/sbin/radar-deploy-command
 ```
 
-The wrapper accepts only `deploy FULL_SHA MODE`, checks main ancestry, and never
+The wrapper accepts `deploy FULL_SHA MODE [BACKEND_DIGEST WEB_DIGEST]`, validates
+the optional digest pair, checks approved branch ancestry, and never
 evals SSH input. This key still has deployment authority and must be protected.
 The deployment source and wrapper must remain root-owned. Update installed
 wrappers intentionally when their reviewed implementation changes.
@@ -258,7 +316,8 @@ Enable the **repository** variable `DEV_SSH_DEPLOY_ENABLED=true` only after thes
 settings and server firewall rules are ready and this workflow is merged. The job
 condition cannot use an environment-only variable for this switch. Dispatch
 Deploy development from `main`, choosing `scheduled` to retain recurring runs.
-The workflow checks, publishes, and then deploys the exact commit. Failures before
+The workflow resolves the successful main CI release and deploys its exact image
+digests. It does not repeat CI or publication. Failures before
 SSH leave the running application unchanged. Active runs still block deployment
 safely; wait for them to finish before trying again.
 

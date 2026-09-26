@@ -1,10 +1,12 @@
 import subprocess
+import tempfile
+import unittest
 from pathlib import Path
 
 HELPER = Path(__file__).resolve().parents[1] / 'scripts/deploy-ref.sh'
 
 
-def test_branch_allowlist_is_development_only(tmp_path):
+def check_branch_allowlist_is_development_only(tmp_path):
     repo = tmp_path / 'repo'
     clone = tmp_path / 'clone'
     def git(*args, cwd=repo):
@@ -31,3 +33,10 @@ def test_branch_allowlist_is_development_only(tmp_path):
         result = subprocess.run(['bash', '-c', 'source "$1"; verify_deploy_ref "$2" "$3" "$4"',
                                  '_', str(HELPER), str(clone), sha, environment], capture_output=True)
         assert (result.returncode == 0) == allowed, result.stderr
+
+
+class DeployRefTests(unittest.TestCase):
+    def test_branch_allowlist_is_development_only(self):
+        # Infrastructure CI uses unittest discovery, so this must be a TestCase.
+        with tempfile.TemporaryDirectory() as directory:
+            check_branch_allowlist_is_development_only(Path(directory))

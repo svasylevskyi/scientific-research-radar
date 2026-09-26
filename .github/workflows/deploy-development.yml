@@ -13,51 +13,52 @@ concurrency:
   group: deploy-development
   cancel-in-progress: false
 jobs:
-  check-ref:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Only deploy approved development branches
-        env:
-          REF: ${{ github.ref }}
-        run: |
-          case "$REF" in
-            refs/heads/main|refs/heads/feature/paid-subscriptions) ;;
-            *) echo 'This branch is not approved for development deployment.' >&2; exit 1 ;;
-          esac
-  checks:
-    needs: check-ref
-    uses: ./.github/workflows/ci.yml
-  publish:
-    needs: checks
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+      actions: read
+    outputs:
+      backend_digest: ${{ steps.manifest.outputs.backend_digest }}
+      web_digest: ${{ steps.manifest.outputs.web_digest }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
         with:
-          name: verified-images
-          path: ${{ runner.temp }}/verified-images
-      - name: Login to GHCR
+          persist-credentials: false
+      - name: Find successful CI for this exact main commit
+        id: ci
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-      - name: Publish verified images for exact commit
+        run: python3 infra/scripts/ci_release.py find
+      - name: Download its verified release manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.ci.outputs.artifact }}
+          path: ${{ runner.temp }}/verified-release
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.ci.outputs.run_id }}
+      - name: Validate release identity and image digests
+        id: manifest
+        env:
+          CI_RUN_ID: ${{ steps.ci.outputs.run_id }}
+          CI_RUN_ATTEMPT: ${{ steps.ci.outputs.run_attempt }}
         run: |
-          gunzip -c "$RUNNER_TEMP/verified-images/radar-images.tar.gz" | docker load
-          docker tag radar-ci-backend "ghcr.io/${GITHUB_REPOSITORY}-backend:${GITHUB_SHA}"
-          docker tag radar-ci-web "ghcr.io/${GITHUB_REPOSITORY}-web:${GITHUB_SHA}"
-          docker push "ghcr.io/${GITHUB_REPOSITORY}-backend:${GITHUB_SHA}"
-          docker push "ghcr.io/${GITHUB_REPOSITORY}-web:${GITHUB_SHA}"
+          python3 infra/scripts/ci_release.py validate \
+            --manifest "$RUNNER_TEMP/verified-release/verified-release.json" \
+            --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT"
       - name: Deployment command
         env:
           MODE: ${{ inputs.mode }}
+          BACKEND_DIGEST: ${{ steps.manifest.outputs.backend_digest }}
+          WEB_DIGEST: ${{ steps.manifest.outputs.web_digest }}
         run: |
-          echo "Images published for $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Run on server from /opt/radar/source:' >> "$GITHUB_STEP_SUMMARY"
-          echo "sudo bash infra/scripts/deploy.sh $GITHUB_SHA $MODE" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "Reusing verified CI images for $GITHUB_SHA"
+            echo 'Run on server from /opt/radar/source (update the checkout first):'
+            echo "sudo bash infra/scripts/deploy.sh $GITHUB_SHA $MODE $BACKEND_DIGEST $WEB_DIGEST"
+          } >> "$GITHUB_STEP_SUMMARY"
   deploy:
-    needs: publish
+    needs: release
     # Enable only after configuring WireGuard and the development environment.
     if: vars.DEV_SSH_DEPLOY_ENABLED == 'true'
     environment: development
@@ -107,6 +108,8 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
       - name: Request deployment
         env:
+          BACKEND_DIGEST: ${{ needs.release.outputs.backend_digest }}
+          WEB_DIGEST: ${{ needs.release.outputs.web_digest }}
           DEPLOY_HOST: ${{ vars.DEV_SSH_HOST }}
           DEPLOY_USER: ${{ vars.DEV_SSH_USER }}
           MODE: ${{ inputs.mode }}
@@ -114,7 +117,7 @@ jobs:
           [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ && "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
           ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
             -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
-            "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA $MODE"
+            "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA $MODE $BACKEND_DIGEST $WEB_DIGEST"
       - name: Remove deployment credentials and tunnel
         if: always()
         run: |

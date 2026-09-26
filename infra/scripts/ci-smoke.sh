@@ -30,8 +30,17 @@ cleanup() {
   rm -f "$RADAR_ENV_FILE"
 }
 trap cleanup EXIT
-docker build -t "$BACKEND_IMAGE" backend
-docker build -t "$WEB_IMAGE" frontend
+case ${1:-} in
+  '')
+    docker build -t "$BACKEND_IMAGE" backend
+    docker build -t "$WEB_IMAGE" frontend
+    ;;
+  --prebuilt)
+    # CI publishes these exact local images after every check succeeds.
+    docker image inspect "$BACKEND_IMAGE" "$WEB_IMAGE" > /dev/null
+    ;;
+  *) echo 'Usage: ci-smoke.sh [--prebuilt]' >&2; exit 1;;
+esac
 dc config --quiet
 dc up -d --wait db mailpit
 dc run --rm --no-deps -T ops alembic upgrade head

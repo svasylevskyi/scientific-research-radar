@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/release-images.sh"
 umask 077
 [[ $EUID == 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
 RADAR_ENVIRONMENT=${RADAR_ENVIRONMENT:-development}
@@ -20,8 +21,7 @@ set_release() {
     *) echo 'Mode must be base, research, or scheduled' >&2; exit 1;;
   esac
   RELEASE=/opt/radar/releases/$SHA
-  export BACKEND_IMAGE=ghcr.io/$REPO-backend:$SHA
-  export WEB_IMAGE=ghcr.io/$REPO-web:$SHA
+  select_release_images "$RELEASE" "$REPO" "$SHA" "${3:-}" "${4:-}"
 }
 load_release() {
   [[ -f $STATE ]] || { echo 'No deployed release yet.' >&2; exit 1; }
