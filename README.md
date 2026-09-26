@@ -282,4 +282,7 @@ The preview is computed from existing data. No database migration or new depende
 
 The Hetzner/Docker Compose setup, PostgreSQL configuration, manual GitHub release
 workflow, and backup/restore instructions are in [infra/README.md](infra/README.md).
+Main CI publishes tested images once; manual deployment reuses their verified
+digests without rerunning CI. Existing servers need the one-time restricted SSH
+command update described in that guide before using this deployment flow.
 Start in `base` mode: research and scheduled execution are explicit opt-ins.
