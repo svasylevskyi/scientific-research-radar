@@ -41,6 +41,8 @@ def now():
 def request_closure(db, *, target_id: UUID, actor: User, password: str) -> AccountClosure:
     from app.services.stripe_sandbox_service import lock_account
     from app.services.subscription_observation_service import lock
+    if db.get(User, target_id) is None:
+        raise HTTPException(404, "Account not found.")
     lock_account(db, target_id, allow_closing=True)
     lock(db, target_id)
     target = db.get(User, target_id, populate_existing=True, with_for_update=True)

@@ -52,6 +52,11 @@ def redact_admin_history(db, uid):
         redacted = redact_reviewers(item.criteria, names)
         if redacted != item.criteria:
             db.execute(update(history).where(history.c.id == item.id).values(criteria=redacted))
+    for review in db.scalars(select(ClaimReview).where(ClaimReview.report.is_not(None))):
+        if redact_reviewers(review.report, names) != review.report:
+            review.report = None
+            review.status = "failed"
+            review.error = "Reviewer attribution was redacted for account closure. Run a new comparison if required."
     # An admin's queued shared benchmark review must not continue after erasure.
     db.execute(update(ClaimReview).where(ClaimReview.created_by == uid, ClaimReview.active_key.is_not(None)).values(
         status="failed", active_key=None, lease_token=None, finished_at=datetime.now(timezone.utc),

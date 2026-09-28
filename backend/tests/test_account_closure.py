@@ -180,3 +180,86 @@ def test_active_run_waits_and_no_new_run_can_be_claimed(client, db_session_facto
     with db_session_factory() as db:
         assert db.get(DigestRun, run_id) is None
         assert db.get(AccountClosure, uid).state == "completed"
+
+
+def test_restore_manifest_blocks_restored_account_and_erases_again(client, db_session_factory):
+    from app.account_closure import ClosureMarker, export_markers, reapply_markers
+    uid, headers = member(client)
+    request(client, headers)
+    with db_session_factory() as db:
+        manifest = export_markers(db)
+        assert set(manifest[0]) == {"user_id", "requested_at"}
+        # Simulate a backup taken before the request. The closure manifest is
+        # stored separately and must be reapplied before reopening the service.
+        db.delete(db.get(AccountClosure, uid))
+        user = db.get(User, uid)
+        user.closure_requested_at, user.is_active = None, True
+        db.commit()
+        reapply_markers(db, [ClosureMarker.model_validate(item) for item in manifest])
+        assert not db.get(User, uid).is_active
+        assert db.get(AccountClosure, uid).notification_email is None
+    closure.process_one(db_session_factory, get_settings())
+    with db_session_factory() as db:
+        assert db.get(AccountClosure, uid).state == "completed"
+        assert db.get(AccountClosure, uid).notice_state == "suppressed_after_restore"
+
+
+def test_concurrent_admin_requests_make_one_closure(client, db_session_factory):
+    from concurrent.futures import ThreadPoolExecutor
+    uid, headers = member(client)
+    admin = _super_admin_login(client, db_session_factory)
+    admin_id = UUID(admin.json()["user"]["id"])
+    def submit():
+        with db_session_factory() as db:
+            return closure.request_closure(db, target_id=uid, actor=db.get(User, admin_id),
+                password=get_settings().super_admin_password).requested_at
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: submit(), range(2)))
+    assert results[0] == results[1]
+    with db_session_factory() as db:
+        assert db.scalar(select(func.count()).select_from(AccountClosure)) == 1
+
+
+def test_failed_email_has_bounded_retry_and_never_undoes_closure(client, db_session_factory):
+    uid, headers = member(client)
+    request(client, headers)
+    closure.process_one(db_session_factory, get_settings())
+    class OfflineMail:
+        def send(self, message):
+            raise OSError("mail offline")
+    closure.notify_one(db_session_factory, get_settings(), sender=OfflineMail())
+    with db_session_factory() as db:
+        row = db.get(AccountClosure, uid)
+        assert row.state == "completed" and row.notice_state == "retry"
+        row.notification_deadline = datetime.now(timezone.utc) - timedelta(seconds=1)
+        db.commit()
+    closure.notify_one(db_session_factory, get_settings(), sender=OfflineMail())
+    with db_session_factory() as db:
+        row = db.get(AccountClosure, uid)
+        assert row.notification_email is None and row.notice_state == "expired"
+        assert row.state == "completed"
+
+
+def test_shared_admin_attribution_removed_and_publication_comparison_invalidated(client, db_session_factory):
+    from app.models.benchmark_review import ResearchBenchmark, BenchmarkPublication, BenchmarkCriteriaHistory
+    from app.evaluation.models import fingerprint
+    uid, headers = member(client)
+    with db_session_factory() as db:
+        user = db.get(User, uid)
+        user.role = "admin"
+        stamp = datetime.now(timezone.utc)
+        benchmark = ResearchBenchmark(id=uuid4(), fingerprint="a" * 64, dataset={}, criteria={"reviewer": user.full_name},
+            created_by=uid, created_by_name=user.full_name, created_at=stamp)
+        db.add(benchmark); db.flush()
+        publication = BenchmarkPublication(id=uuid4(), benchmark_id=benchmark.id, number=1, source_revision=0,
+            reviews={"records": [{"reviewer": user.full_name, "verdict": "supported"}]}, criteria=benchmark.criteria,
+            fingerprint="b" * 64, reason="Publication", created_by=uid, created_by_name=user.full_name, created_at=stamp)
+        db.add(publication); db.commit(); publication_id = publication.id
+    request(client, headers)
+    closure.process_one(db_session_factory, get_settings())
+    with db_session_factory() as db:
+        assert db.get(AccountClosure, uid).state == "completed"
+        publication = db.get(BenchmarkPublication, publication_id)
+        assert publication.created_by is None and publication.created_by_name == "Former administrator"
+        assert publication.reviews["records"][0] == {"reviewer": "Former administrator", "verdict": "supported"}
+        assert publication.fingerprint != "b" * 64
