@@ -1,6 +1,5 @@
 import { ResourceNotice } from "../components/ResourceNotice";
 import { usePollingResource } from "../hooks/usePollingResource";
-import { useListPageBounds } from "../hooks/useListPageBounds";
 import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
 import {
   Box,
@@ -10,9 +9,8 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { pageNumber, queryPath, updateQuery, withReturnTo } from "../navigationContext";
 
 import { adminDigestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
@@ -25,18 +23,19 @@ export function AdminDigestsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const ownerId = searchParams.get("owner_id") ?? "";
   const ownerQuery = searchParams.get("owner_query") ?? "";
-  const page = pageNumber(searchParams);
-  const setPage = (value: number) => setSearchParams(current => updateQuery(current, { page: value === 1 ? null : value }), { preventScrollReset: true });
-  const returnTo = queryPath("/admin/digests", searchParams);
+  const filterKey = `${ownerId}:${ownerQuery}`;
+  const [pagination, setPagination] = useState({ key: filterKey, page: 1 });
+  const page = pagination.key === filterKey ? pagination.page : 1;
+  const setPage = (page: number) => setPagination({ key: filterKey, page });
   const load = useCallback((signal: AbortSignal) => adminDigestsApi.list({ offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE, ownerId: ownerId || undefined, ownerQuery: ownerQuery || undefined, signal }), [page, ownerId, ownerQuery]);
   const resource = usePollingResource(load, 0);
-  useListPageBounds(page, resource.data?.total, PAGE_SIZE, setSearchParams);
   const digests = resource.data?.items ?? [];
   const total = resource.data?.total ?? 0;
   const isLoading = resource.loading;
 
   function changeOwner(filter: { ownerId?: string; query?: string }) {
-    setSearchParams(current => updateQuery(current, { page: null, owner_id: filter.ownerId || null, owner_query: filter.query || null }), { preventScrollReset: true });
+    setPage(1);
+    setSearchParams(filter.ownerId ? { owner_id: filter.ownerId } : filter.query ? { owner_query: filter.query } : {});
   }
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -77,8 +76,7 @@ export function AdminDigestsPage() {
           <>
             <DigestList
               digests={digests}
-              detailPath={(digest) => withReturnTo(`/admin/digests/${digest.id}`, returnTo)}
-              historyPath={(digest) => withReturnTo(`/admin/digests/${digest.id}/runs`, returnTo)}
+              detailPath={(digest) => `/admin/digests/${digest.id}`}
               showOwner
               emptyTitle="No digests found"
               emptyDescription={

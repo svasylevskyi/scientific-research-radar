@@ -1,6 +1,5 @@
 import { ResourceNotice } from "../components/ResourceNotice";
 import { usePollingResource } from "../hooks/usePollingResource";
-import { useListPageBounds } from "../hooks/useListPageBounds";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { AllowanceNotice } from "../components/AllowanceNotice";
 import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
@@ -14,9 +13,8 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { useCallback } from "react";
-import { Link as RouterLink, useSearchParams } from "react-router-dom";
-import { pageNumber, queryPath, updateQuery, withReturnTo } from "../navigationContext";
+import { useCallback, useState } from "react";
+import { Link as RouterLink } from "react-router-dom";
 
 import { digestsApi } from "../api/digests";
 import { useAuth } from "../auth/AuthContext";
@@ -28,13 +26,9 @@ const PAGE_SIZE = 10;
 export function DashboardPage() {
   const { user } = useAuth();
   const access = useSubscriptionAccess();
-  const [search, setSearch] = useSearchParams();
-  const page = pageNumber(search);
-  const setPage = (value: number) => setSearch(current => updateQuery(current, { page: value === 1 ? null : value }), { preventScrollReset: true });
-  const returnTo = queryPath("/radar", search);
+  const [page, setPage] = useState(1);
   const load = useCallback((signal: AbortSignal) => digestsApi.list({ offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE, signal }), [page]);
   const resource = usePollingResource(load, 0);
-  useListPageBounds(page, resource.data?.total, PAGE_SIZE, setSearch);
   const digests = resource.data?.items ?? [];
   const total = resource.data?.total ?? 0;
   const isLoading = resource.loading;
@@ -58,7 +52,7 @@ export function DashboardPage() {
           </Box>
           <Button
             component={RouterLink}
-            to={withReturnTo("/radar/digests/new", returnTo)}
+            to="/radar/digests/new"
             disabled={!access.data?.create_allowed || !!access.error}
             aria-describedby={!access.data?.create_allowed || access.error ? "create-allowance-notice" : undefined}
             variant="contained"
@@ -90,7 +84,7 @@ export function DashboardPage() {
           <>
             <DigestList
               digests={digests}
-              detailPath={(digest) => withReturnTo(`/radar/digests/${digest.id}`, returnTo)}
+              detailPath={(digest) => `/radar/digests/${digest.id}`}
             />
             {total > PAGE_SIZE && (
               <Pagination

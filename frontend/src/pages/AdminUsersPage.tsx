@@ -1,6 +1,5 @@
 import { ResourceNotice } from "../components/ResourceNotice";
 import { usePollingResource } from "../hooks/usePollingResource";
-import { useListPageBounds } from "../hooks/useListPageBounds";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import ManageAccountsRoundedIcon from "@mui/icons-material/ManageAccountsRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
@@ -22,9 +21,8 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link as RouterLink, useSearchParams } from "react-router-dom";
-import { pageNumber, queryPath, updateQuery, withReturnTo } from "../navigationContext";
+import { useCallback, useState, type FormEvent } from "react";
+import { Link as RouterLink } from "react-router-dom";
 
 import { closureLabels } from "../api/accountClosure";
 import { adminApi } from "../api/admin";
@@ -34,23 +32,19 @@ import { UserRoleChip } from "../components/UserRoleChip";
 const PAGE_SIZE = 20;
 
 export function AdminUsersPage() {
-  const [search, setSearch] = useSearchParams();
-  const page = pageNumber(search);
-  const query = search.get("query") ?? "";
-  const [searchText, setSearchText] = useState(query);
-  useEffect(() => setSearchText(query), [query]);
-  const setPage = (value: number) => setSearch(current => updateQuery(current, { page: value === 1 ? null : value }), { preventScrollReset: true });
-  const returnTo = queryPath("/admin/users", search);
+  const [page, setPage] = useState(1);
+  const [searchText, setSearchText] = useState("");
+  const [query, setQuery] = useState("");
   const load = useCallback((signal: AbortSignal) => adminApi.listUsers({ offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE, query, signal }), [page, query]);
   const resource = usePollingResource(load, 0);
-  useListPageBounds(page, resource.data?.total, PAGE_SIZE, setSearch);
   const users = resource.data?.items ?? [];
   const total = resource.data?.total ?? 0;
   const isLoading = resource.loading;
 
   function handleSearch(event: FormEvent) {
     event.preventDefault();
-    setSearch(current => updateQuery(current, { page: null, query: searchText.trim() || null }), { preventScrollReset: true });
+    setPage(1);
+    setQuery(searchText.trim());
   }
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -108,7 +102,7 @@ export function AdminUsersPage() {
                       <TableCell>{listedUser.closure_state ? closureLabels[listedUser.closure_state] : listedUser.is_active ? "Active" : "Inactive"}</TableCell>
                       <TableCell>{listedUser.subscription_plan_name ?? "No subscription"}</TableCell>
                       <TableCell align="right">
-                        <Button component={RouterLink} to={withReturnTo(`/admin/users/${listedUser.id}`, returnTo)} endIcon={<ChevronRightRoundedIcon />}>View</Button>
+                        <Button component={RouterLink} to={`/admin/users/${listedUser.id}`} endIcon={<ChevronRightRoundedIcon />}>View</Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -131,7 +125,7 @@ export function AdminUsersPage() {
                         </Typography>
                       </Stack>
                     </Box>
-                    <Button component={RouterLink} to={withReturnTo(`/admin/users/${listedUser.id}`, returnTo)} aria-label={`View ${listedUser.full_name}`} sx={{ minWidth: 40 }}>
+                    <Button component={RouterLink} to={`/admin/users/${listedUser.id}`} aria-label={`View ${listedUser.full_name}`} sx={{ minWidth: 40 }}>
                       <ChevronRightRoundedIcon />
                     </Button>
                   </Stack>

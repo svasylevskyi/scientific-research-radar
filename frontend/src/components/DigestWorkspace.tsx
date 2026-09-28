@@ -34,7 +34,6 @@ import {
   TrendAnalysisResult,
 } from "./DigestRunResults";
 import { defaultRunId, filterRuns, runDate, resultTab } from "../runHistory";
-import { diagnosticTab, queryPath, updateQuery, withReturnTo } from "../navigationContext";
 
 export function DigestWorkspace({
   digestId,
@@ -73,13 +72,15 @@ export function DigestWorkspace({
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     })
     .sort();
-  const showInProgress = search.get("run_progress") !== "0";
-  const showSuccessful = search.get("run_completed") !== "0";
-  const showFailed = search.has("run_failed") ? search.get("run_failed") === "1" : admin;
-  const from = search.get("run_from") ?? runDays[0] ?? "";
-  const to = search.get("run_to") ?? runDays.at(-1) ?? "";
-  const tab = search.get("output_tab") ?? "briefing";
-  const adminSection = search.get("run_section") === "output" ? "output" : "diagnostics";
+  const [fromOverride, setFrom] = useState<string | null>(null);
+  const [toOverride, setTo] = useState<string | null>(null);
+  const [showInProgress, setShowInProgress] = useState(true);
+  const [showSuccessful, setShowSuccessful] = useState(true);
+  const [showFailed, setShowFailed] = useState(admin);
+  const from = fromOverride ?? runDays[0] ?? "";
+  const to = toOverride ?? runDays.at(-1) ?? "";
+  const [tab, setTab] = useState("briefing");
+  const [adminSection, setAdminSection] = useState("diagnostics");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const load = useCallback((signal: AbortSignal) => !selectedId || latestRun?.id === selectedId
@@ -92,6 +93,8 @@ export function DigestWorkspace({
 
   useEffect(() => {
     setError(null);
+    setTab("briefing");
+    setAdminSection("diagnostics");
   }, [selectedId]);
 
   // Semantic tab values keep selection stable when available outputs change.
@@ -119,12 +122,16 @@ export function DigestWorkspace({
     (item) => item.id === selectedId,
   );
 
-  function changeView(values: Record<string, string | null>) {
-    // Pin the displayed run so copied tab links do not drift to a newer run.
-    setSearch(current => updateQuery(current, { run_id: selectedId || null, ...values }), { preventScrollReset: true });
+  function selectRun(id: string) {
+    setSearch((current) => {
+      const next = new URLSearchParams(current);
+      next.set("run_id", id);
+      return next;
+    });
+    setError(null);
+    setTab("briefing");
+    setError(null);
   }
-  const benchmarkPath = withReturnTo("/admin/research-quality", queryPath(`/admin/digests/${digestId}/runs`,
-    updateQuery(search, { run_id: selectedId || null, run_section: "diagnostics", diagnostic_tab: "quality" }))) + "#benchmarks";
 
   return (
     <Stack
@@ -177,14 +184,14 @@ export function DigestWorkspace({
                 label="From"
                 type="date"
                 value={from}
-                onChange={(event) => changeView({ run_from: event.target.value })}
+                onChange={(event) => setFrom(event.target.value)}
                 slotProps={{ inputLabel: { shrink: true } }}
               />
               <TextField
                 label="To"
                 type="date"
                 value={to}
-                onChange={(event) => changeView({ run_to: event.target.value })}
+                onChange={(event) => setTo(event.target.value)}
                 error={invalidRange}
                 helperText={
                   invalidRange
@@ -199,7 +206,7 @@ export function DigestWorkspace({
                     <Checkbox
                       checked={showInProgress}
                       onChange={(event) =>
-                        changeView({ run_progress: event.target.checked ? "1" : "0" })
+                        setShowInProgress(event.target.checked)
                       }
                     />
                   }
@@ -210,7 +217,7 @@ export function DigestWorkspace({
                     <Checkbox
                       checked={showSuccessful}
                       onChange={(event) =>
-                        changeView({ run_completed: event.target.checked ? "1" : "0" })
+                        setShowSuccessful(event.target.checked)
                       }
                     />
                   }
@@ -220,7 +227,7 @@ export function DigestWorkspace({
                   control={
                     <Checkbox
                       checked={showFailed}
-                      onChange={(event) => changeView({ run_failed: event.target.checked ? "1" : "0" })}
+                      onChange={(event) => setShowFailed(event.target.checked)}
                     />
                   }
                   label="Failed runs"
@@ -235,7 +242,7 @@ export function DigestWorkspace({
                 <Button
                   key={item.id}
                   color="inherit"
-                  onClick={() => changeView({ run_id: item.id })}
+                  onClick={() => selectRun(item.id)}
                   aria-pressed={item.id === selectedId}
                   sx={{
                     px: 2,
@@ -288,10 +295,10 @@ export function DigestWorkspace({
         {admin && <Stack component="nav" aria-label="Run sections" direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 3 }}>
           <Button variant={adminSection === "diagnostics" ? "contained" : "text"}
             aria-pressed={adminSection === "diagnostics"} aria-controls="admin-run-diagnostics"
-            onClick={() => changeView({ run_section: "diagnostics" })}>Run Diagnostics</Button>
+            onClick={() => setAdminSection("diagnostics")}>Run Diagnostics</Button>
           <Button variant={adminSection === "output" ? "contained" : "text"}
             aria-pressed={adminSection === "output"} aria-controls="admin-run-output"
-            onClick={() => changeView({ run_section: "output" })}>Run Output</Button>
+            onClick={() => setAdminSection("output")}>Run Output</Button>
         </Stack>}
         {selectionOutsideFilter && (
           <Alert severity="info" sx={{ mb: 2 }}>
@@ -305,8 +312,7 @@ export function DigestWorkspace({
             {error}
           </Alert>
         )}
-        {admin && <AdminRunDiagnostics digestId={digestId} run={run} visible={adminSection === "diagnostics"}
-          tab={diagnosticTab(search)} onTabChange={value => changeView({ diagnostic_tab: value })} benchmarkPath={benchmarkPath} />}
+        {admin && <AdminRunDiagnostics digestId={digestId} selectedId={selectedId} run={run} visible={adminSection === "diagnostics"} />}
         <Box id={admin ? "admin-run-output" : undefined} hidden={admin && adminSection !== "output"}>
         <Paper
           variant="outlined"
@@ -314,7 +320,7 @@ export function DigestWorkspace({
         >
           <Tabs
             value={activeTab === "none" ? false : activeTab}
-            onChange={(_event, value) => changeView({ output_tab: value })}
+            onChange={(_event, value) => setTab(value)}
             variant="scrollable"
             scrollButtons="auto"
             aria-label={admin ? "Run output" : "Digest results and settings"}

@@ -3,8 +3,7 @@ import { AllowanceNotice } from "../components/AllowanceNotice";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import { Alert, Box, Button, Container, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
-import { Link as RouterLink, useNavigate, useSearchParams } from "react-router-dom";
-import { listReturnTo, withReturnTo } from "../navigationContext";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { digestsApi } from "../api/digests";
@@ -17,8 +16,6 @@ import type { DigestInput } from "../types/digest";
 
 export function NewDigestPage() {
   const navigate = useNavigate();
-  const [search] = useSearchParams();
-  const returnTo = listReturnTo(search, "/radar");
   const access = useSubscriptionAccess();
   const [initialValues, setInitialValues] = useState<ReturnType<typeof createDefaultDigestFormValues> | null>(null);
   useEffect(() => {
@@ -35,7 +32,7 @@ export function NewDigestPage() {
     setError(null);
     try {
       const created = await digestsApi.create(input);
-      navigate(withReturnTo(`/radar/digests/${created.id}`, returnTo), {
+      navigate(`/radar/digests/${created.id}`, {
         replace: true,
         state: { success: "Digest created." },
       });
@@ -52,7 +49,7 @@ export function NewDigestPage() {
       <Container component="main" maxWidth="md" sx={{ py: { xs: 3, sm: 6 } }}>
         <Button
           component={RouterLink}
-          to={returnTo}
+          to="/radar"
           color="inherit"
           startIcon={<ArrowBackRoundedIcon />}
           sx={{ mb: 2 }}
@@ -76,7 +73,7 @@ export function NewDigestPage() {
           submitLabel="Create digest"
           isSubmitting={isSubmitting}
           onSubmit={createDigest}
-          onCancel={() => navigate(returnTo)}
+          onCancel={() => navigate("/radar")}
         />}
       </Container>
     </Box>

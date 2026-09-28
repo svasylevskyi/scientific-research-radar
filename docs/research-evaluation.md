@@ -2,12 +2,10 @@
 
 ## Review in the application
 
-Open **Admin → Research quality → Benchmarks**. From an admin digest's
+Open **Admin → Research quality → Human benchmark review**. From an admin digest's
 **Research output & history**, select a run and use **Run Diagnostics → Research
-Quality → Open human benchmark review**. This link opens the shared workspace at
-`/admin/research-quality#benchmarks`, with a **Back to run** link retaining the run,
-tabs, history filters and originating digest list. Older `#benchmark-review` links
-still open Benchmarks. Settings and Benchmarks are separate tabs under one menu item.
+Quality → Open human benchmark review**. This link opens and scrolls to the shared
+workspace at `/admin/research-quality#benchmark-review`.
 Run diagnostics contains **Research Quality**, **Costs** and **Steps**;
 **Run Output** contains the briefing, trends, paper summaries and feedback.
 
@@ -37,7 +35,7 @@ or that the product is ready to launch. Dataset size/diversity, verdict coverage
 other scoring gates still apply when evaluating a saved candidate below. The seeded
 held-out set is intentionally too small for the example minimum of 20 cases.
 
-Drafts remain mounted when switching between Settings and Benchmarks. Save before leaving
+Drafts remain mounted when collapsing the benchmark workspace. Save before leaving
 the page; unsaved edits are not automatically persisted. Imports are
 limited to permission-checked benchmark inputs. Imported labels are draft proposals,
 never authenticated approvals, and cannot overwrite existing drafts or reviews.
