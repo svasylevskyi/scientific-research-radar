@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { ResourceNotice } from "../components/ResourceNotice";
+import { usePollingResource } from "../hooks/usePollingResource";
+import { useCallback, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Alert, Box, Button, Chip, Container, Paper, Stack, Typography } from "@mui/material";
 import { AppHeader } from "../components/AppHeader";
@@ -12,28 +14,17 @@ const label = (value: string) => value.replaceAll("_", " ");
 type BillingRedirect = import("../types/api.generated").components["schemas"]["RedirectRead"];
 
 export function AdminSandboxBillingPage() {
-  const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState("");
-  const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState(false);
   const [params] = useSearchParams();
-  useEffect(() => {
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const result = await apiRequest<Overview>(path);
-        if (active) { setData(result); setLoadError(""); }
-      } catch { if (active) setLoadError("Could not load billing status. Retrying shortly."); }
-      if (active) timer = setTimeout(poll, 10000);
-    }
-    void poll();
-    return () => { active = false; clearTimeout(timer); };
-  }, []);
+  const load = useCallback((signal: AbortSignal) => apiRequest<Overview>(path, { signal }), []);
+  const resource = usePollingResource(load);
+  const data = resource.data;
+  const loadError = resource.error;
   async function action(kind: "checkout" | "portal" | "refresh", interval?: string, revision?: number) {
     setBusy(true); setError("");
     try {
-      if (kind === "refresh") setData(await apiRequest<Overview>(path + "/refresh", { method: "POST" }));
+      if (kind === "refresh") { await apiRequest<Overview>(path + "/refresh", { method: "POST" }); await resource.refresh(); }
       else {
         const result = await apiRequest<BillingRedirect>(path + "/" + kind, { method: "POST",
           ...(kind === "checkout" ? { body: { interval, revision: revision ?? data?.plan?.revision } } : {}) });
@@ -54,7 +45,7 @@ export function AdminSandboxBillingPage() {
       {data?.mode === "live" ? "Live payments: checkout charges real money." : data ? "Sandbox: use test payment details; no real money is collected." : "Loading Stripe mode…"} Automatic tax calculation and trials are not enabled.</Alert>
     {params.has("stripe_return") && <Alert severity="info" sx={{ mb: 2 }}>You have returned from Stripe. The status below is updated by verified Stripe events;
       returning here does not confirm a payment. You can also refresh directly from Stripe.</Alert>}
-    {loadError && <Alert severity="warning" sx={{ mb: 2 }}>{loadError}</Alert>}
+    <ResourceNotice {...resource} />
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
     {!data && <Typography role="status">Loading billing…</Typography>}
     {data && <Stack spacing={3}>

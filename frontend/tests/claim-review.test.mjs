@@ -12,7 +12,7 @@ async function load(path, dependencies = {}) {
   }});
   const module = {exports: {}};
   runInNewContext(outputText, {module, exports: module.exports, Error, URLSearchParams, AbortController, crypto: {randomUUID: () => globalThis.crypto.randomUUID()},
-    require: name => dependencies[name] ?? (name === '@mui/material' || name.startsWith('./')
+    require: name => dependencies[name] ?? (name.endsWith("/ResourceNotice") ? {ResourceNotice: "ResourceNotice"} : undefined) ?? (name === '@mui/material' || name.startsWith('./')
       ? new Proxy({}, {get: (_, key) => String(key)}) : require(name)),
   });
   return module.exports;

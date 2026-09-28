@@ -1,3 +1,4 @@
+import { ResourceNotice } from "../components/ResourceNotice";
 import { Fragment, useCallback } from "react";
 import {
   Collapse,
@@ -44,11 +45,11 @@ export function AdminBillingSyncPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
-  const load = useCallback(() => {
+  const load = useCallback((signal: AbortSignal) => {
     const query = new URLSearchParams({ offset: String(offset), limit: "25" });
     if (state) query.set("state", state);
     if (owner) query.set("user_id", owner);
-    return apiRequest<Status>(`/admin/billing-sync?${query}`);
+    return apiRequest<Status>(`/admin/billing-sync?${query}`, { signal });
   }, [owner, state, offset]);
   const resource = usePollingResource(load);
   const data = resource.data;
@@ -96,9 +97,10 @@ export function AdminBillingSyncPage() {
           for accounts opted into subscription limits. Synchronization never resets
           usage allowances.
         </Alert>
-        {(error || pollError) && (
+        <ResourceNotice {...resource} />
+        {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
-            {error || pollError}
+            {error}
           </Alert>
         )}
         <Stack

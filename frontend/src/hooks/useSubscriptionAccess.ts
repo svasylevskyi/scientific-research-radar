@@ -1,28 +1,14 @@
-import { useEffect, useState } from "react";
-import { apiRequest, ApiError } from "../api/client";
-import { startPagePolling } from "../pagePolling";
+import { useCallback } from "react";
+import { apiRequest } from "../api/client";
+import { usePollingResource } from "./usePollingResource";
 export type SubscriptionAccess = import("../types/api.generated").components["schemas"]["AccessRead"];
 export function useSubscriptionAccess(digestId?: string, runId?: string, adminOwner?: string, enabled = true, refreshKey?: string) {
   const query = new URLSearchParams();
   if (digestId) query.set("digest_id", digestId);
   if (runId) query.set("run_id", runId);
   const path = adminOwner ? `/admin/subscription-access/${adminOwner}` : `/subscription?${query}`;
-  const [state, setState] = useState<{ path: string; data: SubscriptionAccess | null; error: string | null }>({ path, data: null, error: null });
-  useEffect(() => {
-    if (!enabled) return;
-    let mounted = true;
-    setState({ path, data: null, error: null });
-    const stop = startPagePolling(async () => {
-      try {
-        const data = await apiRequest<SubscriptionAccess>(path);
-        if (mounted) setState({ path, data, error: null });
-      } catch (error) {
-        if (mounted) setState(previous => ({ path, data: previous.path === path ? previous.data : null,
-          error: error instanceof ApiError ? error.message : "Could not check subscription allowances. Trying again shortly." }));
-      }
-    }, 10000);
-    return () => { mounted = false; stop(); };
-  }, [path, enabled, refreshKey]);
-  const data = enabled && state.path === path ? state.data : null;
-  return { data, error: state.path === path ? state.error : null, loading: enabled && !data && !state.error };
+  const load = useCallback((signal: AbortSignal) => enabled
+    ? apiRequest<SubscriptionAccess>(path, { signal }) : Promise.resolve(null), [path, enabled, refreshKey]);
+  const resource = usePollingResource(load);
+  return { ...resource, data: enabled ? resource.data : null, loading: enabled && resource.loading };
 }

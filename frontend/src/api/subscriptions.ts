@@ -15,9 +15,9 @@ const root = "/subscription";
 const post = <T>(path: string, body?: unknown) =>
   apiRequest<T>(root + path, { method: "POST", body });
 export const subscriptionsApi = {
-  adminAccess: (id: string, offset: number) =>
+  adminAccess: (id: string, offset: number, signal?: AbortSignal) =>
     apiRequest<Schemas["AdminAccessRead"]>(
-      `/admin/subscription-access/${encodeURIComponent(id)}?offset=${offset}`,
+      `/admin/subscription-access/${encodeURIComponent(id)}?offset=${offset}`, { signal },
     ),
   saveAccessPolicy: (
     id: string,
@@ -27,23 +27,23 @@ export const subscriptionsApi = {
       method: "POST",
       body,
     }),
-  plans: () =>
+  plans: (signal?: AbortSignal) =>
     apiRequest<Schemas["PublicPlansRead"]>(root + "/plans", {
-      authenticate: false,
+      authenticate: false, signal,
     }),
-  enrolmentPlans: () =>
+  enrolmentPlans: (signal?: AbortSignal) =>
     apiRequest<ApiResponse<"/api/v1/subscription/enrolment-plans", "get">>(
-      root + "/enrolment-plans",
+      root + "/enrolment-plans", { signal },
     ),
-  access: () => apiRequest<Access>(root),
-  billing: () => apiRequest<BillingStatus>(root + "/billing"),
-  changes: () => apiRequest<ChangeData>(root + "/billing/changes"),
-  activeDigests: () =>
-    apiRequest<ActiveDigests>(root + "/billing/active-digests"),
-  notifications: () =>
-    apiRequest<Schemas["NotificationsRead"]>(root + "/billing/notifications"),
-  upgrades: () => apiRequest<UpgradeData>(root + "/billing/upgrades"),
-  freeDigests: () => apiRequest<FreeChoices>(root + "/free-digests"),
+  access: (signal?: AbortSignal) => apiRequest<Access>(root, { signal }),
+  billing: (signal?: AbortSignal) => apiRequest<BillingStatus>(root + "/billing", { signal }),
+  changes: (signal?: AbortSignal) => apiRequest<ChangeData>(root + "/billing/changes", { signal }),
+  activeDigests: (signal?: AbortSignal) =>
+    apiRequest<ActiveDigests>(root + "/billing/active-digests", { signal }),
+  notifications: (signal?: AbortSignal) =>
+    apiRequest<Schemas["NotificationsRead"]>(root + "/billing/notifications", { signal }),
+  upgrades: (signal?: AbortSignal) => apiRequest<UpgradeData>(root + "/billing/upgrades", { signal }),
+  freeDigests: (signal?: AbortSignal) => apiRequest<FreeChoices>(root + "/free-digests", { signal }),
   refreshBilling: () => post<BillingStatus>("/billing/refresh"),
   openBilling: (action: "portal" | "cancel" | "resume") =>
     post<Schemas["RedirectRead"]>("/billing/" + action),
@@ -77,7 +77,7 @@ export const subscriptionsApi = {
       `/billing/upgrades/${encodeURIComponent(id)}/payment`,
     ),
 };
-export async function loadSubscription() {
+export async function loadSubscription(signal?: AbortSignal) {
   const [
     access,
     billing,
@@ -87,13 +87,13 @@ export async function loadSubscription() {
     upgrades,
     freeDigests,
   ] = await Promise.all([
-    subscriptionsApi.access(),
-    subscriptionsApi.billing(),
-    subscriptionsApi.changes(),
-    subscriptionsApi.activeDigests(),
-    subscriptionsApi.notifications(),
-    subscriptionsApi.upgrades(),
-    subscriptionsApi.freeDigests(),
+    subscriptionsApi.access(signal),
+    subscriptionsApi.billing(signal),
+    subscriptionsApi.changes(signal),
+    subscriptionsApi.activeDigests(signal),
+    subscriptionsApi.notifications(signal),
+    subscriptionsApi.upgrades(signal),
+    subscriptionsApi.freeDigests(signal),
   ]);
   return {
     access,

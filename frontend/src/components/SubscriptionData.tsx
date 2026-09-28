@@ -1,3 +1,4 @@
+import { ResourceNotice } from "./ResourceNotice";
 import {
   createContext,
   useContext,
@@ -5,7 +6,7 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { Alert, Button, Typography } from "@mui/material";
+import { Typography } from "@mui/material";
 import {
   loadSubscription,
   type SubscriptionSnapshot,
@@ -38,21 +39,8 @@ export function SubscriptionData({ children }: PropsWithChildren) {
   }
   return (
     <>
-      {resource.error && (
-        <Alert
-          severity="warning"
-          sx={{ mb: 2 }}
-          action={
-            <Button disabled={busy} onClick={() => void resource.refresh()}>
-              Retry
-            </Button>
-          }
-        >
-          Could not refresh subscription details. {resource.error}{" "}
-          {resource.data &&
-            "Showing the last complete update. Actions are paused until refresh succeeds."}
-        </Alert>
-      )}
+      <ResourceNotice {...resource} />
+      {resource.error && resource.data && <Typography sx={{ mb: 2 }}>Subscription actions are paused until refresh succeeds.</Typography>}
       {resource.loading && (
         <Typography role="status">Loading subscription…</Typography>
       )}

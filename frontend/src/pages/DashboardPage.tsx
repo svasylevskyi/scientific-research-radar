@@ -1,9 +1,10 @@
+import { ResourceNotice } from "../components/ResourceNotice";
+import { usePollingResource } from "../hooks/usePollingResource";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { AllowanceNotice } from "../components/AllowanceNotice";
 import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
 import TravelExploreRoundedIcon from "@mui/icons-material/TravelExploreRounded";
 import {
-  Alert,
   Box,
   Button,
   CircularProgress,
@@ -12,50 +13,25 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 
-import { ApiError } from "../api/client";
 import { digestsApi } from "../api/digests";
 import { useAuth } from "../auth/AuthContext";
 import { AppHeader } from "../components/AppHeader";
 import { DigestList } from "../components/DigestList";
-import type { Digest } from "../types/digest";
 
 const PAGE_SIZE = 10;
 
 export function DashboardPage() {
   const { user } = useAuth();
   const access = useSubscriptionAccess();
-  const [digests, setDigests] = useState<Digest[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    setIsLoading(true);
-    setError(null);
-    digestsApi
-      .list({ offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE })
-      .then((result) => {
-        if (!active) return;
-        setDigests(result.items);
-        setTotal(result.total);
-      })
-      .catch((caught) => {
-        if (active) {
-          setError(caught instanceof ApiError ? caught.message : "Could not load your digests.");
-        }
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [page]);
+  const load = useCallback((signal: AbortSignal) => digestsApi.list({ offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE, signal }), [page]);
+  const resource = usePollingResource(load, 0);
+  const digests = resource.data?.items ?? [];
+  const total = resource.data?.total ?? 0;
+  const isLoading = resource.loading;
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -95,7 +71,7 @@ export function DashboardPage() {
           <Typography component="h2" variant="h4">Your digests</Typography>
         </Stack>
 
-        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+        <ResourceNotice {...resource} />
         {isLoading ? (
           <Box
             role="status"
@@ -104,7 +80,7 @@ export function DashboardPage() {
           >
             <CircularProgress size={34} />
           </Box>
-        ) : (
+        ) : resource.data ? (
           <>
             <DigestList
               digests={digests}
@@ -125,7 +101,7 @@ export function DashboardPage() {
               </Typography>
             )}
           </>
-        )}
+        ) : null}
       </Container>
     </Box>
   );

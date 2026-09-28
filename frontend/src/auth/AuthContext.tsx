@@ -1,9 +1,12 @@
+import { createResourceLoader } from "../resourceLoading";
+import { startPagePolling } from "../pagePolling";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from "react";
@@ -17,6 +20,8 @@ interface AuthContextValue {
   user: User | null;
   isInitializing: boolean;
   initializationError: string | null;
+  initializationRetryAt: number;
+  initializationRetrying: boolean;
   retryInitialization: () => void;
   login: (input: LoginInput) => Promise<void>;
   register: (input: RegisterInput) => Promise<EmailVerification>;
@@ -28,9 +33,12 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: PropsWithChildren) {
+  const stopInitialization = useRef(() => {});
   const [user, setUser] = useState<User | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [initializationError, setInitializationError] = useState<string | null>(null);
+  const [initializationRetryAt, setInitializationRetryAt] = useState(0);
+  const [initializationRetrying, setInitializationRetrying] = useState(false);
   const [initializationAttempt, setInitializationAttempt] = useState(0);
   const retryInitialization = useCallback(() => setInitializationAttempt((value) => value + 1), []);
 
@@ -38,32 +46,38 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let active = true;
     setIsInitializing(true);
     setInitializationError(null);
-    authApi
-      .refresh()
-      .then((session) => {
-        if (active) setUser(session.user);
-      })
-      .catch((error) => {
-        if (!active) return;
-        if (error instanceof ApiError && error.status === 401) setUser(null);
-        else setInitializationError(error instanceof Error ? error.message : "Could not restore your session. Please retry.");
-      })
-      .finally(() => {
-        if (active) setIsInitializing(false);
-      });
-    return () => {
-      active = false;
-    };
+    const resource = createResourceLoader(async () => {
+      try { return await authApi.refresh(); }
+      catch (error) {
+        if (error instanceof ApiError && error.status === 401) return null;
+        throw error;
+      }
+    }, state => {
+      if (!active) return;
+      if (!state.error) setUser(state.data?.user ?? null);
+      setInitializationError(state.error || null);
+      setInitializationRetryAt(state.retryAt);
+      setInitializationRetrying(state.retrying);
+      setIsInitializing(false);
+    });
+    const stop = startPagePolling(() => resource.refresh(), 0, undefined, resource.nextAllowedAt);
+    const dispose = () => { active = false; stop(); resource.stop(); };
+    stopInitialization.current = dispose;
+    return dispose;
   }, [initializationAttempt]);
 
   useEffect(() => {
-    const clearExpiredSession = () => setUser(null);
+    const clearExpiredSession = () => {
+      stopInitialization.current(); setIsInitializing(false); setInitializationError(null); setUser(null);
+    };
     window.addEventListener(AUTH_EXPIRED_EVENT, clearExpiredSession);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, clearExpiredSession);
   }, []);
 
   const login = useCallback(async (input: LoginInput) => {
     const session = await authApi.login(input);
+    stopInitialization.current();
+    setIsInitializing(false);
     setInitializationError(null);
     setUser(session.user);
   }, []);
@@ -74,16 +88,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const confirmRegistration = useCallback(async (id: string, code: string) => {
     const session = await authApi.confirmRegistration(id, code);
+    stopInitialization.current();
+    setIsInitializing(false);
     setInitializationError(null);
     setUser(session.user);
   }, []);
 
   const logout = useCallback(async () => {
-    try {
-      await authApi.logout();
-    } finally {
-      setUser(null);
-    }
+    stopInitialization.current();
+    await authApi.logout();
+    setUser(null);
   }, []);
 
   const refreshUser = useCallback(async () => {
@@ -91,8 +105,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, isInitializing, initializationError, retryInitialization, login, register, confirmRegistration, logout, refreshUser }),
-    [user, isInitializing, initializationError, retryInitialization, login, register, confirmRegistration, logout, refreshUser],
+    () => ({ user, isInitializing, initializationError, initializationRetryAt, initializationRetrying, retryInitialization, login, register, confirmRegistration, logout, refreshUser }),
+    [user, isInitializing, initializationError, initializationRetryAt, initializationRetrying, retryInitialization, login, register, confirmRegistration, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

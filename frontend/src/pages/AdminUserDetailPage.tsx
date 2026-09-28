@@ -1,3 +1,5 @@
+import { ResourceNotice } from "../components/ResourceNotice";
+import { usePollingResource } from "../hooks/usePollingResource";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
@@ -21,7 +23,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 
 import { adminApi } from "../api/admin";
@@ -36,38 +38,28 @@ import type { User, UserRole } from "../types/auth";
 export function AdminUserDetailPage() {
   const { userId = "" } = useParams();
   const { user: currentUser, refreshUser } = useAuth();
-  const [managedUser, setManagedUser] = useState<User | null>(null);
+  const [managedUserRecord, setManagedUser] = useState<User | null>(null);
+  const managedUser = managedUserRecord?.id === userId ? managedUserRecord : null;
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [isActive, setIsActive] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pendingRole, setPendingRole] = useState<UserRole | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const load = useCallback((signal: AbortSignal) => adminApi.getUser(userId, signal), [userId]);
+  const resource = usePollingResource(load, 0);
+  const isLoading = resource.loading;
   useEffect(() => {
-    let active = true;
-    adminApi
-      .getUser(userId)
-      .then((result) => {
-        if (!active) return;
-        setManagedUser(result);
-        setFullName(result.full_name);
-        setEmail(result.email);
-        setIsActive(result.is_active);
-      })
-      .catch((caught) => {
-        if (active) setError(caught instanceof ApiError ? caught.message : "Could not load this user.");
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+    setManagedUser(null); setError(null); setSuccess(null);
   }, [userId]);
+  useEffect(() => {
+    const result = resource.data;
+    if (!result) return;
+    setManagedUser(result); setFullName(result.full_name); setEmail(result.email); setIsActive(result.is_active);
+  }, [resource.data]);
 
   const isSelf = managedUser?.id === currentUser?.id;
   const isProtected = Boolean(managedUser?.is_super_admin || isSelf);
@@ -116,10 +108,11 @@ export function AdminUserDetailPage() {
         <Button component={RouterLink} to="/admin/users" color="inherit" startIcon={<ArrowBackRoundedIcon />} sx={{ mb: 2 }}>
           Back to users
         </Button>
+        <ResourceNotice {...resource} />
         {isLoading ? (
           <Box role="status" aria-label="Loading user" sx={{ py: 10, display: "grid", placeItems: "center" }}><CircularProgress size={34} /></Box>
         ) : !managedUser ? (
-          <Alert severity="error">{error ?? "User not found."}</Alert>
+          resource.error ? null : <Typography role="status">Opening user…</Typography>
         ) : (
           <>
             <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={2} alignItems={{ sm: "center" }} sx={{ mb: 3 }}>

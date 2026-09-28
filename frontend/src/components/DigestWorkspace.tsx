@@ -1,4 +1,5 @@
-import { startPagePolling } from "../pagePolling";
+import { usePollingResource } from "../hooks/usePollingResource";
+import { ResourceNotice } from "./ResourceNotice";
 import { RetryRunButton } from "./RetryRunButton";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
@@ -18,7 +19,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi } from "../api/digests";
@@ -80,53 +81,18 @@ export function DigestWorkspace({
   const to = toOverride ?? runDays.at(-1) ?? "";
   const [tab, setTab] = useState("briefing");
   const [adminSection, setAdminSection] = useState("diagnostics");
-  const [loadedRun, setLoadedRun] = useState<DigestRunDetail | null>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const run =
-    latestRun?.id === selectedId
-      ? latestRun
-      : loadedRun?.id === selectedId
-        ? loadedRun
-        : null;
+  const load = useCallback((signal: AbortSignal) => !selectedId || latestRun?.id === selectedId
+    ? Promise.resolve(null) : admin ? adminDigestsApi.getRun(digestId, selectedId, signal)
+      : digestRunsApi.get(digestId, selectedId, signal), [admin, digestId, selectedId, latestRun?.id]);
+  const resource = usePollingResource(load, 10000);
+  const loadedRun = resource.data;
+  const loading = resource.loading && latestRun?.id !== selectedId;
+  const run = latestRun?.id === selectedId ? latestRun : loadedRun?.id === selectedId ? loadedRun : null;
 
   useEffect(() => {
     setError(null);
-    setLoadedRun(null);
-    if (!selectedId || latestRun?.id === selectedId) {
-      setLoading(false);
-      return;
-    }
-    let active = true;
-    setLoading(true);
-    const stop = startPagePolling(async () => {
-      try {
-        const result = admin
-          ? await adminDigestsApi.getRun(digestId, selectedId)
-          : await digestRunsApi.get(digestId, selectedId);
-        if (active) {
-          setLoadedRun(result);
-          setError(null);
-        }
-      } catch (caught) {
-        if (active)
-          setError(
-            caught instanceof ApiError
-              ? caught.message
-              : "Could not refresh this run.",
-          );
-      } finally {
-        if (active) setLoading(false);
-      }
-    }, 10000);
-    return () => {
-      active = false;
-      stop();
-    };
-  }, [admin, digestId, selectedId, latestRun?.id]);
-
-  useEffect(() => {
     setTab("briefing");
     setAdminSection("diagnostics");
   }, [selectedId]);
@@ -162,6 +128,7 @@ export function DigestWorkspace({
       next.set("run_id", id);
       return next;
     });
+    setError(null);
     setTab("briefing");
     setError(null);
   }
@@ -339,6 +306,7 @@ export function DigestWorkspace({
             or select a matching run.
           </Alert>
         )}
+        <ResourceNotice {...resource} />
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -436,7 +404,7 @@ export function DigestWorkspace({
                           run.id,
                           feedback,
                         );
-                        setLoadedRun(updated);
+                        await resource.refresh();
                         onUpdate(updated);
                       } catch (caught) {
                         setError(

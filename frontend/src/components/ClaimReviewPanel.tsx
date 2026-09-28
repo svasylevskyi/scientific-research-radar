@@ -1,3 +1,4 @@
+import { ResourceNotice } from "./ResourceNotice";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Link, MenuItem, Pagination, Stack, TextField, Typography } from "@mui/material";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -60,9 +61,9 @@ export function ClaimReviewPanel(props: Props) {
   const runId = "runId" in props ? props.runId : null;
   const benchmarkId = "benchmarkId" in props ? props.benchmarkId : null;
   const [page, setPage] = useState(1);
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal: AbortSignal) => {
     const target: ClaimReviewTarget = digestId && runId ? { digest_id: digestId, run_id: runId } : { benchmark_id: benchmarkId! };
-    const [settings, history] = await Promise.all([researchQualityApi.get(), claimReviewsApi.history(target, page)]);
+    const [settings, history] = await Promise.all([researchQualityApi.get(signal), claimReviewsApi.history(target, page, signal)]);
     return { settings, history };
   }, [digestId, runId, benchmarkId, page]);
   const resource = usePollingResource(load, 15000);
@@ -71,7 +72,7 @@ export function ClaimReviewPanel(props: Props) {
 
 type ReviewResource = {
   data: { settings: QualitySettings; history: Awaited<ReturnType<typeof claimReviewsApi.history>> } | null;
-  loading: boolean; error: string; refresh: () => Promise<void>;
+  loading: boolean; error: string; retryAt?: number; retrying?: boolean; refresh: () => Promise<void>;
 };
 
 /** Controls shared by the run overview and the standalone benchmark workspace. */
@@ -151,7 +152,8 @@ export function ClaimReviewControls(props: Props & {
       <Button variant="outlined" disabled={!canStart} onClick={() => setConfirm(true)}>{benchmarkId ? "Compare AI with benchmark (paid)" : "Review claims with AI (paid)"}</Button>
       {showRefresh && <Button disabled={busy || resource.loading} onClick={() => void resource.refresh()}>Refresh AI reviews</Button>}
     </Stack>
-    {(error || (showRefresh && resource.error)) && <Alert severity="error">{error || resource.error}</Alert>}
+    {error && <Alert severity="error">{error}</Alert>}
+    {showRefresh && <ResourceNotice {...resource} />}
     {!resource.loading && !jobs.length && <Typography variant="body2">No AI reviews have been recorded.</Typography>}
     {jobs.map(job => <Accordion key={job.id} expanded={selectedId === job.id} onChange={(_, expanded) => { setError(""); setSelectedId(expanded ? job.id : null); }}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography>{new Date(job.created_at).toLocaleString()} · {title(job.status)} · {job.completed_claims}/{job.selected_claims} claims{job.publication ? ` · Publication ${job.publication} / ${job.split}` : ""}</Typography></AccordionSummary>

@@ -1,6 +1,7 @@
+import { ResourceNotice } from "../components/ResourceNotice";
+import { usePollingResource } from "../hooks/usePollingResource";
 import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
 import {
-  Alert,
   Box,
   CircularProgress,
   Container,
@@ -8,15 +9,13 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { ApiError } from "../api/client";
 import { adminDigestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
 import { DigestList } from "../components/DigestList";
 import { DigestOwnerFilter } from "../components/DigestOwnerFilter";
-import type { AdminDigest } from "../types/digest";
 
 const PAGE_SIZE = 20;
 
@@ -24,46 +23,15 @@ export function AdminDigestsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const ownerId = searchParams.get("owner_id") ?? "";
   const ownerQuery = searchParams.get("owner_query") ?? "";
-  const [digests, setDigests] = useState<AdminDigest[]>([]);
-  const [total, setTotal] = useState(0);
   const filterKey = `${ownerId}:${ownerQuery}`;
   const [pagination, setPagination] = useState({ key: filterKey, page: 1 });
   const page = pagination.key === filterKey ? pagination.page : 1;
   const setPage = (page: number) => setPagination({ key: filterKey, page });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
-    setIsLoading(true);
-    setError(null);
-    adminDigestsApi
-      .list({
-        offset: (page - 1) * PAGE_SIZE,
-        limit: PAGE_SIZE,
-        ownerId: ownerId || undefined,
-        ownerQuery: ownerQuery || undefined,
-        signal: controller.signal,
-      })
-      .then((result) => {
-        if (!active) return;
-        setDigests(result.items);
-        setTotal(result.total);
-      })
-      .catch((caught) => {
-        if (active) {
-          setError(caught instanceof ApiError ? caught.message : "Could not load digests.");
-        }
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [ownerId, ownerQuery, page]);
+  const load = useCallback((signal: AbortSignal) => adminDigestsApi.list({ offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE, ownerId: ownerId || undefined, ownerQuery: ownerQuery || undefined, signal }), [page, ownerId, ownerQuery]);
+  const resource = usePollingResource(load, 0);
+  const digests = resource.data?.items ?? [];
+  const total = resource.data?.total ?? 0;
+  const isLoading = resource.loading;
 
   function changeOwner(filter: { ownerId?: string; query?: string }) {
     setPage(1);
@@ -95,7 +63,7 @@ export function AdminDigestsPage() {
           <DigestOwnerFilter key={`${ownerId}:${ownerQuery}`} ownerId={ownerId} query={ownerQuery} onChange={changeOwner} />
         </Stack>
 
-        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+        <ResourceNotice {...resource} />
         {isLoading ? (
           <Box
             role="status"
@@ -104,7 +72,7 @@ export function AdminDigestsPage() {
           >
             <CircularProgress size={34} />
           </Box>
-        ) : (
+        ) : resource.data ? (
           <>
             <DigestList
               digests={digests}
@@ -133,7 +101,7 @@ export function AdminDigestsPage() {
               </Typography>
             )}
           </>
-        )}
+        ) : null}
       </Container>
     </Box>
   );

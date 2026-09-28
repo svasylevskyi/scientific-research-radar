@@ -1,3 +1,4 @@
+import { ResourceNotice } from "./ResourceNotice";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Pagination, Paper, Stack, Typography } from "@mui/material";
 import { useCallback, useRef, useState, type ReactNode } from "react";
@@ -29,7 +30,7 @@ export function AdminRunQuality({ digestId, run }: { digestId: string; run: Dige
   const pending = useRef(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState<QualityEvaluation | null>(null);
-  const load = useCallback(() => loadRunQualityResults(digestId, run.id, pages), [digestId, run.id, pages]);
+  const load = useCallback((signal: AbortSignal) => loadRunQualityResults(digestId, run.id, pages, signal), [digestId, run.id, pages]);
   const resource = usePollingResource(load, 30000, true);
   const data = resource.data;
   const currentRun = data?.run ?? run;
@@ -62,7 +63,8 @@ export function AdminRunQuality({ digestId, run }: { digestId: string; run: Dige
     </Stack>
     <Typography variant="body2" color="text.secondary">Refresh reloads saved results only, with no external service requests or LLM calls. Expand an area to inspect results or run a check.</Typography>
     {resource.loading && <Typography role="status">Loading saved quality results…</Typography>}
-    {resource.error && <Alert severity="warning">{data ? "Saved results may be outdated. Check actions are paused until refresh succeeds. " : "Could not load saved quality results. "}{resource.error}</Alert>}
+    <ResourceNotice {...resource} />
+    {resource.error && data && <Typography>Saved results may be outdated. Check actions are paused until refresh succeeds.</Typography>}
     <Paper variant="outlined" sx={{ p: 2 }}><ResearchQualityNotice run={currentRun} admin /></Paper>
     <Box>
       <QualitySection title="Structural checks" summary={`${qualityLabels[local.status]} · ${latest ? "Latest manual check" : "Original automatic check"}`}>

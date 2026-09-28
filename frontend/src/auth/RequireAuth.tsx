@@ -1,11 +1,12 @@
-import { Alert, Box, Button, CircularProgress } from "@mui/material";
+import { ResourceNotice } from "../components/ResourceNotice";
+import { Box, CircularProgress } from "@mui/material";
 import type { PropsWithChildren } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
 import { useAuth } from "./AuthContext";
 
 export function RequireAuth({ children }: PropsWithChildren) {
-  const { user, isInitializing, initializationError, retryInitialization } = useAuth();
+  const { user, isInitializing, initializationError, initializationRetryAt, initializationRetrying, retryInitialization } = useAuth();
   const location = useLocation();
 
   if (isInitializing) {
@@ -21,9 +22,8 @@ export function RequireAuth({ children }: PropsWithChildren) {
   }
 
   if (initializationError && !user) {
-    return <Box sx={{ p: 3 }}><Alert severity="warning" action={<Button onClick={retryInitialization}>Retry</Button>}>
-      {initializationError}
-    </Alert></Box>;
+    return <Box sx={{ p: 3 }}><ResourceNotice error={initializationError} retryAt={initializationRetryAt}
+      retrying={initializationRetrying} refresh={retryInitialization} /></Box>;
   }
 
   if (!user) {
