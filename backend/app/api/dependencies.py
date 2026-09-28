@@ -61,6 +61,16 @@ def get_current_user(
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+def get_optional_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    db: DbSession, settings: AppSettings,
+) -> User | None:
+    return get_current_user(credentials, db, settings) if credentials else None
+
+
+OptionalUser = Annotated[User | None, Depends(get_optional_user)]
+
+
 def require_admin(current_user: CurrentUser) -> User:
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(

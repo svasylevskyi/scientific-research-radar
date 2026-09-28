@@ -23,10 +23,12 @@ import { useAuth } from "../auth/AuthContext";
 import { isValidNewPassword, passwordRequirementsText } from "../auth/passwordRequirements";
 import { AppHeader } from "../components/AppHeader";
 import { EmailVerificationForm, type EmailVerification } from "../components/EmailVerificationForm";
+import { CloseAccountDialog } from "../components/CloseAccountDialog";
 
 export function ProfilePage() {
   const { user, refreshUser, logout } = useAuth();
   const navigate = useNavigate();
+  const [closing, setClosing] = useState(false);
   const [fullName, setFullName] = useState(user?.full_name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -197,8 +199,18 @@ export function ProfilePage() {
               </Button>
             </Stack>
           </Paper>
+          {!user?.is_super_admin && <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
+            <Typography variant="h6" sx={{ mb: 1 }}>Close account</Typography>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>Permanently end access, cancel Radar subscriptions, and remove your saved research and profile. You will review the consequences before confirming.</Typography>
+            <Button color="error" variant="outlined" onClick={() => setClosing(true)}>Close account</Button>
+          </Paper>}
         </Stack>
       </Container>
+      <CloseAccountDialog open={closing} onClose={() => setClosing(false)} onAccepted={async () => {
+        setClosing(false);
+        try { await logout(); } catch { /* Server sessions were already revoked by closure. */ }
+        navigate("/radar/login", { replace: true, state: { accountClosing: true } });
+      }} />
     </Box>
   );
 }

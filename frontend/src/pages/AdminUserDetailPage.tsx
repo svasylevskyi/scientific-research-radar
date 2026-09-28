@@ -22,18 +22,19 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useState, type FormEvent } from "react";
-import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
+import { Link as RouterLink, useParams } from "react-router-dom";
 
 import { adminApi } from "../api/admin";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { AppHeader } from "../components/AppHeader";
+import { CloseAccountDialog } from "../components/CloseAccountDialog";
+import { AdminAccountClosure } from "../components/AdminAccountClosure";
 import { UserRoleChip } from "../components/UserRoleChip";
 import type { User, UserRole } from "../types/auth";
 
 export function AdminUserDetailPage() {
   const { userId = "" } = useParams();
-  const navigate = useNavigate();
   const { user: currentUser, refreshUser } = useAuth();
   const [managedUser, setManagedUser] = useState<User | null>(null);
   const [fullName, setFullName] = useState("");
@@ -108,19 +109,6 @@ export function AdminUserDetailPage() {
     }
   }
 
-  async function deleteUser() {
-    setIsSaving(true);
-    setError(null);
-    try {
-      await adminApi.deleteUser(userId);
-      navigate("/admin/users", { replace: true });
-    } catch (caught) {
-      setConfirmDelete(false);
-      setError(caught instanceof ApiError ? caught.message : "Could not delete this user.");
-      setIsSaving(false);
-    }
-  }
-
   return (
     <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
@@ -176,7 +164,8 @@ export function AdminUserDetailPage() {
               <Button component={RouterLink} to={`/admin/billing-sync?user_id=${managedUser.id}`} sx={{ mt: 2 }}>Billing synchronization</Button>
             </Paper>
 
-            <Paper component="form" onSubmit={saveDetails} variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
+            {managedUser.closure_state && <AdminAccountClosure userId={userId} />}
+            {!managedUser.closure_state && <Paper component="form" onSubmit={saveDetails} variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, borderRadius: 3 }}>
               <Typography variant="h6" sx={{ mb: 2.5 }}>Account details</Typography>
               <Stack spacing={2.25}>
                 <TextField label="Full name" value={fullName} onChange={(event) => setFullName(event.target.value)} required fullWidth />
@@ -206,14 +195,14 @@ export function AdminUserDetailPage() {
               </Button>
 
               <Divider sx={{ my: 3.5 }} />
-              <Typography variant="h6" color="error.main" sx={{ mb: 0.75 }}>Delete account</Typography>
+              <Typography variant="h6" color="error.main" sx={{ mb: 0.75 }}>Close account</Typography>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
-                Permanently removes the user, their digests, and all active sessions.
+                Ends access immediately, cancels Radar subscriptions, and removes personal data through a tracked closure workflow.
               </Typography>
               <Button color="error" variant="outlined" startIcon={<DeleteOutlineRoundedIcon />} disabled={isSaving || isProtected} onClick={() => setConfirmDelete(true)}>
-                Delete user
+                Close account
               </Button>
-            </Paper>
+            </Paper>}
           </>
         )}
       </Container>
@@ -249,18 +238,11 @@ export function AdminUserDetailPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Delete this user?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {managedUser ? `${managedUser.full_name}'s account will be permanently deleted. This action cannot be undone.` : "This account will be permanently deleted."}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button onClick={() => setConfirmDelete(false)} disabled={isSaving}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={deleteUser} disabled={isSaving}>Delete permanently</Button>
-        </DialogActions>
-      </Dialog>
+      <CloseAccountDialog open={confirmDelete} onClose={() => setConfirmDelete(false)} userId={userId} name={managedUser?.full_name}
+        onAccepted={(closure) => {
+          setConfirmDelete(false);
+          setManagedUser((previous) => previous ? { ...previous, is_active: false, closure_state: closure.state } : previous);
+        }} />
     </Box>
   );
 }

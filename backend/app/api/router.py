@@ -1,4 +1,4 @@
-from app.api.routes import admin_subscriptions, contact
+from app.api.routes import admin_subscriptions, contact, account_closure
 from app.api.routes import research_quality
 from app.api.routes import benchmark_review
 from app.api.routes import claim_reviews
@@ -8,6 +8,7 @@ from app.api.security import guard_request
 from app.api.routes import admin_spending, admin_pricing, admin_digests, admin_users, auth, digest_runs, digests, users
 
 api_router = APIRouter(dependencies=[Depends(guard_request)])
+api_router.include_router(account_closure.router, tags=["account closure"])
 api_router.include_router(claim_reviews.router, prefix="/admin/research-quality/claim-reviews", tags=["administration", "research quality"])
 api_router.include_router(benchmark_review.router, prefix="/admin/research-quality/benchmarks", tags=["administration", "research quality"])
 api_router.include_router(research_quality.router, prefix="/admin/research-quality", tags=["administration", "research quality"])

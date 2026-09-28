@@ -113,7 +113,7 @@ class StripeSandboxClient:
                 if ("livemode" in result and result["livemode"] is not self.settings.stripe_livemode) or (
                     path != "billing_portal/sessions"
                     and not (
-                        path.split("?")[0] == "invoices"
+                        path.split("?")[0] in {"invoices", "invoiceitems", "checkout/sessions"}
                         and result.get("object") == "list"
                     )
                     and result.get("livemode") is not self.settings.stripe_livemode

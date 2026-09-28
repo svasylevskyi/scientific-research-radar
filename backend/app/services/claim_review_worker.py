@@ -17,6 +17,7 @@ from app.evaluation.models import fingerprint
 from app.evaluation.scoring import evaluate
 from app.models.claim_review import ClaimReview, ClaimReviewRequest
 from app.models.user import User, UserRole
+from app.models.digest_run import DigestRun
 from app.schemas.claim_review import ClaimReviewConfig
 from app.services.benchmark_review_service import export_bundle
 from app.services.claim_review_provider import PROMPT_VERSION, request_review, validate_verdict
@@ -76,6 +77,11 @@ def tick(factory: sessionmaker[Session], settings: Settings, provider: Provider 
             finish(db, job, error="AI claim review was switched Off. No further requests were submitted.")
             return True
         actor = db.get(User, job.created_by) if job.created_by else None
+        if job.run_id:
+            owner_closing = db.scalar(select(User.closure_requested_at).join(DigestRun, DigestRun.owner_id == User.id).where(DigestRun.id == job.run_id))
+            if owner_closing is not None:
+                finish(db, job, error="The digest owner closed their account. Review stopped.")
+                return True
         try:
             if actor is None or not actor.is_active or (actor.role != UserRole.ADMIN and not actor.is_super_admin):
                 raise HTTPException(403)

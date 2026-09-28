@@ -120,8 +120,9 @@ def test_admin_can_list_view_update_promote_demote_and_delete_user(
     assert demoted.json()["role"] == "user"
 
     deleted = client.delete(f"/api/v1/admin/users/{member_id}", headers=admin_access)
-    assert deleted.status_code == 204
-    assert client.get(f"/api/v1/admin/users/{member_id}", headers=admin_access).status_code == 404
+    assert deleted.status_code == 403
+    assert "Close account" in deleted.json()["detail"]
+    assert client.get(f"/api/v1/admin/users/{member_id}", headers=admin_access).status_code == 200
 
 
 def test_super_admin_cannot_be_deactivated_demoted_or_deleted(

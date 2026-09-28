@@ -21,6 +21,7 @@ class UserRead(BaseModel):
 
 class AdminUserRead(UserRead):
     subscription_plan_name: str | None = None
+    closure_state: str | None = None
 
 
 class UserListResponse(BaseModel):

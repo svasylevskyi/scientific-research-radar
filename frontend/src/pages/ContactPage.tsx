@@ -34,7 +34,7 @@ export function ContactPage({ workspace = false }: { workspace?: boolean }) {
     }
     setSending(true);
     try {
-      const result = await contactApi.send({ name: name.trim(), email: email.trim(), message: message.trim() });
+      const result = await contactApi.send({ name: name.trim(), email: email.trim(), message: message.trim() }, Boolean(user));
       setMessage("");
       setNotice({ severity: "success", text: result.message });
     } catch (error) {

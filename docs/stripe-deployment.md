@@ -166,6 +166,10 @@ reconciliation continue, and Stripe may still execute already scheduled changes.
 Background change/upgrade command retries pause while checkout is disabled.
 Keep credentials and webhook processing working for existing paying subscribers.
 
+Account closure has its own cancellation worker and requires additional restricted
+key permissions, even when checkout is disabled. See [account closure](account-closure.md)
+for setup, pending-invoice handling, manual Stripe refunds and acceptance checks.
+
 References: [Stripe keys and modes](https://docs.stripe.com/keys),
 [webhooks](https://docs.stripe.com/webhooks),
 [portal configuration](https://docs.stripe.com/customer-management/configure-portal).

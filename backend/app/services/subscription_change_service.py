@@ -322,10 +322,11 @@ def undo(db, settings, uid, change_id):
 
 
 def tick(factory, settings):
+    from app.models.user import User
     if not settings.effective_stripe_checkout_enabled:
         return False
     with factory() as db:
-        row = db.scalar(select(Change).where(Change.state.in_(WORK), Change.next_attempt_at <= now())
+        row = db.scalar(select(Change).join(User, User.id == Change.user_id).where(User.closure_requested_at.is_(None), Change.state.in_(WORK), Change.next_attempt_at <= now())
             .order_by(Change.next_attempt_at, Change.id).limit(1))
         if not row:
             return False

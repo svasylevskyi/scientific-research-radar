@@ -18,6 +18,7 @@ from app.models.digest_run import (
     DigestRunTrigger,
 )
 from app.radar.client import RadarTokenUsage
+from app.models.user import User
 from app.repositories.digest_run_repository import DigestRunRepository
 
 
@@ -109,7 +110,9 @@ class RunStateRepository:
         now = datetime.now(timezone.utc)
         candidate = self.db.scalar(
             select(DigestRun.id)
+            .join(User, User.id == DigestRun.owner_id)
             .where(
+                User.closure_requested_at.is_(None),
                 DigestRun.status.in_((DigestRunStatus.QUEUED, DigestRunStatus.RUNNING)),
                 or_(
                     DigestRun.lease_expires_at.is_(None),
@@ -125,6 +128,7 @@ class RunStateRepository:
             update(DigestRun)
             .where(
                 DigestRun.id == candidate,
+                DigestRun.owner_id.in_(select(User.id).where(User.closure_requested_at.is_(None))),
                 DigestRun.status.in_((DigestRunStatus.QUEUED, DigestRunStatus.RUNNING)),
                 or_(
                     DigestRun.lease_expires_at.is_(None),

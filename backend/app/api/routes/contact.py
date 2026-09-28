@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 
-from app.api.dependencies import CurrentAdmin, DbSession
+from app.api.dependencies import CurrentAdmin, DbSession, OptionalUser
 from app.models.contact_message import ContactMessage
 from app.schemas.contact_message import (
     ContactMessageCreate, ContactMessageList, ContactMessageRead,
@@ -17,8 +17,12 @@ admin_router = APIRouter()
 
 
 @router.post("", response_model=ContactMessageReceipt, status_code=201)
-def submit_message(payload: ContactMessageCreate, db: DbSession) -> ContactMessageReceipt:
-    db.add(ContactMessage(**payload.model_dump()))
+def submit_message(payload: ContactMessageCreate, db: DbSession, current_user: OptionalUser) -> ContactMessageReceipt:
+    if current_user:
+        db.refresh(current_user, with_for_update=True)
+        if current_user.closure_requested_at:
+            raise HTTPException(409, "Your account is closing. Use the public Contact page after signing out.")
+    db.add(ContactMessage(**payload.model_dump(), user_id=current_user.id if current_user else None))
     db.commit()
     return ContactMessageReceipt(message="Your message has been sent to the Radar administration team.")
 

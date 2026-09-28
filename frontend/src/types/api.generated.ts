@@ -795,6 +795,92 @@ export interface paths {
         patch: operations["update_user_api_v1_admin_users__user_id__patch"];
         trace?: never;
     };
+    "/api/v1/admin/users/{user_id}/closure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Closure Status */
+        get: operations["closure_status_api_v1_admin_users__user_id__closure_get"];
+        put?: never;
+        /** Close Managed Account */
+        post: operations["close_managed_account_api_v1_admin_users__user_id__closure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/closure/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recover Checkout */
+        post: operations["recover_checkout_api_v1_admin_users__user_id__closure_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/closure/contact-messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Contact Messages */
+        get: operations["contact_messages_api_v1_admin_users__user_id__closure_contact_messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/closure/contact-messages/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Contact Message */
+        post: operations["review_contact_message_api_v1_admin_users__user_id__closure_contact_messages__message_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/closure/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Closure */
+        post: operations["retry_closure_api_v1_admin_users__user_id__closure_retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/{user_id}/role": {
         parameters: {
             query?: never;
@@ -1487,6 +1573,23 @@ export interface paths {
         patch: operations["update_me_api_v1_users_me_patch"];
         trace?: never;
     };
+    "/api/v1/users/me/closure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close My Account */
+        post: operations["close_my_account_api_v1_users_me_closure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me/email-verification": {
         parameters: {
             query?: never;
@@ -1932,6 +2035,8 @@ export interface components {
         };
         /** AdminUserRead */
         AdminUserRead: {
+            /** Closure State */
+            closure_state?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -2494,6 +2599,16 @@ export interface components {
             /** Revision */
             revision: number;
         };
+        /** CheckoutRecovery */
+        CheckoutRecovery: {
+            /**
+             * Attempt Id
+             * Format: uuid
+             */
+            attempt_id: string;
+            /** Checkout Id */
+            checkout_id: string;
+        };
         /** CheckoutRequest */
         CheckoutRequest: {
             /**
@@ -2704,6 +2819,71 @@ export interface components {
              * @enum {string}
              */
             split?: "development" | "heldout";
+        };
+        /** ClosureIssue */
+        ClosureIssue: {
+            /** Attempt Id */
+            attempt_id?: string | null;
+            /** Kind */
+            kind: string;
+            /** Reference */
+            reference: string;
+        };
+        /** ClosureRead */
+        ClosureRead: {
+            /** Acknowledgement Sent At */
+            acknowledgement_sent_at: string | null;
+            /** Attempts */
+            attempts: number;
+            /** Billing Issues */
+            billing_issues: components["schemas"]["ClosureIssue"][];
+            /** Billing Resolved At */
+            billing_resolved_at: string | null;
+            /** Completed At */
+            completed_at: string | null;
+            /** Completion Sent At */
+            completion_sent_at: string | null;
+            /** Data Removed At */
+            data_removed_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Next Attempt At */
+            next_attempt_at: string | null;
+            /** Notice State */
+            notice_state: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "waiting" | "needs_review" | "completed";
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** ClosureRequest */
+        ClosureRequest: {
+            /**
+             * Confirmation
+             * @constant
+             */
+            confirmation: "CLOSE";
+            /** Current Password */
+            current_password: string;
+        };
+        /** ContactClosureDecision */
+        ContactClosureDecision: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "delete" | "unrelated";
         };
         /** ContactMessageCreate */
         ContactMessageCreate: {
@@ -6725,6 +6905,205 @@ export interface operations {
             };
         };
     };
+    closure_status_api_v1_admin_users__user_id__closure_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosureRead"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_managed_account_api_v1_admin_users__user_id__closure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosureRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recover_checkout_api_v1_admin_users__user_id__closure_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutRecovery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosureRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    contact_messages_api_v1_admin_users__user_id__closure_contact_messages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactMessageRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_contact_message_api_v1_admin_users__user_id__closure_contact_messages__message_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactClosureDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosureRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_closure_api_v1_admin_users__user_id__closure_retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosureRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_user_role_api_v1_admin_users__user_id__role_put: {
         parameters: {
             query?: never;
@@ -8103,6 +8482,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_my_account_api_v1_users_me_closure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosureRead"];
                 };
             };
             /** @description Validation Error */

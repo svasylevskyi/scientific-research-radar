@@ -61,6 +61,8 @@ def receive(db, settings, event):
         raise billing.Error('Invalid sandbox event object.', 400) from None
     if not checkout:
         return {'received': True, 'ignored': True}
+    if db.scalar(select(User.closure_requested_at).where(User.id == checkout.user_id)) is not None:
+        return {'received': True, 'ignored': True}
     if checkout.livemode != settings.stripe_livemode:
         raise billing.Error('Event checkout belongs to a different Stripe mode.', 400)
     # No card/customer details or arbitrary provider fields are stored.
@@ -77,7 +79,7 @@ def seed_reconciliation(db):
     # No full Stripe account scans. Reconcile every locally known attempt,
     # including historical ones, in bounded batches without starvation.
     missing = ~exists(select(Job.id).where(Job.checkout_id == SandboxCheckout.id, Job.kind == 'reconcile'))
-    checkouts = list(db.scalars(select(SandboxCheckout).where(missing).order_by(SandboxCheckout.created_at, SandboxCheckout.id).limit(25)))
+    checkouts = list(db.scalars(select(SandboxCheckout).join(User).where(missing, User.closure_requested_at.is_(None)).order_by(SandboxCheckout.created_at, SandboxCheckout.id).limit(25)))
     for checkout in checkouts:
         db.execute(insert(db, Job).values(**job_values(checkout, 'reconcile:' + str(checkout.id), 'reconcile', stamp))
                    .on_conflict_do_nothing(index_elements=['id']))
@@ -118,6 +120,11 @@ def process(factory, settings, job_id, token, *, client=None):
                 return False
             job = db.get(Job, job_id)
             checkout = db.get(SandboxCheckout, job.checkout_id)
+            if db.scalar(select(User.closure_requested_at).where(User.id == job.user_id)) is not None:
+                job.state, job.next_attempt_at = 'processed', None
+                job.lease_token, job.lease_expires_at = None, None
+                db.commit()
+                return True
             if job.kind == 'webhook':
                 billing.handle_event(db, settings, job.payload, client=client, commit=False)
                 following = None
