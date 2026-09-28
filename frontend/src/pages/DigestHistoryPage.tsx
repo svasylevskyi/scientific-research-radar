@@ -17,6 +17,7 @@ import { AdminDigestNavigation } from "../components/AdminDigestNavigation";
 import { DigestWorkspace } from "../components/DigestWorkspace";
 import { usePollingResource } from "../hooks/usePollingResource";
 import { loadRunHistory } from "../runHistory";
+import { listReturnTo } from "../navigationContext";
 export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
   const { digestId = "" } = useParams();
   const location = useLocation();
@@ -42,7 +43,7 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
           <>
             <Button
               component={Link}
-              to="/admin/digests"
+              to={listReturnTo(new URLSearchParams(location.search), "/admin/digests")}
               color="inherit"
               startIcon={<ArrowBackRoundedIcon />}
               sx={{ mb: 2 }}
@@ -52,7 +53,7 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
             <AdminDigestNavigation digestId={digestId} current="runs" />
           </>
         ) : (
-          <Button component={Link} to={`/radar/digests/${digestId}`}>
+          <Button component={Link} to={`/radar/digests/${digestId}${location.search}`}>
             Back to digest
           </Button>
         )}
@@ -104,7 +105,7 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
                   <Typography>{data.digest.topic}</Typography>
                   <Button
                     component={Link}
-                    to={`${admin ? "/admin" : "/radar"}/digests/${digestId}`}
+                    to={`${admin ? "/admin" : "/radar"}/digests/${digestId}${location.search}`}
                   >
                     Open digest details and settings
                   </Button>

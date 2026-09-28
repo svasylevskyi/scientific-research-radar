@@ -3,6 +3,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Recovery when a main push did not start CI or its release artifacts expired.
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -155,10 +157,10 @@ jobs:
       - name: Test built images, stack, backup, and restore
         run: bash infra/scripts/ci-smoke.sh --prebuilt
       - name: Save verified images for publication
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         run: docker save radar-ci-backend radar-ci-web | gzip -1 > "$RUNNER_TEMP/radar-images.tar.gz"
       - uses: actions/upload-artifact@v7.0.1
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         with:
           name: tested-images-${{ github.sha }}
           path: ${{ runner.temp }}/radar-images.tar.gz
@@ -183,7 +185,7 @@ jobs:
         run: python3 infra/scripts/ci_policy.py verify
   publish:
     needs: [ci-passed, containers]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read

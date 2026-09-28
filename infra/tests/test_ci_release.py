@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/ci_release.py'
 spec = importlib.util.spec_from_file_location('ci_release', SCRIPT)
@@ -39,6 +40,7 @@ class ReleaseTests(unittest.TestCase):
                 release.main()
             self.assertIn('head_sha=' + SHA, request.call_args.args[0])
             self.assertIn('/actions/workflows/ci.yml/runs?', request.call_args.args[0])
+            self.assertNotIn('event', parse_qs(urlsplit(request.call_args.args[0]).query))
             self.assertEqual(output.read_text(), f'run_id=123\nrun_attempt=1\nartifact=verified-release-{SHA}-1\n')
 
     def test_only_exact_main_ci_can_authorize_deployment(self):
@@ -50,9 +52,51 @@ class ReleaseTests(unittest.TestCase):
             {'head_repository': {'full_name': 'someone/fork'}},
             {'head_repository': None}, {'status': 'in_progress'},
             {'conclusion': 'failure'}, {'conclusion': 'cancelled'}, {'conclusion': 'skipped'},
+            {'event': 'pull_request_target'}, {'event': 'workflow_run'}, {'event': 'schedule'},
         ):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 release.select_run([run | changes], REPO, SHA)
+
+    def test_manual_main_recovery_is_accepted_only_after_successful_full_ci(self):
+        manual = successful_run(event='workflow_dispatch')
+        self.assertEqual(release.select_run([manual], REPO, SHA), manual)
+        for changes in (
+            {'head_sha': 'd' * 40}, {'head_branch': 'feature/recovery'},
+            {'head_repository': {'full_name': 'someone/fork'}},
+            {'path': '.github/workflows/deploy-development.yml'},
+            {'status': 'in_progress', 'conclusion': None}, {'conclusion': 'failure'},
+        ):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                release.select_run([manual | changes], REPO, SHA)
+
+    def test_find_exports_manual_recovery_artifact_without_reusing_pr_images(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'outputs'
+            env = dict(GITHUB_REPOSITORY=REPO, GITHUB_SHA=SHA, GITHUB_REF='refs/heads/main',
+                       GH_TOKEN='test-only', GITHUB_OUTPUT=str(output))
+            runs = [successful_run(event='pull_request', id=999),
+                    successful_run(event='workflow_dispatch', id=124, run_attempt=2)]
+            with patch.dict(os.environ, env), patch('sys.argv', ['ci_release.py', 'find']), \
+                 patch.object(release, 'github_json', return_value={'workflow_runs': runs}):
+                release.main()
+            self.assertEqual(output.read_text(), f'run_id=124\nrun_attempt=2\nartifact=verified-release-{SHA}-2\n')
+
+    def test_missing_main_ci_explains_recovery_and_never_exports_a_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'outputs'
+            env = dict(GITHUB_REPOSITORY=REPO, GITHUB_SHA=SHA, GITHUB_REF='refs/heads/main',
+                       GH_TOKEN='test-only', GITHUB_OUTPUT=str(output))
+            with patch.dict(os.environ, env), patch('sys.argv', ['ci_release.py', 'find']), \
+                 patch.object(release, 'github_json', return_value={'workflow_runs': []}), \
+                 self.assertRaisesRegex(ValueError, 'Run workflow on main'):
+                release.main()
+            self.assertFalse(output.exists())
+
+    def test_pending_or_failed_manual_recovery_cannot_fall_back_to_a_successful_push(self):
+        push = successful_run()
+        for changes in ({'status': 'in_progress', 'conclusion': None}, {'conclusion': 'failure'}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                release.select_run([push, successful_run(event='workflow_dispatch', id=124, **changes)], REPO, SHA)
 
     def test_latest_failed_or_pending_attempt_cannot_fall_back_to_old_success(self):
         old = successful_run()
