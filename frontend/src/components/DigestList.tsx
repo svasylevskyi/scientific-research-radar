@@ -21,7 +21,6 @@ import type { AdminDigest, Digest } from "../types/digest";
 interface DigestListProps {
   digests: Digest[];
   detailPath: (digest: Digest) => string;
-  historyPath?: (digest: Digest) => string;
   showOwner?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
@@ -37,12 +36,12 @@ function formatDate(value: string) {
   );
 }
 
-function LatestSuccessfulRun({ digest, admin, historyPath }: { digest: Digest; admin: boolean; historyPath?: (digest: Digest) => string }) {
+function LatestSuccessfulRun({ digest, admin }: { digest: Digest; admin: boolean }) {
   const value = digest.latest_successful_run_at;
   if (!value) return <>Never</>;
   const timestamp = /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}Z`;
   const formatted = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(timestamp));
-  return admin ? <Link component={RouterLink} to={historyPath?.(digest) ?? `/admin/digests/${digest.id}/runs`}>{formatted}</Link> : <>{formatted}</>;
+  return admin ? <Link component={RouterLink} to={`/admin/digests/${digest.id}/runs`}>{formatted}</Link> : <>{formatted}</>;
 }
 
 function frequencyLabel(value: string) {
@@ -52,7 +51,6 @@ function frequencyLabel(value: string) {
 export function DigestList({
   digests,
   detailPath,
-  historyPath,
   showOwner = false,
   emptyTitle = "No digests yet",
   emptyDescription = "Create your first digest to begin monitoring research.",
@@ -109,7 +107,7 @@ export function DigestList({
                   {formatDate(digest.reporting_from)} – {formatDate(digest.reporting_to)}
                 </TableCell>
                 <TableCell><Chip size="small" label={digest.schedule ? frequencyLabel(digest.schedule.frequency) : "Not scheduled"} /></TableCell>
-                <TableCell><LatestSuccessfulRun digest={digest} admin={showOwner} historyPath={historyPath} /></TableCell>
+                <TableCell><LatestSuccessfulRun digest={digest} admin={showOwner} /></TableCell>
                 <TableCell align="right">
                   <Button
                     component={RouterLink}
@@ -139,7 +137,7 @@ export function DigestList({
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>
                   {formatDate(digest.reporting_from)} – {formatDate(digest.reporting_to)}
                 </Typography>
-                <Typography variant="body2" sx={{ mb: 1.25 }}>Latest successful run: <LatestSuccessfulRun digest={digest} admin={showOwner} historyPath={historyPath} /></Typography>
+                <Typography variant="body2" sx={{ mb: 1.25 }}>Latest successful run: <LatestSuccessfulRun digest={digest} admin={showOwner} /></Typography>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <Chip size="small" label={digest.schedule ? frequencyLabel(digest.schedule.frequency) : "Not scheduled"} />
                   <Typography variant="body2" color="text.secondary">

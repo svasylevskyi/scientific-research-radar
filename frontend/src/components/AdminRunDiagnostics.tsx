@@ -1,6 +1,6 @@
 import { Box, CircularProgress, Link, Paper, Stack, Tab, Tabs, Typography } from "@mui/material";
+import { useEffect, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
-import type { DiagnosticTab } from "../navigationContext";
 import type { DigestRunDetail } from "../types/digest";
 import { AdminCostDetails, AdminCostSummary, useAdminRunCosts } from "./AdminRunCosts";
 import { AdminDigestCostSummary } from "./AdminDigestCostSummary";
@@ -13,20 +13,21 @@ export const diagnosticTabs = [
   { value: "steps", label: "Steps" },
 ] as const;
 
-export function AdminRunDiagnostics({ digestId, run, visible, tab, onTabChange, benchmarkPath }: {
-  digestId: string; run: DigestRunDetail | null; visible: boolean;
-  tab: DiagnosticTab; onTabChange: (tab: DiagnosticTab) => void; benchmarkPath: string;
+export function AdminRunDiagnostics({ digestId, selectedId, run, visible }: {
+  digestId: string; selectedId: string; run: DigestRunDetail | null; visible: boolean;
 }) {
+  const [tab, setTab] = useState("quality");
+  useEffect(() => setTab("quality"), [selectedId]);
   const costs = useAdminRunCosts(visible && tab === "costs", digestId, run);
   return <Box hidden={!visible} id="admin-run-diagnostics">
     <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden", mb: 3 }}>
-      <Tabs value={tab} onChange={(_, value) => onTabChange(value)} variant="scrollable" scrollButtons="auto" aria-label="Run diagnostics">
+      <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" aria-label="Run diagnostics">
         {diagnosticTabs.map(item => <Tab key={item.value} value={item.value} label={item.label}
           id={`diagnostic-tab-${item.value}`} aria-controls={`diagnostic-panel-${item.value}`} />)}
       </Tabs>
     </Paper>
     <Stack id="diagnostic-panel-quality" role="tabpanel" aria-labelledby="diagnostic-tab-quality" hidden={tab !== "quality"} sx={{ display: tab === "quality" ? "flex" : "none" }} spacing={3}>
-      <Link component={RouterLink} to={benchmarkPath} sx={{ alignSelf: "flex-start" }}>
+      <Link component={RouterLink} to="/admin/research-quality#benchmark-review" sx={{ alignSelf: "flex-start" }}>
         Open human benchmark review
       </Link>
       {run ? <AdminRunQuality key={run.id} digestId={digestId} run={run} /> : <CircularProgress aria-label="Loading run quality" />}

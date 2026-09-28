@@ -8,12 +8,20 @@ import { BenchmarkCaseForm } from "./BenchmarkCaseForm";
 import { BenchmarkCriteriaForm } from "./BenchmarkCriteriaForm";
 import { ClaimReviewPanel } from "./ClaimReviewPanel";
 
-export function BenchmarkReviewPanel() {
-  return <Stack spacing={2}>
-    <Typography component="h2" variant="h6">Human benchmark review</Typography>
-    <Typography variant="body2" color="text.secondary">Review shared calibration cases against their permitted evidence. Saving human reviews makes no LLM calls and does not change run quality, delivery, or allowances. The optional AI comparison below is a separate paid action.</Typography>
-    <BenchmarkReviewWorkspace />
-  </Stack>;
+export function BenchmarkReviewPanel({ openRequest }: { openRequest?: string }) {
+  const [opened, setOpened] = useState(!!openRequest);
+  const [expanded, setExpanded] = useState(!!openRequest);
+  useEffect(() => {
+    if (openRequest) { setOpened(true); setExpanded(true); }
+  }, [openRequest]);
+  const introduction = <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Review shared calibration cases against their permitted evidence. These cases are separate from the selected digest run. Saving human reviews makes no LLM calls and does not change run quality, delivery, or allowances. The optional AI comparison below is a separate paid action.</Typography>;
+  return <Accordion expanded={expanded} onChange={(_, value) => { setExpanded(value); if (value) setOpened(true); }}>
+    <AccordionSummary id="benchmark-review-heading" aria-controls="benchmark-review-content" expandIcon={<ExpandMoreIcon />}><Typography component="h2" variant="h6">Human benchmark review</Typography></AccordionSummary>
+    <AccordionDetails>
+      {introduction}
+      {opened && <BenchmarkReviewWorkspace />}
+    </AccordionDetails>
+  </Accordion>;
 }
 
 export function BenchmarkReviewWorkspace() {

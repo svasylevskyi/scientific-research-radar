@@ -1,5 +1,5 @@
 import { Button, Stack } from "@mui/material";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 export function AdminDigestNavigation({
   digestId,
   current,
@@ -7,7 +7,6 @@ export function AdminDigestNavigation({
   digestId: string;
   current: "details" | "runs";
 }) {
-  const { search } = useLocation();
   return (
     <Stack
       component="nav"
@@ -20,7 +19,7 @@ export function AdminDigestNavigation({
     >
       <Button
         component={Link}
-        to={`/admin/digests/${digestId}${search}`}
+        to={`/admin/digests/${digestId}`}
         variant={current === "details" ? "contained" : "text"}
         aria-current={current === "details" ? "page" : undefined}
       >
@@ -28,7 +27,7 @@ export function AdminDigestNavigation({
       </Button>
       <Button
         component={Link}
-        to={`/admin/digests/${digestId}/runs${search}`}
+        to={`/admin/digests/${digestId}/runs`}
         variant={current === "runs" ? "contained" : "text"}
         aria-current={current === "runs" ? "page" : undefined}
       >

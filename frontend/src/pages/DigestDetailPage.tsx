@@ -37,7 +37,6 @@ import { DigestWorkspace } from "../components/DigestWorkspace";
 import type { AdminDigest, Digest, DigestInput, DigestRunDetail, DigestRunSummary } from "../types/digest";
 import { startPagePolling } from "../pagePolling";
 import { loadRunHistory } from "../runHistory";
-import { listReturnTo, updateQuery } from "../navigationContext";
 
 interface DigestDetailPageProps {
   admin?: boolean;
@@ -55,10 +54,10 @@ function snapshotTopic(run: DigestRunDetail) {
 export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const { digestId = "" } = useParams();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [, setSearchParams] = useSearchParams();
   const location = useLocation();
   const routeState = location.state as { success?: string } | null;
-  const backPath = listReturnTo(searchParams, admin ? "/admin/digests" : "/radar");
+  const backPath = admin ? "/admin/digests" : "/radar";
   const [digestRecord, setDigest] = useState<Digest | null>(null);
   const digest = digestRecord?.id === digestId ? digestRecord : null;
   const [latestRun, setLatestRun] = useState<DigestRunDetail | null>(null);
@@ -171,7 +170,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
       setActiveRun(run);
       setLatestRun(run);
       updateRun(run);
-      setSearchParams(current => updateQuery(current, { run_id: run.id }), { preventScrollReset: true });
+      setSearchParams({ run_id: run.id });
       setSuccess("Radar run started. You can continue using the application.");
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
@@ -193,7 +192,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
     try {
       const retried = await digestRunsApi.retry(digestId, run.id);
       updateRun(retried); setLatestRun(retried); setActiveRun(retried);
-      setSearchParams(current => updateQuery(current, { run_id: retried.id }), { preventScrollReset: true });
+      setSearchParams({ run_id: retried.id });
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "Could not retry this run.");
     } finally {
@@ -382,7 +381,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                       </Button>
                     )}
                     {currentDigestIsRunning && hasSuccessfulRun && (
-                    <Button size="small" onClick={() => setSearchParams(current => updateQuery(current, { run_id: activeRun.id }), { preventScrollReset: true })}>View progress</Button>
+                      <Button size="small" onClick={() => setSearchParams({ run_id: activeRun.id })}>View progress</Button>
                     )}
                   </Alert>
                 )}

@@ -105,8 +105,8 @@ permissions and stored attribution remain unchanged.
 Settings follow the same purposes: automatic checks/delivery, structural rules,
 source verification, evidence availability, and paid AI observations. One save
 records all settings with a reason and concurrency version. Saving settings runs
-no checks. History is expandable in **Settings**; the human benchmark workspace is
-available in the separate **Benchmarks** tab. Ordinary admins can inspect all controls; only
+no checks. History is expandable; the human benchmark workspace remains separately
+available below settings. Ordinary admins can inspect all controls; only
 super-admins can save them.
 
 Costs and Steps remain separate diagnostics tabs; Run Output shows the research.
@@ -117,7 +117,7 @@ by quality checks” does not claim an email was sent.
 
 The link at the top of **Research Quality** opens the shared
 [human benchmark review workspace](research-evaluation.md) on the admin Research
-quality page's **Benchmarks** tab. **Back to run** retains the original run context. These labels
+quality settings page. It expands and reveals the workspace directly. These labels
 evaluate the research system; they do not approve or release the selected run.
 
 ## Manual evaluation and history
