@@ -68,7 +68,9 @@ class AdminUserService:
             Plan, Plan.id == FreeSubscription.plan_revision_id).outerjoin(SubscriptionAccountState, SubscriptionAccountState.user_id == FreeSubscription.user_id).where(FreeSubscription.user_id.in_([u.id for u in users]), or_(SubscriptionAccountState.effective_type == 'free', ~select(Checkout.id).where(Checkout.user_id == FreeSubscription.user_id, Checkout.subscription_id.is_not(None)).exists())))
         for uid, config in free_rows:
             names[uid] = config['name']
-        return [AdminUserRead.model_validate(u).model_copy(update={'subscription_plan_name': names.get(u.id)}) for u in users]
+        from app.models.account_closure import AccountClosure
+        closures = dict(self.db.execute(select(AccountClosure.user_id, AccountClosure.state).where(AccountClosure.user_id.in_([u.id for u in users]))).all())
+        return [AdminUserRead.model_validate(u).model_copy(update={'subscription_plan_name': names.get(u.id), 'closure_state': closures.get(u.id)}) for u in users]
 
     def get_user(self, *, actor: User, user_id: UUID) -> User:
         user = self._get_user(user_id)
@@ -83,6 +85,7 @@ class AdminUserService:
 
     def update_user(self, *, actor: User, user_id: UUID, changes: AdminUserUpdate) -> User:
         target = self.get_user(actor=actor, user_id=user_id)
+        self._require_open_account(target)
         values = changes.model_dump(exclude_unset=True, exclude_none=True)
 
         if values.get("is_active") is False:
@@ -108,6 +111,7 @@ class AdminUserService:
 
     def set_role(self, *, actor: User, user_id: UUID, role: UserRole) -> User:
         target = self.get_user(actor=actor, user_id=user_id)
+        self._require_open_account(target)
         if role != UserRole.ADMIN and target.is_super_admin:
             raise AdminActionForbiddenError("The super-admin cannot be demoted")
         if role != UserRole.ADMIN and target.id == actor.id:
@@ -124,8 +128,12 @@ class AdminUserService:
             raise AdminActionForbiddenError("The super-admin cannot be deleted")
         if target.id == actor.id:
             raise AdminActionForbiddenError("Administrators cannot delete their own account")
-        self.users.delete(target)
-        self.db.commit()
+        raise AdminActionForbiddenError("Use Close account with password confirmation. Direct deletion is unavailable.")
+
+    def _require_open_account(self, target: User) -> None:
+        self.db.refresh(target, with_for_update=True)
+        if target.closure_requested_at is not None:
+            raise AdminActionForbiddenError("Account closure is irreversible. This account cannot be edited or reactivated.")
 
     def _require_management_access(self, *, actor: User, target: User) -> None:
         if target.is_super_admin and not actor.is_super_admin:

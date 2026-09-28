@@ -23,6 +23,7 @@ import {
 import { useEffect, useState, type FormEvent } from "react";
 import { Link as RouterLink } from "react-router-dom";
 
+import { closureLabels } from "../api/accountClosure";
 import { adminApi } from "../api/admin";
 import { ApiError } from "../api/client";
 import { AppHeader } from "../components/AppHeader";
@@ -120,7 +121,7 @@ export function AdminUsersPage() {
                       <TableCell><Typography fontWeight={700}>{listedUser.full_name}</Typography></TableCell>
                       <TableCell>{listedUser.email}</TableCell>
                       <TableCell><UserRoleChip user={listedUser} /></TableCell>
-                      <TableCell>{listedUser.is_active ? "Active" : "Inactive"}</TableCell>
+                      <TableCell>{listedUser.closure_state ? closureLabels[listedUser.closure_state] : listedUser.is_active ? "Active" : "Inactive"}</TableCell>
                       <TableCell>{listedUser.subscription_plan_name ?? "No subscription"}</TableCell>
                       <TableCell align="right">
                         <Button component={RouterLink} to={`/admin/users/${listedUser.id}`} endIcon={<ChevronRightRoundedIcon />}>View</Button>
@@ -142,7 +143,7 @@ export function AdminUsersPage() {
                         <UserRoleChip user={listedUser} />
                         <Typography variant="body2">Plan: {listedUser.subscription_plan_name ?? "No subscription"}</Typography>
                         <Typography variant="body2" color={listedUser.is_active ? "success.main" : "text.secondary"}>
-                          {listedUser.is_active ? "Active" : "Inactive"}
+                          {listedUser.closure_state ? closureLabels[listedUser.closure_state] : listedUser.is_active ? "Active" : "Inactive"}
                         </Typography>
                       </Stack>
                     </Box>

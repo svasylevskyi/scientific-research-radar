@@ -2,7 +2,9 @@
 
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from app.models.user import User
 
 from app.models.digest_run import DigestRun
 from app.ops import heartbeat
@@ -25,6 +27,8 @@ class RunLease:
 
     def renew(self, run: DigestRun) -> None:
         heartbeat()
+        if self.db.scalar(select(User.closure_requested_at).where(User.id == run.owner_id)) is not None:
+            raise RadarClientError("Account closure stopped this research run.")
         if self.worker_id is not None:
             renewed = self.state.renew_lease(
                 run_id=run.id,

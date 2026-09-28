@@ -17,6 +17,7 @@ class User(Base):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint("role IN ('user', 'admin')", name="ck_users_role"),
+        CheckConstraint("closure_requested_at IS NULL OR NOT is_active", name="ck_users_closure_inactive"),
         CheckConstraint(
             "NOT is_super_admin OR (role = 'admin' AND is_active)",
             name="ck_users_super_admin_active_admin",
@@ -30,6 +31,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     auth_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    closure_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     role: Mapped[UserRole] = mapped_column(
         String(16),
         nullable=False,

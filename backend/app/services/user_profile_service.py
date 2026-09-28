@@ -29,6 +29,9 @@ class UserProfileService:
         self.sessions = AuthSessionRepository(db)
 
     def update_profile(self, *, user: User, changes: UserProfileUpdate) -> User:
+        self.db.refresh(user, with_for_update=True)
+        if user.closure_requested_at is not None:
+            raise ProfileEmailConflictError("This account is closing and cannot be edited.")
         values = changes.model_dump(exclude_unset=True, exclude_none=True)
         email = values.get("email")
         if email is not None and email != user.email:

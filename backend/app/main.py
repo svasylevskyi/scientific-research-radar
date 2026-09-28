@@ -54,9 +54,15 @@ async def lifespan(_app: FastAPI):
     billing_worker = asyncio.create_task(worker_loop(SessionLocal, settings)) if settings.environment != "test" else None
     from app.services.claim_review_worker import worker_loop as claim_review_loop
     claim_worker = asyncio.create_task(claim_review_loop(SessionLocal, settings)) if settings.environment != "test" else None
+    from app.services.account_closure_service import worker_loop as closure_loop
+    closure_worker = asyncio.create_task(closure_loop(SessionLocal, settings)) if settings.environment != "test" else None
     try:
         yield
     finally:
+        if closure_worker:
+            closure_worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await closure_worker
         if claim_worker:
             claim_worker.cancel()
             with suppress(asyncio.CancelledError):

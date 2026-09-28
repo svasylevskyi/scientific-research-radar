@@ -57,11 +57,15 @@ EVENTS = {"checkout.session.completed", "checkout.session.expired", "customer.su
           "customer.subscription.pending_update_applied", "customer.subscription.pending_update_expired"} | INVOICE_EVENTS
 
 
-def lock_account(db, user_id):
+def lock_account(db, user_id, *, allow_closing=False):
     insert = pg_insert
     db.execute(insert(SandboxBillingAccount).values(user_id=user_id, lock_version=0).on_conflict_do_nothing())
     db.execute(update(SandboxBillingAccount).where(SandboxBillingAccount.user_id == user_id)
                .values(lock_version=SandboxBillingAccount.lock_version + 1))
+    if not allow_closing:
+        from app.models.user import User
+        if db.scalar(select(User.closure_requested_at).where(User.id == user_id)) is not None:
+            raise Error("This account is closing. Billing changes are unavailable.", 409)
 
 
 def latest(db, user_id):

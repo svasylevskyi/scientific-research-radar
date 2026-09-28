@@ -252,10 +252,11 @@ def payment(db, settings, uid, quote_id):
 
 
 def tick(factory, settings):
+    from app.models.user import User
     if not settings.effective_stripe_checkout_enabled:
         return False
     with factory() as db:
-        row = db.scalar(select(Upgrade).where(Upgrade.state.in_(['submitting', 'pending_payment']), Upgrade.next_attempt_at <= now())
+        row = db.scalar(select(Upgrade).join(User, User.id == Upgrade.user_id).where(User.closure_requested_at.is_(None), Upgrade.state.in_(['submitting', 'pending_payment']), Upgrade.next_attempt_at <= now())
             .order_by(Upgrade.next_attempt_at, Upgrade.id).limit(1))
         if not row:
             return False

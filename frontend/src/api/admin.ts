@@ -40,7 +40,4 @@ export const adminApi = {
     });
   },
 
-  deleteUser(userId: string): Promise<void> {
-    return apiRequest<void>(`/admin/users/${userId}`, { method: "DELETE" });
-  },
 };

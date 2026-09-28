@@ -9,6 +9,7 @@ export interface User {
   is_super_admin: boolean;
   created_at: string;
   subscription_plan_name?: string | null;
+  closure_state?: "pending" | "waiting" | "needs_review" | "completed" | null;
 }
 
 export interface AuthResponse {

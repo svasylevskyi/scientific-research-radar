@@ -62,6 +62,10 @@ class EmailVerificationService:
               user: User | None = None) -> EmailVerification:
         # Also releases expired email reservations when the periodic cleaner is offline.
         cleanup_expired(self.db)
+        if user:
+            self.db.refresh(user, with_for_update=True)
+            if user.closure_requested_at:
+                raise VerificationError("This account is closing.", 409)
         existing_user = self.users.get_by_email(email)
         if existing_user:
             raise VerificationError("An account with this email already exists", 409)
@@ -101,6 +105,10 @@ class EmailVerificationService:
         return challenge
 
     def _lock(self, challenge_id: UUID, user: User | None, *, consume_attempt=False) -> EmailVerification:
+        if user:
+            self.db.refresh(user, with_for_update=True)
+            if user.closure_requested_at:
+                raise VerificationError("This account is closing.", 409)
         now = datetime.now(UTC)
         condition = [EmailVerification.id == challenge_id,
                      EmailVerification.user_id == (user.id if user else None),
@@ -136,6 +144,10 @@ class EmailVerificationService:
         return challenge
 
     def confirm(self, challenge_id: UUID, code: str, user: User | None = None):
+        if user:
+            self.db.refresh(user, with_for_update=True)
+            if user.closure_requested_at:
+                raise VerificationError("This account is closing.", 409)
         challenge = self._lock(challenge_id, user, consume_attempt=True)
         if (datetime.now(UTC) >= _as_utc(challenge.code_expires_at)
                 or not hmac.compare_digest(challenge.code_hash, self._hash(challenge.id, code))):

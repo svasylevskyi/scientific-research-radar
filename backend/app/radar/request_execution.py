@@ -1,6 +1,9 @@
 """Provider execution and durable accounting callbacks for one stage request."""
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from app.models.user import User
+from app.radar.client import RadarClientError
 
 from app.models.digest_run import DigestRun, DigestRunStage
 from app.radar.client import OutputT, RadarClient, RadarClientResult
@@ -25,6 +28,8 @@ class StageRequestExecutor:
         use_web_search: bool,
         reasoning_effort: str,
     ) -> RadarClientResult[OutputT]:
+        if self.db.scalar(select(User.closure_requested_at).where(User.id == run.owner_id)) is not None:
+            raise RadarClientError("Account closure stopped further research requests.")
         accounting = RequestAccounting(
             self.db,
             run=run,

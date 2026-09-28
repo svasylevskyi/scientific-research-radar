@@ -26,6 +26,7 @@ from app.models.research_quality import ResearchQualityEvaluation, ResearchQuali
 from app.models.benchmark_review import ResearchBenchmark, BenchmarkCaseReview, BenchmarkCriteriaHistory, BenchmarkPublication
 from app.models.source_verification import SourceMetadataCache, SourceProviderState, SourceVerification
 from app.models.user import User, UserRole
+from app.models.account_closure import AccountClosure
 from app.models.email_verification import EmailVerification
 
 __all__ = [

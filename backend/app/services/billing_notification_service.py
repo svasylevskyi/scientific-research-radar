@@ -68,6 +68,10 @@ def tick(factory, settings):
         user = db.get(User, row.user_id)
         if not user:
             return False
+        if user.closure_requested_at is not None:
+            row.state = 'cancelled'
+            db.commit()
+            return True
         message = OutgoingEmail(recipient=user.email, subject='Research Radar — ' + row.subject,
             text=row.text + '\n\nReview your subscription: ' + settings.frontend_base_url + '/radar/subscription',
             message_id='<billing-' + hashlib.sha256(key.encode()).hexdigest() + '@research-radar>')

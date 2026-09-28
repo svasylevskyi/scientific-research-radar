@@ -58,6 +58,9 @@ export function LoginPage() {
       </Box>
 
       <Stack component="form" onSubmit={handleSubmit} spacing={2.25} noValidate>
+        {(location.state as { accountClosing?: boolean } | null)?.accountClosing && <Alert severity="success">
+          Account closure requested. Access is disabled while we resolve billing and remove your data. We will email you when closure is complete. For help, use the Contact page.
+        </Alert>}
         {passwordChanged && (
           <Alert severity="success">Password changed successfully. Sign in with your new password.</Alert>
         )}

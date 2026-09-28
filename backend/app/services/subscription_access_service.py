@@ -27,6 +27,12 @@ def now():
     return datetime.now(timezone.utc)
 
 
+def require_open_account(db, user_id):
+    from app.models.user import User
+    if db.scalar(select(User.closure_requested_at).where(User.id == user_id)) is not None:
+        raise AccessDenied('This account is closing. New research and settings changes are unavailable.')
+
+
 def policy(db, user_id):
     return db.scalar(select(Policy).where(Policy.user_id == user_id).order_by(Policy.version.desc()).limit(1))
 
@@ -108,6 +114,7 @@ def _resolve_billing(db, user_id, settings=None):
 
 
 def resolve(db, user_id, settings=None):
+    require_open_account(db, user_id)
     # Changes are staged in the caller's transaction. Read APIs commit them too.
     selected = policy(db, user_id)
     if not selected or selected.mode == 'complimentary':
@@ -277,6 +284,7 @@ def run_context(db, run, *, existing=None, schedule=None):
 
 def reserve(db, run, *, schedule=None, settings=None):
     lock(db, run.owner_id)
+    require_open_account(db, run.owner_id)
     existing = db.get(Usage, run.id, populate_existing=True)
     if existing and existing.state in ('reserved', 'settled'):
         return
@@ -311,6 +319,7 @@ def settle(db, run, *, success):
 
 def change_policy(db, user_id, actor_id, mode, expected_version, note):
     lock(db, user_id)
+    require_open_account(db, user_id)
     current = policy(db, user_id)
     version = current.version if current else 0
     if expected_version != version:
@@ -329,6 +338,7 @@ def change_policy(db, user_id, actor_id, mode, expected_version, note):
 
 def check_details(db, user_id, *, requested_papers=None, creating=False, schedule=None):
     lock(db, user_id)
+    require_open_account(db, user_id)
     access = resolve(db, user_id)
     if access['mode'] == 'complimentary':
         return
