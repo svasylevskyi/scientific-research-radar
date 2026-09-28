@@ -150,12 +150,34 @@ deployment only reads Actions artifacts and no longer writes packages.
   the exact commit's CI is green. A newer failed/running CI attempt is not bypassed
   by an older successful attempt, and PR results cannot authorize deployment.
 - Missing/expired manifests or missing registry images fail rather than trigger
-  a rebuild during deployment. For a new release, push a new commit and wait for
-  CI. To recover an already deployed release, use its saved local image pins and
-  the normal operator procedures; keep the registry images available.
+  a rebuild during deployment. For the current main commit, run CI manually as
+  described below. To recover an already deployed release, use its saved local
+  image pins and the normal operator procedures; keep the registry images available.
 - The container job tests the same images later published, including the actual
   PostgreSQL backup/restore scripts and readiness failure check. No server-side
   backup, migration, or active-work checks are removed by this optimization.
+
+#### Missing main CI or release artifacts
+
+PR #92 passed its PR checks, but neither deployment attempt could find a main-push
+CI run for merge commit `63a889a6d45ffb693edd39d38ad437d9ca1d2f00`. Both stopped in
+release verification, before the server connection. The Actions records establish
+the missing run; they do not explain why the push trigger was absent.
+
+If a merge has no main CI run, or the current main release artifacts have expired:
+
+1. Open **Actions → CI → Run workflow**, select **main**, and start it.
+2. Wait for the whole workflow, including **publish**, to finish successfully.
+   Manual main CI runs every check and publishes the exact tested images with the
+   same immutable digest manifest as push CI. PRs never authorize deployment;
+   manually running a feature branch does not publish a release.
+3. Start a **new** **Deploy development** workflow on **main**, selecting the usual
+   mode. It accepts a successful push or manual CI run for its exact commit.
+
+Do not repeatedly rerun the old failed deployment if main has advanced: a rerun
+retains the old commit, while a new dispatch selects current main. Check that the
+CI and deployment commits match. No SSH, environment, secrets, or database updates
+are needed for this recovery path, and deployment verification must not be bypassed.
 
 A successful first deploy must pass:
 

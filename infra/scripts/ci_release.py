@@ -18,17 +18,21 @@ def validate_identity(repository, sha):
 
 
 def select_run(runs, repository, sha):
-    """Never substitute a PR run, another commit, or an older successful attempt."""
+    """Accept full main CI (push or manual), never PRs or another commit."""
     validate_identity(repository, sha)
     matching = [run for run in runs if (
         run.get("head_sha") == sha
         and run.get("head_branch") == "main"
-        and run.get("event") == "push"
+        and run.get("event") in {"push", "workflow_dispatch"}
         and run.get("path") == ".github/workflows/ci.yml"
         and (run.get("head_repository") or {}).get("full_name") == repository
     )]
     if not matching:
-        raise ValueError("No main CI run exists for this commit. Deploy from main after CI publishes its images.")
+        raise ValueError(
+            "No main CI run exists for this commit. In Actions, open CI, choose Run workflow on main, "
+            "and wait for all checks and image publication to succeed. Then start a new Deploy development "
+            "run on main. If main has advanced, the new deployment will use that newer commit."
+        )
     run = max(matching, key=lambda value: (value["id"], value["run_attempt"]))
     if run.get("status") != "completed" or run.get("conclusion") != "success":
         raise ValueError("CI for this exact commit must finish successfully, including publication. Retry deployment after CI is green.")
@@ -79,7 +83,9 @@ def main():
     if args.command == "find":
         if os.environ.get("GITHUB_REF") != "refs/heads/main":
             raise ValueError("Deploy development must be dispatched from main.")
-        query = urlencode(dict(head_sha=sha, branch="main", event="push", per_page=100))
+        # Both push CI and explicit recovery runs may publish this exact commit.
+        # select_run still rejects PRs, other workflows, branches and repositories.
+        query = urlencode(dict(head_sha=sha, branch="main", per_page=100))
         data = github_json(f"repos/{repository}/actions/workflows/ci.yml/runs?{query}", os.environ["GH_TOKEN"])
         run = select_run(data["workflow_runs"], repository, sha)
         output(dict(run_id=run["id"], run_attempt=run["run_attempt"],

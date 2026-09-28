@@ -24,7 +24,8 @@ import {
   Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link as RouterLink, useParams } from "react-router-dom";
+import { Link as RouterLink, useParams, useSearchParams } from "react-router-dom";
+import { listReturnTo } from "../navigationContext";
 
 import { adminApi } from "../api/admin";
 import { ApiError } from "../api/client";
@@ -37,6 +38,7 @@ import type { User, UserRole } from "../types/auth";
 
 export function AdminUserDetailPage() {
   const { userId = "" } = useParams();
+  const [search] = useSearchParams();
   const { user: currentUser, refreshUser } = useAuth();
   const [managedUserRecord, setManagedUser] = useState<User | null>(null);
   const managedUser = managedUserRecord?.id === userId ? managedUserRecord : null;
@@ -105,7 +107,7 @@ export function AdminUserDetailPage() {
     <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
       <Container component="main" maxWidth="md" sx={{ py: { xs: 3, sm: 6 } }}>
-        <Button component={RouterLink} to="/admin/users" color="inherit" startIcon={<ArrowBackRoundedIcon />} sx={{ mb: 2 }}>
+        <Button component={RouterLink} to={listReturnTo(search, "/admin/users")} color="inherit" startIcon={<ArrowBackRoundedIcon />} sx={{ mb: 2 }}>
           Back to users
         </Button>
         <ResourceNotice {...resource} />
