@@ -115,11 +115,10 @@ remain active. Off/legacy runs show Not evaluated until manually assessed. A Pas
 only means the indicated checks passed; it is not scientific approval. “Not blocked
 by quality checks” does not claim an email was sent.
 
-The next diagnostics tab, **Human Benchmark Review**, contains the shared
-[human benchmark review workspace](research-evaluation.md). These labels evaluate
-the research system;
-they do not approve or release the selected run. Reviews are also accessible from
-the admin Research quality settings page.
+The link at the top of **Research Quality** opens the shared
+[human benchmark review workspace](research-evaluation.md) on the admin Research
+quality settings page. It expands and reveals the workspace directly. These labels
+evaluate the research system; they do not approve or release the selected run.
 
 ## Manual evaluation and history
 
