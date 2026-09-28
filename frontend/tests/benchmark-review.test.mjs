@@ -130,7 +130,7 @@ test('read-only admins cannot submit criteria even when a handler is invoked dir
   await tree.props.onSubmit({preventDefault: noop});
 });
 
-test('diagnostic tabs start with quality and keep benchmark forms mounted between views', async () => {
+test('diagnostics link to the shared benchmark workspace and retain run-specific tabs', async () => {
   const runtime = hooks(); const costCalls = [];
   const {AdminRunDiagnostics} = await load('../src/components/AdminRunDiagnostics.tsx', {
     react: runtime.react, './AdminRunCosts': {useAdminRunCosts: enabled => { costCalls.push(enabled); return {}; },
@@ -139,21 +139,20 @@ test('diagnostic tabs start with quality and keep benchmark forms mounted betwee
   const props = {digestId: 'd', selectedId: 'r', run: {id: 'r'}, visible: true};
   const render = () => runtime.render(() => AdminRunDiagnostics(props));
   let tree = render();
-  assert.deepEqual(elements(tree).filter(item => item.type === 'Tab').map(item => item.props.label), ['Research Quality', 'Human Benchmark Review', 'Costs', 'Steps']);
+  assert.deepEqual(elements(tree).filter(item => item.type === 'Tab').map(item => item.props.label), ['Research Quality', 'Costs', 'Steps']);
   assert.equal(elements(tree).find(item => item.type === 'Tabs').props.value, 'quality');
   assert.equal(elements(tree).some(item => item.type === 'BenchmarkReviewPanel'), false);
-  elements(tree).find(item => item.type === 'Tabs').props.onChange(null, 'benchmark');
-  tree = render();
-  assert.equal(elements(tree).find(item => item.props.id === 'diagnostic-panel-benchmark').props.hidden, false);
-  assert.equal(elements(tree).find(item => item.type === 'BenchmarkReviewPanel').props.standalone, true);
+  const panel = elements(tree).find(item => item.props.id === 'diagnostic-panel-quality');
+  const link = elements(panel).find(item => item.type === 'Link');
+  assert.equal(panel.props.children[0], link);
+  assert.equal(link.props.to, '/admin/research-quality#benchmark-review');
+  assert.equal(text(link), 'Open human benchmark review');
   elements(tree).find(item => item.type === 'Tabs').props.onChange(null, 'costs');
   tree = render();
   const quality = elements(tree).find(item => item.props.id === 'diagnostic-panel-quality');
   assert.equal(quality.props.sx.display, 'none');
   assert.equal(elements(quality).some(item => item.type === 'BenchmarkReviewPanel'), false);
-  const benchmark = elements(tree).find(item => item.props.id === 'diagnostic-panel-benchmark');
-  assert.equal(benchmark.props.hidden, true);
-  assert.equal(elements(benchmark).some(item => item.type === 'BenchmarkReviewPanel'), true);
+  assert.equal(elements(tree).some(item => item.props.id === 'diagnostic-panel-benchmark'), false);
   assert.equal(costCalls.at(-1), true);
   props.visible = false; tree = render();
   assert.equal(tree.props.hidden, true);

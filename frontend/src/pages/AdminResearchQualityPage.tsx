@@ -1,6 +1,7 @@
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip, CircularProgress, Container, Pagination, Paper, Stack, TextField, Typography } from "@mui/material";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useLocation } from "react-router-dom";
 import { researchQualityApi, type QualityConfig, type QualityHistory, type QualitySettings } from "../api/researchQuality";
 import { useAuth } from "../auth/AuthContext";
 import { AppHeader } from "../components/AppHeader";
@@ -11,6 +12,10 @@ import { QualityPolicySettings } from "../components/QualityPolicySettings";
 const modes = { off: "Off", observe: "Observe", enforce: "Enforce" };
 export function AdminResearchQualityPage() {
   const { user } = useAuth();
+  const location = useLocation();
+  const benchmarkRequested = location.hash === "#benchmark-review";
+  const benchmarkSection = useRef<HTMLElement>(null);
+  const revealedBenchmark = useRef<string | null>(null);
   const [settings, setSettings] = useState<QualitySettings | null>(null);
   const [config, setConfig] = useState<QualityConfig | null>(null);
   const [threshold, setThreshold] = useState("3");
@@ -23,6 +28,14 @@ export function AdminResearchQualityPage() {
   const [page, setPage] = useState(1);
   const [history, setHistory] = useState<QualityHistory | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Wait for the settings form above to settle, then reveal this explicit link once.
+    if (!benchmarkRequested || loading || revealedBenchmark.current === location.key) return;
+    benchmarkSection.current?.scrollIntoView({ block: "start" });
+    benchmarkSection.current?.focus({ preventScroll: true });
+    revealedBenchmark.current = location.key;
+  }, [benchmarkRequested, loading, location.key]);
 
   useEffect(() => {
     let active = true;
@@ -96,7 +109,10 @@ export function AdminResearchQualityPage() {
         </Stack>}
         </AccordionDetails>
       </Accordion>
-      <BenchmarkReviewPanel />
+      <Box component="section" id="benchmark-review" ref={benchmarkSection} tabIndex={-1}
+        aria-labelledby="benchmark-review-heading" sx={{ scrollMarginTop: { xs: 16, lg: 12 } }}>
+        <BenchmarkReviewPanel openRequest={benchmarkRequested ? location.key : undefined} />
+      </Box>
     </Stack>
   </Container></Box>;
 }

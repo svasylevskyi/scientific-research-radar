@@ -74,7 +74,7 @@ still apply.
 
 ## Compare with the human benchmark
 
-Open **Human Benchmark Review → AI benchmark comparison**, select a published
+Open **Admin → Research quality → Human benchmark review → AI benchmark comparison**, select a published
 revision and Development or Held-out, then **Compare AI with benchmark**. Every
 approved case in that split must fit the configured claim limit; no convenient
 subset is selected. Use held-out cases only for planned evaluation, not tuning.
