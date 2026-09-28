@@ -1,3 +1,4 @@
+import { ResourceNotice } from "../components/ResourceNotice";
 import { AdminBillingNavigation } from "../components/AdminBillingNavigation";
 import { useCallback, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -38,9 +39,9 @@ function AccessEditor() {
   const [busy, setBusy] = useState(false);
   const [offset, setOffset] = useState(0);
   const load = useCallback(
-    () =>
+    (signal: AbortSignal) =>
       userId
-        ? subscriptionsApi.adminAccess(userId, offset)
+        ? subscriptionsApi.adminAccess(userId, offset, signal)
         : Promise.resolve(null),
     [userId, offset],
   );
@@ -90,7 +91,8 @@ function AccessEditor() {
             Choose a user in user administration
           </Button>
         )}
-        {(error || resource.error) && (
+        <ResourceNotice {...resource} />
+        {error && (
           <Alert
             severity="error"
             sx={{ mb: 2 }}
@@ -105,7 +107,7 @@ function AccessEditor() {
               </Button>
             }
           >
-            {error || resource.error}
+            {error}
           </Alert>
         )}
         {!data && !error && !resource.error && userId && (

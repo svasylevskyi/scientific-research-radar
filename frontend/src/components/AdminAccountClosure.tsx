@@ -1,5 +1,7 @@
+import { ResourceNotice } from "./ResourceNotice";
+import { usePollingResource } from "../hooks/usePollingResource";
 import { Alert, Box, Button, Chip, Divider, Paper, Stack, TextField, Typography } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { accountClosureApi, closureLabels, type AccountClosure } from "../api/accountClosure";
 import { ApiError } from "../api/client";
 import type { ContactMessage } from "../api/contact";
@@ -10,25 +12,14 @@ export function AdminAccountClosure({ userId }: { userId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [checkoutIds, setCheckoutIds] = useState<Record<string, string>>({});
-  useEffect(() => {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function load() {
-      try {
-        const next = await accountClosureApi.get(userId, controller.signal);
-        if (controller.signal.aborted) return;
-        setValue(next); setError(null);
-        if (next?.state === "pending" || next?.state === "waiting") timer = setTimeout(load, 5000);
-      } catch (caught) { if (!controller.signal.aborted) setError(caught instanceof ApiError ? caught.message : "Could not load closure progress."); }
-    }
-    void load();
-    return () => { controller.abort(); clearTimeout(timer); };
-  }, [userId, busy]);
+  const load = useCallback((signal: AbortSignal) => accountClosureApi.get(userId, signal), [userId]);
+  const resource = usePollingResource(load, value?.state === "pending" || value?.state === "waiting" ? 5000 : 0, true);
+  useEffect(() => { if (resource.data) setValue(resource.data); }, [resource.data]);
   async function action(operation: () => Promise<AccountClosure>) {
     setBusy(true); setError(null);
     try { setValue(await operation()); setContacts([]); }
     catch (caught) { setError(caught instanceof ApiError ? caught.message : "The action could not be completed."); }
-    finally { setBusy(false); }
+    finally { setBusy(false); await resource.refresh(); }
   }
   async function loadContacts() {
     setBusy(true); setError(null);
@@ -41,6 +32,7 @@ export function AdminAccountClosure({ userId }: { userId: string }) {
     <Stack spacing={2}>
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap"><Typography variant="h6">Account closure</Typography>
         {value && <Chip size="small" label={closureLabels[value.state]} color={value.state === "needs_review" ? "warning" : "default"} />}</Stack>
+      <ResourceNotice {...resource} />
       {error && <Alert severity="error">{error}</Alert>}
       {value && <>
         <Typography>Access is disabled. Closing accounts cannot be reactivated.</Typography>

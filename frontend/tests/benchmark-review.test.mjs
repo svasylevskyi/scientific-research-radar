@@ -169,6 +169,7 @@ test('section buttons change local visibility without navigation; user output ta
       react: runtime.react, 'react-router-dom': {useSearchParams: () => [new URLSearchParams(), () => assert.fail('Section changes must not navigate')]},
       '../api/client': {ApiError: Error}, '../api/digests': {}, '../auth/AuthContext': {useAuth: () => ({user: {id: 'u'}})},
       '../pagePolling': {startPagePolling: () => noop}, '../runHistory': runHistory,
+      '../hooks/usePollingResource': {usePollingResource: () => ({data: null, error: '', loading: false, refresh: noop})},
     });
     const run = {id: 'r', status: 'completed', started_at: '2026-09-25T10:00:00Z', paper_results: [], briefing: {}};
     return () => runtime.render(() => DigestWorkspace({admin, digestId: 'd', runs: [run], latestRun: run,

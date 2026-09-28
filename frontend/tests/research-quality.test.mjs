@@ -13,7 +13,7 @@ async function load(path, dependencies = {}) {
   } });
   const module = { exports: {} };
   runInNewContext(outputText, { module, exports: module.exports,
-    require: (name) => dependencies[name] ?? (name === "@mui/material" ? new Proxy({}, { get: (_, key) => key }) : require(name)) });
+    require: (name) => dependencies[name] ?? (name.endsWith("/ResourceNotice") ? {ResourceNotice: "ResourceNotice"} : undefined) ?? (name === "@mui/material" ? new Proxy({}, { get: (_, key) => key }) : require(name)) });
   return module.exports;
 }
 const { ResearchQualityNotice } = await load("../src/components/ResearchQualityNotice.tsx", {
@@ -199,7 +199,7 @@ test('source rechecks include the current revision and use paginated read-only h
   assert.equal(JSON.stringify(requests[0].options.body), '{"expected_settings_version":7}');
   assert.match(requests[0].path, /source-verifications$/);
   assert.match(requests[1].path, /offset=5&limit=5$/);
-  assert.equal(requests[1].options, undefined);
+  assert.equal(requests[1].options.method, undefined);
 });
 
 const { ContentEvidence } = await load('../src/components/AdminSourceContent.tsx', {
@@ -234,7 +234,8 @@ test('missing evidence references remain explicit and source content reads do no
     './client': { apiRequest: async (...args) => { requests.push(args); return {}; } },
   });
   await researchQualityApi.content('digest-a', 'run-b');
-  assert.deepEqual(requests[0], ['/admin/digests/digest-a/runs/run-b/source-content']);
+  assert.equal(requests[0][0], '/admin/digests/digest-a/runs/run-b/source-content');
+  assert.equal(requests[0][1].method, undefined);
 });
 test('source attribution retains the notice, licence link, and modification statement', async () => {
   const { SourceAttribution } = await load('../src/components/SourceAttribution.tsx');

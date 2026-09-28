@@ -1,8 +1,9 @@
+import { ResourceNotice } from "../components/ResourceNotice";
+import { usePollingResource } from "../hooks/usePollingResource";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import ManageAccountsRoundedIcon from "@mui/icons-material/ManageAccountsRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import {
-  Alert,
   Box,
   Button,
   CircularProgress,
@@ -20,48 +21,25 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 import { Link as RouterLink } from "react-router-dom";
 
 import { closureLabels } from "../api/accountClosure";
 import { adminApi } from "../api/admin";
-import { ApiError } from "../api/client";
 import { AppHeader } from "../components/AppHeader";
 import { UserRoleChip } from "../components/UserRoleChip";
-import type { User } from "../types/auth";
 
 const PAGE_SIZE = 20;
 
 export function AdminUsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState("");
   const [query, setQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    setIsLoading(true);
-    setError(null);
-    adminApi
-      .listUsers({ offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE, query })
-      .then((result) => {
-        if (!active) return;
-        setUsers(result.items);
-        setTotal(result.total);
-      })
-      .catch((caught) => {
-        if (active) setError(caught instanceof ApiError ? caught.message : "Could not load users.");
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [page, query]);
+  const load = useCallback((signal: AbortSignal) => adminApi.listUsers({ offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE, query, signal }), [page, query]);
+  const resource = usePollingResource(load, 0);
+  const users = resource.data?.items ?? [];
+  const total = resource.data?.total ?? 0;
+  const isLoading = resource.loading;
 
   function handleSearch(event: FormEvent) {
     event.preventDefault();
@@ -96,12 +74,12 @@ export function AdminUsersPage() {
           </Stack>
         </Stack>
 
-        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+        <ResourceNotice {...resource} />
         {isLoading ? (
           <Box role="status" aria-label="Loading users" sx={{ py: 10, display: "grid", placeItems: "center" }}>
             <CircularProgress size={34} />
           </Box>
-        ) : (
+        ) : resource.data ? (
           <>
             <TableContainer component={Paper} variant="outlined" sx={{ display: { xs: "none", md: "block" }, borderRadius: 3 }}>
               <Table>
@@ -175,7 +153,7 @@ export function AdminUsersPage() {
               {total} {total === 1 ? "account" : "accounts"}
             </Typography>
           </>
-        )}
+        ) : null}
       </Container>
     </Box>
   );

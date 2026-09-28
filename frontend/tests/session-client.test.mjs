@@ -44,21 +44,19 @@ function limited(seconds = "30", scope = "request") {
     status: 429, headers: {"Retry-After": seconds, "X-Radar-Rate-Limit-Scope": scope},
   });
 }
-test("refresh rate limiting silently waits without expiring the local session", async (t) => {
+test("long refresh cooldown releases the page without expiring the session", async (t) => {
   fakeTime(t);
   const api = await loadClient();
   api.setAccessToken("old");
-  let expired = 0;
+  let expired = 0, refreshes = 0;
   window.addEventListener(api.AUTH_EXPIRED_EVENT, () => expired++);
-  let refreshes = 0;
   globalThis.fetch = async (url, options) => url.endsWith("/auth/refresh")
     ? ++refreshes === 1 ? limited() : response(200, {access_token: "new"})
     : response(options.headers.get("Authorization") === "Bearer new" ? 200 : 401, {ok: true});
-  const request = api.apiRequest("/users/me");
-  await flush(); t.mock.timers.tick(29999); await flush();
-  assert.equal(refreshes, 1);
-  t.mock.timers.tick(1); await flush();
-  assert.equal((await request).ok, true);
+  await assert.rejects(api.apiRequest("/users/me"), error => error instanceof api.RateLimitError && error.retryAfterSeconds === 30);
+  assert.equal(expired, 0);
+  t.mock.timers.tick(30000);
+  assert.equal((await api.apiRequest("/users/me")).ok, true);
   assert.equal(refreshes, 2);
   assert.equal(expired, 0);
 });
@@ -77,21 +75,21 @@ test("a shared API cooldown delays other requests and staggers recovery", async 
   assert.equal(calls.length, 3);
 });
 
-test("endpoint cooldowns do not block unrelated reads, and rejected writes retain their payload", async (t) => {
+test("writes release their controls on 429 and are never automatically replayed", async (t) => {
   fakeTime(t);
   const api = await loadClient(); const bodies = [];
   globalThis.fetch = async (url, options) => {
     if (url.endsWith("/users/me")) return response(200, {ok: true});
     bodies.push(options.body);
-    return bodies.length === 1 ? limited("1") : response(201, {saved: true});
+    return limited("1");
   };
-  const body = {value: "original"};
-  const saved = api.apiRequest("/digests", {method: "POST", body}); await flush();
-  body.value = "changed";
+  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+    await assert.rejects(api.apiRequest(`/action/${method}`, {method, body: {value: "original"}}),
+      error => error instanceof api.RateLimitError && !error.message.includes("429"));
+  }
   assert.equal((await api.apiRequest("/users/me")).ok, true);
-  t.mock.timers.tick(1000); await flush();
-  assert.equal((await saved).saved, true);
-  assert.deepEqual(bodies, ['{"value":"original"}', '{"value":"original"}']);
+  t.mock.timers.tick(3600000); await flush();
+  assert.equal(bodies.length, 4);
 });
 
 test("missing retry guidance uses backoff and continues after repeated throttles", async (t) => {
@@ -109,7 +107,7 @@ test("cancelling a request or ending a session stops queued retries", async (t) 
   for (const endSession of [false, true]) {
     const api = await loadClient(); let calls = 0;
     const controller = new AbortController();
-    globalThis.fetch = async () => { calls++; return limited(); };
+    globalThis.fetch = async () => { calls++; return limited("2"); };
     const request = api.apiRequest("/digests", {signal: controller.signal});
     const rejected = assert.rejects(request, error => error.name === "AbortError");
     await flush();
@@ -169,4 +167,106 @@ test("a refresh conflict retries once without expiring the session", async () =>
   globalThis.fetch = async () => response(++calls === 1 ? 409 : 200, { access_token: "valid" });
   assert.equal((await api.refreshAccessToken()).access_token, "valid");
   assert.equal(calls, 2);
+});
+
+
+test("repeated read throttles stop after three retries", async (t) => {
+  fakeTime(t);
+  const api = await loadClient(); let calls = 0;
+  globalThis.fetch = async () => { calls++; return limited("1"); };
+  const rejected = assert.rejects(api.apiRequest("/digests"), error => error instanceof api.RateLimitError);
+  await flush();
+  for (let index = 0; index < 3; index++) { t.mock.timers.tick(1000); await flush(); }
+  await rejected;
+  assert.equal(calls, 4);
+  t.mock.timers.tick(3600000); await flush();
+  assert.equal(calls, 4);
+});
+
+test("a retry that exceeds the foreground budget is deferred without shortening the cooldown", async (t) => {
+  fakeTime(t);
+  const api = await loadClient(); let calls = 0;
+  globalThis.fetch = async () => { calls++; return limited("10"); };
+  const rejected = assert.rejects(api.apiRequest("/digests"), error => error.retryAt === 120000);
+  await flush(); t.mock.timers.tick(10000); await flush(); await rejected;
+  await assert.rejects(api.apiRequest("/digests", {method: "POST"}), error => error.status === 429);
+  assert.equal(calls, 3); // Different method has its own endpoint bucket.
+});
+
+test("identical concurrent reads share a fetch, while query parameters stay distinct", async () => {
+  const api = await loadClient(); let calls = 0; const finish = deferred();
+  globalThis.fetch = async () => { calls++; await finish.promise; return response(200, {ok: true}); };
+  const pending = [api.apiRequest("/users?q=a"), api.apiRequest("/users?q=a"), api.apiRequest("/users?q=b")];
+  await flush(); assert.equal(calls, 2); finish.resolve();
+  assert.equal((await Promise.all(pending)).length, 3);
+  await api.apiRequest("/users?q=a"); assert.equal(calls, 3); // No response cache.
+});
+
+test("one canceled reader does not cancel other consumers of the same GET", async () => {
+  const api = await loadClient(); const finish = deferred(); let signal;
+  globalThis.fetch = async (_url, options) => { signal = options.signal; await finish.promise; return response(200, {ok: true}); };
+  const controller = new AbortController();
+  const first = api.apiRequest("/users", {signal: controller.signal});
+  const second = api.apiRequest("/users");
+  const rejected = assert.rejects(first, error => error.name === "AbortError");
+  await flush(); controller.abort(); await rejected;
+  assert.equal(signal.aborted, false);
+  finish.resolve(); assert.equal((await second).ok, true);
+});
+
+test("reads after a write never reuse a pre-write request", async () => {
+  const api = await loadClient(); const finish = deferred(); let reads = 0;
+  globalThis.fetch = async (_url, options) => {
+    if (options.method === "POST") return response(200, {});
+    if (++reads === 1) { await finish.promise; return response(200, {value: "old"}); }
+    return response(200, {value: "new"});
+  };
+  const old = api.apiRequest("/users"); await flush();
+  await api.apiRequest("/users", {method: "POST", body: {value: "new"}});
+  assert.equal((await api.apiRequest("/users")).value, "new");
+  finish.resolve(); assert.equal((await old).value, "old");
+});
+
+test("all canceled readers abort the fetch and a new reader starts fresh", async () => {
+  const api = await loadClient(); let calls = 0;
+  globalThis.fetch = async (_url, options) => {
+    calls++;
+    if (calls > 1) return response(200, {});
+    return new Promise((_, reject) => options.signal.addEventListener("abort", () => reject(options.signal.reason)));
+  };
+  const controller = new AbortController();
+  const request = api.apiRequest("/users", {signal: controller.signal});
+  const rejected = assert.rejects(request, error => error.name === "AbortError");
+  await flush(); controller.abort(); await rejected;
+  await api.apiRequest("/users"); assert.equal(calls, 2);
+});
+
+test("already-aborted read returns a rejected promise without sending a request", async () => {
+  const api = await loadClient(); const controller = new AbortController(); controller.abort();
+  globalThis.fetch = async () => assert.fail("Must not fetch");
+  await assert.rejects(api.apiRequest("/users", {signal: controller.signal}), error => error.name === "AbortError");
+});
+
+test("a proxy throttle on session refresh is not automatically replayed", async t => {
+  fakeTime(t); const api = await loadClient(); let calls = 0;
+  globalThis.fetch = async () => { calls++; return response(429, {}); };
+  await assert.rejects(api.refreshAccessToken(), error => error.status === 429);
+  t.mock.timers.tick(3600000); await flush(); assert.equal(calls, 1);
+});
+
+test("sign-out is announced only after the server acknowledges revocation", async () => {
+  const calls = [];
+  globalThis.logoutRequest = async () => { throw new Error("Please wait before trying again."); };
+  globalThis.logoutAnnouncements = () => calls.push("signed-out");
+  const authSource = (await readFile(new URL("../src/api/auth.ts", import.meta.url), "utf8"))
+    .replace(/import \{[^\n]+\} from "\.\/client";/,
+      `const apiRequest = (...args) => globalThis.logoutRequest(...args);
+       const announceSignOut = () => globalThis.logoutAnnouncements();
+       const withSessionLock = operation => operation();`);
+  const authOutput = ts.transpileModule(authSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const {authApi} = await import(`data:text/javascript;base64,${Buffer.from(authOutput).toString("base64")}`);
+  await assert.rejects(authApi.logout(), /Please wait/); assert.deepEqual(calls, []);
+  globalThis.logoutRequest = async () => ({});
+  await authApi.logout(); assert.deepEqual(calls, ["signed-out"]);
+  delete globalThis.logoutRequest; delete globalThis.logoutAnnouncements;
 });

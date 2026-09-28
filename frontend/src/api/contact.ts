@@ -5,6 +5,6 @@ type Schemas = components["schemas"];
 export type ContactMessage = Schemas["ContactMessageRead"];
 export const contactApi = {
   send: (body: Schemas["ContactMessageCreate"], signedIn = false) => apiRequest<Schemas["ContactMessageReceipt"]>("/contact", { method: "POST", body, authenticate: signedIn }),
-  list: (page: number) => apiRequest<Schemas["ContactMessageList"]>(`/admin/messages?offset=${(page - 1) * 20}&limit=20`),
+  list: (page: number, signal?: AbortSignal) => apiRequest<Schemas["ContactMessageList"]>(`/admin/messages?offset=${(page - 1) * 20}&limit=20`, { signal }),
   review: (id: string, reviewed: boolean) => apiRequest<ContactMessage>(`/admin/messages/${id}`, { method: "PATCH", body: { reviewed } }),
 };

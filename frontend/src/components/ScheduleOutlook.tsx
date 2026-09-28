@@ -1,11 +1,12 @@
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import { Alert, Box, Button, Collapse, Stack, Typography } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { digestsApi } from "../api/digests";
 import { useAuth } from "../auth/AuthContext";
-import { startPagePolling } from "../pagePolling";
-import type { DigestSchedule, SchedulePreview } from "../types/digest";
+import { usePollingResource } from "../hooks/usePollingResource";
+import { ResourceNotice } from "./ResourceNotice";
+import type { DigestSchedule } from "../types/digest";
 
 function dateLabel(value: string, timeZone: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -17,20 +18,11 @@ function dateLabel(value: string, timeZone: string) {
 export function ScheduleOutlook({ digestId, schedule, exhausted }: {
   digestId: string; schedule: DigestSchedule; exhausted: boolean;
 }) {
-  const [preview, setPreview] = useState<SchedulePreview | null>(null);
-  const [error, setError] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const { user } = useAuth();
-  useEffect(() => {
-    let mounted = true;
-    const stop = startPagePolling(async () => {
-      try {
-        const result = await digestsApi.schedulePreview(digestId);
-        if (mounted) { setPreview(result); setError(false); }
-      } catch { if (mounted) setError(true); }
-    }, 5000);
-    return () => { mounted = false; stop(); };
-  }, [digestId]);
+  const load = useCallback((signal: AbortSignal) => digestsApi.schedulePreview(digestId, signal), [digestId]);
+  const resource = usePollingResource(load, 10000);
+  const preview = resource.data;
 
   const ended = preview?.exhausted ?? exhausted;
   const state = preview?.state;
@@ -48,9 +40,7 @@ export function ScheduleOutlook({ digestId, schedule, exhausted }: {
   if (state === "not_scheduled") return <Typography variant="body2">No schedule is saved.</Typography>;
 
   return <Stack spacing={1}>
-    {error && <Alert severity="warning">Could not refresh schedule timing. Retrying automatically.
-      {preview && ` Last checked: ${dateLabel(preview.as_of, timeZone)}.`}
-    </Alert>}
+    <ResourceNotice {...resource} />
     {executing && <Alert severity="info">
       {state === "queued" ? "Scheduled run queued — waiting to begin." : "Scheduled run in progress."}
       {preview?.active_run_id && <Button size="small" component={RouterLink}

@@ -35,7 +35,7 @@ test("focus and visibility refresh immediately; hidden pages do not keep polling
   await flush();
   env.document.visibilityState = "hidden";
   env.document.dispatchEvent(new Event("visibilitychange"));
-  env.tick(); await flush();
+  await flush();
   assert.equal(calls, 1); assert.equal(env.timers.size, 0);
   env.document.visibilityState = "visible";
   env.document.dispatchEvent(new Event("visibilitychange")); await flush();
@@ -62,4 +62,24 @@ test("a transient failure schedules a later recovery attempt", async () => {
   const stop = startPagePolling(async () => { if (++calls === 1) throw new Error("offline"); }, 5000, env);
   await flush(); env.tick(); await flush();
   assert.equal(calls, 2); stop();
+});
+
+
+test("cooldowns survive focus changes and one-off loads retry only when due", async () => {
+  const env = environment(); let calls = 0, deadline = Date.now() + 60000;
+  const stop = startPagePolling(async () => { calls++; deadline = 0; }, 0, env, () => deadline);
+  await flush(); env.window.dispatchEvent(new Event("focus")); await flush();
+  assert.equal(calls, 0);
+  deadline = Date.now() - 1; env.tick(); await flush();
+  assert.equal(calls, 1); assert.equal(env.timers.size, 0);
+  env.window.dispatchEvent(new Event("focus")); await flush();
+  assert.equal(calls, 1); stop();
+});
+
+test("an initially hidden one-off resource loads when its page becomes visible", async () => {
+  const env = environment(); env.document.visibilityState = "hidden"; let calls = 0;
+  const stop = startPagePolling(async () => { calls++; }, 0, env);
+  await flush(); assert.equal(calls, 0);
+  env.document.visibilityState = "visible"; env.document.dispatchEvent(new Event("visibilitychange"));
+  await flush(); assert.equal(calls, 1); stop();
 });

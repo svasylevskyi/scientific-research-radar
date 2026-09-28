@@ -8,7 +8,7 @@ async function load(path, dependencies) {
   const source = await readFile(new URL(path, import.meta.url), 'utf8');
   const {outputText} = ts.transpileModule(source, {compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022}});
   const module = {exports: {}};
-  runInNewContext(outputText, {module, exports: module.exports, URLSearchParams, Error, require: name => dependencies[name]});
+  runInNewContext(outputText, {module, exports: module.exports, URLSearchParams, Error, AbortController, AbortSignal, require: name => dependencies[name]});
   return module.exports;
 }
 async function loader() {
@@ -88,9 +88,10 @@ function hooks() {
 test('pagination retains saved results, rejects abandoned responses, and recovers from a failed refresh', async () => {
   const runtime = hooks();
   const queue = await load('../src/refreshQueue.ts', {});
+  const resource = await load('../src/resourceLoading.ts', { './refreshQueue': queue, './api/client': {RateLimitError: class extends Error {}} });
   const {usePollingResource} = await load('../src/hooks/usePollingResource.ts', {
-    react: runtime.react, '../refreshQueue': queue,
-    '../pagePolling': {startPagePolling: refresh => {void refresh(); return () => {}; }},
+    react: runtime.react, '../resourceLoading': resource,
+    '../pagePolling': {startPagePolling: refresh => {void refresh(); return Object.assign(() => {}, {schedule() {}}); }},
   });
   let fail = false;
   let current = async () => {if (fail) throw new Error('Disconnected'); return 'page one';};

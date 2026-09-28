@@ -1,6 +1,8 @@
+import { ResourceNotice } from "../components/ResourceNotice";
+import { usePollingResource } from "../hooks/usePollingResource";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Alert,
   Box,
@@ -21,7 +23,7 @@ import {
 } from "@mui/material";
 import { Link, useLocation } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
-import { apiRequest, ApiError } from "../api/client";
+import { apiRequest } from "../api/client";
 import { rates, type Price, type PriceList } from "../admin/pricing";
 const PAGE_SIZE = 25;
 function Copy({ row }: { row: Price }) {
@@ -38,36 +40,13 @@ function Copy({ row }: { row: Price }) {
 }
 export function AdminPricingPage() {
   const location = useLocation();
-  const [list, setList] = useState<PriceList>({ items: [], total: 0, offset: 0, limit: PAGE_SIZE });
   const [page, setPage] = useState(1);
-  const [refresh, setRefresh] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError("");
-    apiRequest<PriceList>(
-      `/admin/pricing?offset=${(page - 1) * PAGE_SIZE}&limit=${PAGE_SIZE}`,
-    )
-      .then((result) => {
-        if (active) setList(result);
-      })
-      .catch((caught) => {
-        if (active)
-          setError(
-            caught instanceof ApiError
-              ? caught.message
-              : "Could not load pricing. Reload to retry.",
-          );
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [page, refresh]);
+  const load = useCallback((signal: AbortSignal) => apiRequest<PriceList>(
+    `/admin/pricing?offset=${(page - 1) * PAGE_SIZE}&limit=${PAGE_SIZE}`, { signal }), [page]);
+  const resource = usePollingResource(load, 0);
+  const list = resource.data ?? { items: [], total: 0 };
+  const loading = resource.loading;
+
   return (
     <Box>
       <AppHeader />
@@ -96,7 +75,7 @@ export function AdminPricingPage() {
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} alignItems="center">
-            <Button disabled={loading} onClick={() => setRefresh((v) => v + 1)}>
+            <Button disabled={loading} onClick={() => void resource.refresh()}>
               Reload
             </Button>
             <Button
@@ -128,11 +107,7 @@ export function AdminPricingPage() {
             estimates are unchanged.
           </Alert>
         )}
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
+        <ResourceNotice {...resource} />
         {loading ? (
           <Box
             role="status"
@@ -142,7 +117,7 @@ export function AdminPricingPage() {
             <CircularProgress size={34} />
           </Box>
         ) : (
-          !error && (
+          !!resource.data && (
             <>
               {!!list.items.length && (
                 <>

@@ -1,5 +1,7 @@
+import { ResourceNotice } from "../components/ResourceNotice";
+import { usePollingResource } from "../hooks/usePollingResource";
 import { Alert, Box, Button, Chip, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogTitle, Pagination, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { contactApi, type ContactMessage } from "../api/contact";
 import { AppHeader } from "../components/AppHeader";
 
@@ -9,23 +11,15 @@ function displayDate(value: string) {
 
 export function AdminMessagesPage() {
   const [items, setItems] = useState<ContactMessage[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [refresh, setRefresh] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ContactMessage | null>(null);
   const [saving, setSaving] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
-  useEffect(() => {
-    let active = true;
-    setLoading(true); setError(null);
-    contactApi.list(page).then((result) => {
-      if (active) { setItems(result.items); setTotal(result.total); }
-    }).catch((error) => { if (active) setError(error instanceof Error ? error.message : "Could not load messages."); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [page, refresh]);
+  const load = useCallback((signal: AbortSignal) => contactApi.list(page, signal), [page]);
+  const resource = usePollingResource(load, 0);
+  const loading = resource.loading;
+  const total = resource.data?.total ?? 0;
+  useEffect(() => { if (resource.data) setItems(resource.data.items); }, [resource.data]);
 
   function open(item: ContactMessage) { setSelected(item); setReviewError(null); }
   async function toggleReview() {
@@ -41,10 +35,10 @@ export function AdminMessagesPage() {
   return <Box><AppHeader /><Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
     <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2} sx={{ mb: 3 }}>
       <Box><Typography component="h1" variant="h3">Contact messages</Typography><Typography color="text.secondary">Review messages sent to the Radar administration team. Sender details are supplied by the visitor.</Typography></Box>
-      <Button disabled={loading} onClick={() => setRefresh((value) => value + 1)}>Refresh</Button>
+      <Button disabled={loading} onClick={() => void resource.refresh()}>Refresh</Button>
     </Stack>
-    {error && <Alert severity="error" action={<Button onClick={() => setRefresh((value) => value + 1)}>Retry</Button>}>{error}</Alert>}
-    {loading ? <CircularProgress aria-label="Loading messages" /> : !error && <>
+    <ResourceNotice {...resource} />
+    {loading ? <CircularProgress aria-label="Loading messages" /> : !!resource.data && <>
       {!items.length ? <Paper variant="outlined" sx={{ p: 3 }}>No contact messages yet.</Paper> : <>
         <TableContainer component={Paper} variant="outlined" sx={{ display: { xs: "none", md: "block" } }}><Table>
           <TableHead><TableRow>{["Received", "Sender", "Message", "Status", ""].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>

@@ -18,7 +18,7 @@ async function load(path, dependencies = {}, globals = {}) {
   const module = { exports: {} };
   runInNewContext(outputText, {
     ...globals, module, exports: module.exports,
-    require: (name) => dependencies[name] ?? require(name),
+    require: (name) => dependencies[name] ?? (name.endsWith("/ResourceNotice") ? {ResourceNotice: "ResourceNotice"} : undefined) ?? require(name),
   });
   return module.exports;
 }

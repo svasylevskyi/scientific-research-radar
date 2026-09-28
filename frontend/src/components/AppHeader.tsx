@@ -1,3 +1,4 @@
+import { Alert } from "@mui/material";
 import AdminPanelSettingsRoundedIcon from "@mui/icons-material/AdminPanelSettingsRounded";
 import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
 import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
@@ -18,6 +19,7 @@ import { ResponsiveMainMenu, type MainMenuItem } from "./ResponsiveMainMenu";
 
 export function AppHeader() {
   const { user, logout } = useAuth();
+  const [signOutError, setSignOutError] = useState("");
   const [isSigningOut, setIsSigningOut] = useState(false);
   const initials = user?.full_name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
   const avatar = (
@@ -43,8 +45,11 @@ export function AppHeader() {
 
   async function handleLogout() {
     setIsSigningOut(true);
+    setSignOutError("");
     try {
       await logout();
+    } catch (error) {
+      setSignOutError(error instanceof Error ? error.message : "Please try signing out again.");
     } finally {
       setIsSigningOut(false);
     }
@@ -53,6 +58,7 @@ export function AppHeader() {
   return (
     <AppBar position="sticky" color="inherit" elevation={0}
       sx={{ borderBottom: "1px solid", borderColor: "divider" }}>
+      {signOutError && <Alert severity="info" onClose={() => setSignOutError("")}>Sign out has not completed. {signOutError}</Alert>}
       <Toolbar sx={{ minHeight: { xs: 68, sm: 76 } }}>
         <Container maxWidth="lg" disableGutters sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
           <Box component={MainMenuLink} to="/" aria-label="Scientific Research Radar home"

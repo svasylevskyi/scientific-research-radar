@@ -1,3 +1,5 @@
+import { ResourceNotice } from "../components/ResourceNotice";
+import { usePollingResource } from "../hooks/usePollingResource";
 import { AdminDigestNavigation } from "../components/AdminDigestNavigation";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { AllowanceNotice } from "../components/AllowanceNotice";
@@ -23,7 +25,7 @@ import {
   Tabs,
   Typography,
 } from "@mui/material";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi, digestsApi } from "../api/digests";
@@ -56,12 +58,12 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const location = useLocation();
   const routeState = location.state as { success?: string } | null;
   const backPath = admin ? "/admin/digests" : "/radar";
-  const [digest, setDigest] = useState<Digest | null>(null);
+  const [digestRecord, setDigest] = useState<Digest | null>(null);
+  const digest = digestRecord?.id === digestId ? digestRecord : null;
   const [latestRun, setLatestRun] = useState<DigestRunDetail | null>(null);
   const subscription = useSubscriptionAccess(admin ? undefined : digestId, undefined, admin ? digest?.owner_id : undefined, !admin || !!digest, `${digest?.maximum_papers}:${latestRun?.id}:${latestRun?.status}`);
   const access = subscription.data;
   const [activeRun, setActiveRun] = useState<DigestRunDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isStartingRun, setIsStartingRun] = useState(false);
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
@@ -82,63 +84,42 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const [confirmRun, setConfirmRun] = useState(false);
   const scheduleRevision = useRef(0);
 
-  useEffect(() => {
-    let active = true;
-    setIsLoading(true);
-    setSaveNotice(null);
-    setError(null);
-    setRuns([]); setLatestRun(null); setActiveRun(null); setRunTab(0);
-    setConfirmRun(false);
-
-    async function load() {
-      try {
-        const digestRequest = admin ? adminDigestsApi.get(digestId) : digestsApi.get(digestId);
-        const [digestResult, history, accountActiveRun] = await Promise.all([
-          digestRequest,
-          admin ? Promise.resolve([]) : loadRunHistory((offset) => digestRunsApi.list(digestId, { offset, limit: 100 })),
-          admin ? Promise.resolve(null) : digestRunsApi.active(),
-        ]);
-        if (!active) return;
-        setDigest(digestResult);
-        setActiveRun(accountActiveRun);
-        setHasRuns(history.length > 0);
-        setRuns(history);
-
-        if (accountActiveRun?.digest_id === digestId) {
-          setLatestRun(accountActiveRun);
-        } else if (history[0]) {
-          const detail = await digestRunsApi.get(digestId, history[0].id);
-          if (active) setLatestRun(detail);
-        } else {
-          setLatestRun(null);
-        }
-      } catch (caught) {
-        if (active) {
-          setError(caught instanceof ApiError ? caught.message : "Could not load this digest.");
-        }
-      } finally {
-        if (active) setIsLoading(false);
-      }
-    }
-
-    void load();
-    return () => {
-      active = false;
-    };
+  const load = useCallback(async (signal: AbortSignal) => {
+    const [digestResult, history, accountActiveRun] = await Promise.all([
+      admin ? adminDigestsApi.get(digestId, signal) : digestsApi.get(digestId, signal),
+      admin ? Promise.resolve([]) : loadRunHistory(offset => digestRunsApi.list(digestId, { offset, limit: 100, signal })),
+      admin ? Promise.resolve(null) : digestRunsApi.active(signal),
+    ]);
+    const latest = accountActiveRun?.digest_id === digestId ? accountActiveRun
+      : history[0] ? await digestRunsApi.get(digestId, history[0].id, signal) : null;
+    return { digestResult, history, accountActiveRun, latest };
   }, [admin, digestId]);
+  const initial = usePollingResource(load, 0);
+  const isLoading = initial.loading;
+  useEffect(() => {
+    setDigest(null); setSaveNotice(null); setError(null);
+    setRuns([]); setLatestRun(null); setActiveRun(null); setRunTab(0); setConfirmRun(false);
+  }, [admin, digestId]);
+  useEffect(() => {
+    if (!initial.data) return;
+    const { digestResult, history, accountActiveRun, latest } = initial.data;
+    setDigest(digestResult); setActiveRun(accountActiveRun);
+    setHasRuns(history.length > 0); setRuns(history); setLatestRun(latest);
+  }, [initial.data]);
 
   useEffect(() => {
-    if (admin || isLoading || isStartingRun) return;
+    if (admin || !digest || initial.error || isLoading || isStartingRun) return;
     let mounted = true;
     const trackedRun = activeRun;
+    const controller = new AbortController();
 
     async function refreshProgress() {
       try {
         const revision = scheduleRevision.current;
-        const accountActiveRun = await digestRunsApi.active();
+        const accountActiveRun = await digestRunsApi.active(controller.signal);
         if (!mounted) return;
         // Schedule reads are independent: a failed read must not hide an active run.
-        const scheduleRead = digestsApi.get(digestId).then((saved) => {
+        const scheduleRead = digestsApi.get(digestId, controller.signal).then((saved) => {
           if (mounted && revision === scheduleRevision.current) {
             setDigest((current) => current?.id === digestId ? { ...current,
               schedule: saved.schedule, schedule_next_at: saved.schedule_next_at,
@@ -154,7 +135,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
         }
 
         if (trackedRun?.digest_id === digestId) {
-          const finished = await digestRunsApi.get(trackedRun.digest_id, trackedRun.id);
+          const finished = await digestRunsApi.get(trackedRun.digest_id, trackedRun.id, controller.signal);
           if (!mounted) return;
           setLatestRun(finished);
           updateRun(finished);
@@ -169,8 +150,8 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
     }
 
     const stop = startPagePolling(refreshProgress, activeRun ? 2500 : 5000);
-    return () => { mounted = false; stop(); };
-  }, [activeRun?.id, admin, digestId, isLoading, isStartingRun]);
+    return () => { mounted = false; controller.abort(); stop(); };
+  }, [activeRun?.id, admin, digestId, isLoading, isStartingRun, initial.error, !!digest]);
 
   useEffect(() => {
     if (runTab === 1 && latestRun?.status !== "completed") setRunTab(0);
@@ -324,12 +305,13 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
           {admin ? "Back to digest management" : "Back to workspace"}
         </Button>
 
+        <ResourceNotice {...initial} />
         {isLoading ? (
           <Box role="status" aria-label="Loading digest" sx={{ py: 10, display: "grid", placeItems: "center" }}>
             <CircularProgress size={34} />
           </Box>
         ) : !digest ? (
-          <Alert severity="error">{error ?? "Digest not found."}</Alert>
+          initial.error ? null : <Typography role="status">Opening digest…</Typography>
         ) : (
           <>
             {admin && <AdminDigestNavigation digestId={digestId} current="details" />}

@@ -1,6 +1,8 @@
+import { ResourceNotice } from "./ResourceNotice";
+import { usePollingResource } from "../hooks/usePollingResource";
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 import { apiRequest } from "../api/client";
 import type { DigestRunDetail } from "../types/digest";
 
@@ -18,34 +20,27 @@ const money = (value: string | null) => value === null ? "Unknown" : `$${Number(
 const stageName = (value: string) => value.replaceAll("_", " ");
 
 export function useAdminRunCosts(admin: boolean, digestId: string, run: DigestRunDetail | null) {
-  const [data, setData] = useState<Costs | null>(null);
-  const [error, setError] = useState(false);
-  useEffect(() => {
-    if (!admin || !run) return;
-    let active = true;
-    setError(false);
-    apiRequest<Costs>(`/admin/digests/${digestId}/runs/${run.id}/costs`)
-      .then((result) => { if (active) setData(result); })
-      .catch(() => { if (active) setError(true); });
-    return () => { active = false; };
-  }, [admin, digestId, run]);
-  return { data: data?.run_id === run?.id ? data : null, error };
+  const load = useCallback((signal: AbortSignal) => admin && run
+    ? apiRequest<Costs>(`/admin/digests/${digestId}/runs/${run.id}/costs`, { signal }) : Promise.resolve(null), [admin, digestId, run?.id]);
+  return usePollingResource(load, run?.status === "running" || run?.status === "queued" ? 15000 : 0);
 }
 
-export function AdminCostSummary({ data, error }: ReturnType<typeof useAdminRunCosts>) {
-  if (error) return <Alert severity="warning">Cost details could not be loaded. Reload to retry.</Alert>;
-  if (!data) return <Typography role="status">Loading cost details…</Typography>;
-  return <Alert severity={data.complete ? "info" : "warning"}>
+export function AdminCostSummary(resource: ReturnType<typeof useAdminRunCosts>) {
+  const { data } = resource;
+  return <Stack spacing={1}><ResourceNotice {...resource} />
+    {resource.loading && <Typography role="status">Loading cost details…</Typography>}
+    {data && <Alert severity={data.complete ? "info" : "warning"}>
     {data.complete ? "Estimated run cost" : "Known cost subtotal"}: {money(data.known_estimated_usd)} USD.
     {" "}{data.request_count} recorded request attempts. {data.unknown_requests} with unknown cost.
     {!data.complete && " Total cost is incomplete."}
     {data.historical_gap && " Earlier requests have incomplete accounting."}
     {" "}Estimates are not an OpenAI invoice.
-  </Alert>;
+  </Alert>}</Stack>;
 }
 
-export function AdminCostDetails({ data, error }: ReturnType<typeof useAdminRunCosts>) {
-  if (error || !data) return <AdminCostSummary data={data} error={error} />;
+export function AdminCostDetails(resource: ReturnType<typeof useAdminRunCosts>) {
+  const { data } = resource;
+  if (!data) return null;
   return <Stack spacing={2}>
     <Typography color="text.secondary">Usage includes rejected responses and retries recorded since accounting was enabled. Polling an existing response does not add another request. Cached reads and cache writes are part of input; reasoning is part of output and is not charged twice. Expand a stage for request details.</Typography>
     {data.stages.map((stage) => <Accordion key={stage.stage}>

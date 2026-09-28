@@ -1,3 +1,4 @@
+import { ResourceNotice } from "../components/ResourceNotice";
 import type { AdminDigest } from "../types/digest";
 import { useCallback } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
@@ -20,13 +21,13 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
   const { digestId = "" } = useParams();
   const location = useLocation();
   const routeState = location.state as { success?: string } | null;
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal: AbortSignal) => {
     const [digest, runs] = await Promise.all([
-      admin ? adminDigestsApi.get(digestId) : digestsApi.get(digestId),
+      admin ? adminDigestsApi.get(digestId, signal) : digestsApi.get(digestId, signal),
       loadRunHistory((offset) =>
         admin
-          ? adminDigestsApi.listRuns(digestId, { offset, limit: 100 })
-          : digestRunsApi.list(digestId, { offset, limit: 100 }),
+          ? adminDigestsApi.listRuns(digestId, { offset, limit: 100, signal })
+          : digestRunsApi.list(digestId, { offset, limit: 100, signal }),
       ),
     ]);
     return { digest, runs, owner: "owner" in digest ? (digest as AdminDigest).owner : null };
@@ -79,17 +80,7 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
             {routeState.success}
           </Alert>
         )}
-        {resource.error && (
-          <Alert
-            severity="error"
-            sx={{ mb: 2 }}
-            action={
-              <Button onClick={() => void resource.refresh()}>Retry</Button>
-            }
-          >
-            {resource.error}
-          </Alert>
-        )}
+        <ResourceNotice {...resource} />
         {resource.loading && (
           <Typography role="status">Loading digest history…</Typography>
         )}

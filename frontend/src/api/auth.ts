@@ -52,15 +52,13 @@ export const authApi = {
   },
 
   async logout(): Promise<void> {
-    try {
-      await withSessionLock(() => apiRequest<{ message: string }>("/auth/logout", {
-        method: "POST",
-        authenticate: false,
-        retryAfterRefresh: false,
-      }));
-    } finally {
-      announceSignOut();
-    }
+    await withSessionLock(() => apiRequest<{ message: string }>("/auth/logout", {
+      method: "POST",
+      authenticate: false,
+      retryAfterRefresh: false,
+    }));
+    // Keep the session visible until server-side revocation is acknowledged.
+    announceSignOut();
   },
 
   me(): Promise<User> {

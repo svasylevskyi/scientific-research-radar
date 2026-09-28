@@ -1,14 +1,17 @@
+import { ResourceNotice } from "./ResourceNotice";
 import { Alert, Button, Box } from "@mui/material";
 import { Link } from "react-router-dom";
 import type { SubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { allowanceMessage, type AllowanceContext } from "../allowancePresentation";
 
 /** One page-owned notice; loading and errors take precedence over stale quotas. */
-export function AllowanceNotice({ data, error, loading, context, id }: {
+export function AllowanceNotice({ data, error, loading, retryAt, retrying, refresh, context, id }: {
   data: SubscriptionAccess | null; error?: string | null; loading?: boolean;
+  retryAt?: number; retrying?: boolean; refresh?: () => Promise<void>;
   context: AllowanceContext; id?: string;
 }) {
   const message = allowanceMessage(data, context);
+  if (error && retryAt && refresh) return <Box id={id} sx={{ my: 2 }}><ResourceNotice error={error} retryAt={retryAt} retrying={retrying} refresh={refresh} data={data} /></Box>;
   if (error) return <Alert id={id} severity="warning" sx={{ my: 2 }}>Could not refresh subscription allowances. Allowance-dependent actions are paused while we retry.</Alert>;
   if (loading) return <Alert id={id} severity="info" role="status" sx={{ my: 2 }}>Checking subscription allowances…</Alert>;
   if (!message) return null;

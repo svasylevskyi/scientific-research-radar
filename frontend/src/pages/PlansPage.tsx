@@ -1,3 +1,4 @@
+import { ResourceNotice } from "../components/ResourceNotice";
 import { useCallback, useState, type ChangeEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import {
@@ -39,11 +40,11 @@ function PlansContent({ enrolment, workspace }: { enrolment: boolean; workspace:
   const catalogue = usePollingResource(
     enrolment ? subscriptionsApi.enrolmentPlans : subscriptionsApi.plans,
   );
-  const loadAccount = useCallback(async () => {
+  const loadAccount = useCallback(async (signal: AbortSignal) => {
     if (!user) return null;
     const [billing, access] = await Promise.all([
-      subscriptionsApi.billing(),
-      subscriptionsApi.access(),
+      subscriptionsApi.billing(signal),
+      subscriptionsApi.access(signal),
     ]);
     return { billing, access };
   }, [user?.id]);
@@ -126,16 +127,11 @@ function PlansContent({ enrolment, workspace }: { enrolment: boolean; workspace:
           Free is managed by Radar and assigned after registration. Prices include tax.
           {catalogue.data?.sandbox && " Paid subscriptions are in sandbox testing: use Stripe test payment details only. No real payment is collected."}
         </Alert>
-        {error && (
-          <Alert severity="error" action={
-            <Button onClick={() => void catalogue.refresh()}>Retry</Button>
-          }>
-            {error}
-          </Alert>
-        )}
-        {billingError && (
+        <ResourceNotice {...catalogue} />
+        <ResourceNotice {...account} />
+        {actionError && (
           <Alert severity="error">
-            {billingError}{" "}
+            {actionError}{" "}
             <Button component={Link} to="/radar/subscription">
               Review billing
             </Button>
