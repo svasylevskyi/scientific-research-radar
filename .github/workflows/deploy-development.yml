@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       actions: read
@@ -62,7 +62,7 @@ jobs:
     # Enable only after configuring WireGuard and the development environment.
     if: vars.DEV_SSH_DEPLOY_ENABLED == 'true'
     environment: development
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7.0.1

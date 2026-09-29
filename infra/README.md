@@ -131,6 +131,12 @@ deployment only reads Actions artifacts and no longer writes packages.
 
 ### CI artifacts, caching, and recovery
 
+- CI and deployment jobs explicitly use `ubuntu-26.04`, so changes to GitHub's
+  `ubuntu-latest` alias do not change our runner OS release. Runner tools still
+  receive updates. Application Python/Node versions and container base images
+  remain configured separately; existing servers do not need an OS upgrade.
+  After changing runner releases, verify full CI and a development deployment
+  to exercise the WireGuard/SSH connection as well as the container checks.
 - PRs run the same application, database, migration, and container smoke checks,
   but never publish release images. Superseded PR runs are cancelled. Main runs
   and deployments are not cancelled by newer commits.
