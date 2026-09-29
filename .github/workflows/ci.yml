@@ -14,7 +14,7 @@ concurrency:
 jobs:
   changes:
     name: Select CI checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       profile: ${{ steps.select.outputs.profile }}
     steps:
@@ -29,7 +29,7 @@ jobs:
         run: python3 infra/scripts/ci_policy.py select
   deployment-config:
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7.0.1
       - run: python3 -m unittest discover -s infra/tests -v
@@ -38,7 +38,7 @@ jobs:
   backend-static:
     needs: changes
     if: needs.changes.outputs.profile == 'full'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: backend
@@ -60,7 +60,7 @@ jobs:
     name: backend (postgres)
     needs: changes
     if: needs.changes.outputs.profile == 'full'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     services:
       postgres:
         image: postgres:17-bookworm
@@ -107,7 +107,7 @@ jobs:
   frontend:
     needs: changes
     if: needs.changes.outputs.profile == 'full' || needs.changes.outputs.profile == 'frontend'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: frontend
@@ -132,7 +132,7 @@ jobs:
   containers:
     needs: changes
     if: needs.changes.outputs.profile == 'full' || needs.changes.outputs.profile == 'frontend'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: docker/setup-buildx-action@v4.4.1
@@ -174,7 +174,7 @@ jobs:
     # An expected skip must not skip this gate; failed/cancelled prerequisites
     # must reach the verifier as well.
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -186,7 +186,7 @@ jobs:
   publish:
     needs: [ci-passed, containers]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
