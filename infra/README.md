@@ -245,14 +245,17 @@ file:
 sudo install -m 644 infra/radar-backup.logrotate /etc/logrotate.d/radar-backup
 ```
 
-Cron failures are visible in the log; alerting is not yet configured.
+Cron failures are visible in the log. Configure the independent
+[Healthchecks alerts](#healthchecksio-monitoring) so missed daily backups reach
+an operator.
 
-**Off-server storage is still a setup requirement.** Select an encrypted backup
-destination before relying on these backups. A server disk snapshot or a dump on
-the same server does not protect against account/server loss. Until an automated
-remote destination is configured, download copies over SSH and keep them in
-protected storage. Preserve the env file separately in a password manager or
-an encrypted backup, including the JWT secret and database password.
+**Off-server storage is still a setup requirement.** The optional
+[encrypted Restic/R2 workflow](../docs/offsite-backups.md) saves fresh database
+dumps, application configuration, release pins and cumulative closure manifests.
+It includes separate alerts and an isolated remote restore drill. It must be
+configured and scheduled explicitly; local dumps or Hetzner snapshots alone do
+not establish independent recoverability. Keep the Restic password and credentials
+in a password manager outside the server.
 
 Restore verification NEVER overwrites the live database:
 

@@ -133,8 +133,12 @@ This revokes restored sessions, disables schedules and queues erasure without
 sending notices or contacting Stripe. Run closure processing in isolation with
 the correct Stripe mode, resolve its issues, and verify erasure before promotion.
 The existing restore script creates a separate database and does not switch
-production. Manifest export/off-site copying and review are operator steps; if the
-latest manifest was lost, investigate missing closure records before promotion.
+production. The optional [Restic/R2 workflow](offsite-backups.md) automates encrypted
+off-site exports and preserves cumulative markers across database rollbacks. Its
+recovery command downloads the latest manifest even when selecting an older
+database. Reapplication, erasure review and promotion remain operator steps; if
+closure records since the last checkpoint may be missing, investigate before
+promotion.
 
 References: [Stripe cancellation](https://docs.stripe.com/billing/subscriptions/cancel),
 [subscription cancellation API](https://docs.stripe.com/api/subscriptions/cancel),

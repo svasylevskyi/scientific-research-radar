@@ -20,3 +20,4 @@ infra/*.env
 
 # Healthchecks ping URLs
 *.monitoring.json
+*.restic.env
