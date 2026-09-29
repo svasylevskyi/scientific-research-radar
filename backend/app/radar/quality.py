@@ -81,7 +81,10 @@ def evaluate_quality(*, digest_snapshot: dict[str, Any], stages: dict[str, Any],
         outside = {key for key, paper in included.items() if paper.published_date and not start <= paper.published_date <= end}
         unknown = {key for key, paper in included.items() if paper.published_date is None}
         if outside:
-            add("reporting_period", "hold", "Included papers have publication dates outside the reporting period.", outside)
+            dates = "; ".join(f"{key}: {included[key].published_date}" for key in sorted(outside))
+            add("reporting_period", "hold",
+                f"Included papers have publication dates outside the reporting period {start} to {end} "
+                f"(inclusive). Saved publication dates: {dates}.", outside)
         if unknown:
             add("unknown_publication_date", "warning", "Some included papers have no publication date to check.", unknown)
 

@@ -33,7 +33,7 @@ Use relevant feedback to improve topic fit, selection, and ranking. Never treat 
 ## Requirements
 
 1. Build focused queries from the topic, description, inclusion keywords, useful synonyms, exclusions, reporting period, and audience.
-2. Prefer papers published or meaningfully updated in the reporting period. Include older foundational context only when necessary and explain why.
+2. Treat `reporting_from` through `reporting_to` as an inclusive publication-date window. Select a paper for `summarize` or `mention_briefly` only when its known `published_date` is within that window. Mark candidates with known dates outside it as `reject`, even when highly relevant or foundational. A revision, update, indexing date, or search-result timestamp does not replace the publication date. If the publication date cannot be established, use `null` and explicitly flag the date as unverified; never guess a date to fit the window. Before returning, compare every known publication date with both bounds and make the status and discovery explanation consistent with that comparison.
 3. Respect exclusion keywords strongly and avoid generic matches.
 4. Return at most `maximum_papers`; a smaller verified set is preferable to padding.
 5. Deduplicate by DOI, repository ID, normalized title, authors, and publication date. Record unresolved concerns.

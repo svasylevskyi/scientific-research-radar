@@ -6,7 +6,7 @@ without acquiring responsibility for retries, accounting, or quota settlement.
 """
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -134,7 +134,11 @@ class RadarRunner:
 
     def _execute_discovery(self, run: DigestRun) -> DiscoveryRelevanceOutput:
         stage = self.lifecycle.stage(run, DigestRunStageType.DISCOVERY_RELEVANCE)
+        reporting_from = date.fromisoformat(run.digest_snapshot["reporting_from"])
+        reporting_to = date.fromisoformat(run.digest_snapshot["reporting_to"])
         if stage.status == DigestRunStageStatus.COMPLETED and stage.result_data:
+            # Accepted checkpoints retain their decisions on retry; filtering is
+            # committed with discovery, before any content retrieval or summaries.
             return DiscoveryRelevanceOutput.model_validate(stage.result_data)
 
         self.lifecycle.begin_stage(stage=stage)
@@ -154,6 +158,9 @@ class RadarRunner:
         validation.validate_discovery(
             output=result.output,
             maximum_papers=int(run.digest_snapshot["maximum_papers"]),
+        )
+        validation.exclude_out_of_period_papers(
+            output=result.output, reporting_from=reporting_from, reporting_to=reporting_to
         )
         # Discovery may locate any scholarly source, but cannot authorize copied abstracts.
         for paper in result.output.search.papers:
@@ -241,7 +248,7 @@ class RadarRunner:
         )
         validation.validate_trends(
             output=result.output,
-            known_ids={paper.external_id for paper in discovery.search.papers},
+            known_ids={summary.external_id for summary in summaries.paper_summaries},
         )
         self.lifecycle.save_trend_analysis(run=run, stage=stage, result=result)
         return result.output
@@ -276,7 +283,7 @@ class RadarRunner:
         )
         validation.validate_briefing(
             output=result.output,
-            known_ids={paper.external_id for paper in discovery.search.papers},
+            known_ids={summary.external_id for summary in summaries.paper_summaries},
         )
         result.output.digest_briefing.source_attributions = [summary.source_attribution
             for summary in summaries.paper_summaries if summary.source_attribution is not None]

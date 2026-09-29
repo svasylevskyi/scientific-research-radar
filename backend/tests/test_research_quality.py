@@ -76,6 +76,15 @@ def test_pass_inclusive_dates_and_configurable_warnings():
         check_source_access=False, sparse_paper_threshold=0).status == "hold"
 
 
+def test_out_of_period_finding_reports_compared_dates():
+    stages = copy.deepcopy(BASELINE["stages"])
+    paper = stages["discovery_relevance"]["search"]["papers"][0]
+    paper["published_date"] = "2026-08-20"
+    finding = next(item for item in evaluate(stages).findings if item.code == "reporting_period")
+    assert "2026-09-01 to 2026-09-24 (inclusive)" in finding.message
+    assert f"{paper['external_id']}: 2026-08-20" in finding.message
+
+
 @pytest.mark.parametrize("kind,expected", [("doi", "duplicate_identity"), ("url", "duplicate_identity"), ("title", "possible_duplicates")])
 def test_duplicate_papers_across_distinct_provider_ids(kind, expected):
     stages = copy.deepcopy(BASELINE["stages"])

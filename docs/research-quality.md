@@ -42,6 +42,30 @@ Agree the treatment of permanently held output before enforcing for paying users
 
 ## Rules
 
+### Reporting-period eligibility before summarization
+
+Discovery accepted from prompt version `2026-09-29.1` onward enforces the run's
+saved publication-date window before saving its checkpoint. Known dates outside
+the inclusive interval are marked **Reject**, regardless of relevance, revision
+dates, quality mode, or the optional reporting-date check. The candidate stays in
+Paper Search/Relevance for inspection, with the publication date, window, and
+exclusion reason in its warnings and assessment. It receives no source-content
+capture or summary, and cannot be cited by trends or the briefing. Returning fewer
+or zero selected papers does not trigger a replacement search or extra LLM call.
+
+Missing publication dates stay unknown and retain their separate quality warning;
+this rule does not infer dates or independently verify publisher metadata. The
+final date check remains a safeguard and now states the dates actually compared.
+Manual runs use the saved form dates. Scheduled runs use the occurrence's local
+date and preserve the configured window length, not the delayed worker's date.
+
+Retries reuse the saved, filtered discovery decision and do not repeat discovery.
+Previously completed discovery checkpoints and historical runs are not rewritten;
+start a **new run** to apply this selection policy to an older result. Re-running
+local quality checks only assesses saved output; it does not regenerate research.
+
+### Final quality checks
+
 | Check | Result | Configurable |
 | --- | --- | --- |
 | Blank briefing title, executive summary, content, transparency, trend overview, or selected-paper summary | Hold | No, in Observe/Enforce |
