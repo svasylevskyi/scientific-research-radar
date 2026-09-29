@@ -14,7 +14,7 @@ from app.scheduler.dispatch import ScheduleDispatcher
 from app.services.research_quality_service import delivery_allowed
 from test_digest_runs import RecordingRadarClient, _execute_next
 from test_digests import _authorization, _register
-from test_research_quality import publish
+from test_research_quality import publish, seed_out_of_period_checkpoint
 from test_scheduler_delivery import NOW, setup_schedule
 
 
@@ -100,6 +100,7 @@ def test_legacy_run_can_be_evaluated_using_current_rules_in_any_mode(client, db_
         run.quality_status = "not_evaluated"
         run.quality_findings = []
         run.quality_evaluated_at = None
+        seed_out_of_period_checkpoint(run)
         db.commit()
     publish(db_session_factory, mode)
     result = submit(client, completed, 1)
@@ -121,6 +122,7 @@ def test_legacy_run_can_be_evaluated_using_current_rules_in_any_mode(client, db_
 def test_re_evaluation_preserves_history_delivery_and_run_state(client, db_session_factory, completed, blocked):
     with db_session_factory() as db:
         run = DigestRunRepository(db).get(completed["run_id"])
+        seed_out_of_period_checkpoint(run)
         run.quality_delivery_blocked = blocked
         run.email_delivery.status = "held" if blocked else "pending"
         db.commit()

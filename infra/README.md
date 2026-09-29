@@ -487,6 +487,9 @@ folder. A separate server is required by this initial fixed-port/fixed-proxy-sub
 layout. Use production.env.example as a starting point, provide real SMTP, and set
 RADAR_ENVIRONMENT=production consistently for operations and cron.
 
+For subsequent releases, follow the [manual production update guide](../docs/production-deployment.md)
+to select the successful main CI manifest and deploy its pinned images.
+
 Before paid launch, add independent backup storage/alerts, restore drills,
 production monitoring, provider budget controls, safe database upgrades and
 retention policies. Configure separate credentials and integration accounts.

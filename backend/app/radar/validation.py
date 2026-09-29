@@ -4,6 +4,8 @@ Future quality gates belong at this boundary. Rejection must retain request cost
 evidence while preventing the completed response from being reused on retry.
 """
 
+from datetime import date
+
 from app.radar.contracts import (
     DigestBriefingOutput,
     DiscoveryRelevanceOutput,
@@ -62,6 +64,35 @@ def validate_discovery(
         raise RadarOutputValidationError(
             "The discovery stage returned more papers than the digest maximum"
         )
+
+
+def exclude_out_of_period_papers(
+    *, output: DiscoveryRelevanceOutput, reporting_from: date, reporting_to: date
+) -> None:
+    """Keep discovered candidates for inspection, but reject known invalid dates.
+
+    This mandatory selection rule is independent of optional delivery-quality
+    settings. Unknown publication dates remain unknown; revisions never substitute
+    for publication dates. Apply before persisting the discovery checkpoint.
+    """
+    if reporting_from > reporting_to:
+        raise RadarOutputValidationError("Invalid reporting interval")
+    assessments = {item.external_id: item for item in output.relevance.assessments}
+    for paper in output.search.papers:
+        if paper.published_date is None or reporting_from <= paper.published_date <= reporting_to:
+            continue
+        reason = (
+            f"Excluded by reporting-period rule: publication date {paper.published_date} "
+            f"is outside {reporting_from} to {reporting_to} (inclusive)."
+        )
+        assessment = assessments[paper.external_id]
+        assessment.recommended_status = "reject"
+        assessment.best_digest_placement = "reject"
+        if reason not in assessment.caveats:
+            assessment.caveats.append(reason)
+            assessment.rationale = f"{reason} Original discovery assessment: {assessment.rationale}"
+        if reason not in paper.warnings:
+            paper.warnings.append(reason)
 
 
 def validate_summaries(*, output: PaperSummariesOutput, expected_ids: set[str]) -> None:

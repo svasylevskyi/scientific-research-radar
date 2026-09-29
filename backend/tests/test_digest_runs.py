@@ -1,5 +1,7 @@
 from app.repositories.run_state_repository import RunStateRepository
 from datetime import date, datetime, timedelta, timezone
+import json
+import re
 from types import SimpleNamespace
 from typing import Annotated
 from uuid import UUID
@@ -294,8 +296,16 @@ class RecordingRadarClient:
                      "service_tier": "default"}
             on_usage(event)
             on_usage(event)  # Repeated observation must be idempotent.
+        output = _stage_output(response_format)
+        if response_format is DiscoveryRelevanceOutput:
+            # Scheduled tests use fixed occurrence dates. Their synthetic paper
+            # must belong to that run's window, not the wall-clock test date.
+            snapshot = json.loads(re.findall(r"```json\n(.*?)\n```", prompt.user, re.S)[0])
+            if snapshot.get("reporting_to"):
+                for paper in output.search.papers:
+                    paper.published_date = date.fromisoformat(snapshot["reporting_to"])
         return RadarClientResult(
-            output=_stage_output(response_format),
+            output=output,
             response_id=response_id,
             model_name=self.model_name,
             usage=RadarTokenUsage(input_tokens=100, output_tokens=50),
@@ -856,7 +866,7 @@ def test_stage_prompts_are_versioned_compact_and_compliant() -> None:
         papers=[],
     )
 
-    assert discovery.version == "2026-09-25.1"
+    assert discovery.version == "2026-09-29.1"
     assert "untrusted data" in discovery.system
     assert "Public accessibility does not establish" in discovery.system
     assert "could substitute for a source" in discovery.system
