@@ -1,6 +1,7 @@
 """Synthetic evaluation fixtures and delivery/settings integration regressions."""
 import copy
 import json
+from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
@@ -25,6 +26,31 @@ from test_digests import _authorization, _register
 from test_scheduler_delivery import NOW, setup_schedule
 
 BASELINE = json.loads((Path(__file__).parent / "fixtures/research_quality_baseline.json").read_text())
+
+
+def seed_out_of_period_checkpoint(run):
+    """Model a saved legacy outlier without relying on today's test-machine date."""
+    stage = next(stage for stage in run.stages if stage.stage == DigestRunStageType.DISCOVERY_RELEVANCE)
+    checkpoint = copy.deepcopy(stage.result_data)
+    checkpoint["search"]["papers"][0]["published_date"] = (
+        date.fromisoformat(run.digest_snapshot["reporting_from"]) - timedelta(days=1)
+    ).isoformat()
+    stage.result_data = checkpoint
+
+
+@pytest.fixture
+def legacy_date_at_completion(monkeypatch):
+    # Fresh discovery now rejects outliers. Inject a legacy checkpoint at the
+    # completion boundary to exercise the independent final delivery safeguard.
+    from app.radar.lifecycle import RunLifecycle
+    complete = RunLifecycle.complete_run
+
+    def with_legacy_checkpoint(self, run_id):
+        seed_out_of_period_checkpoint(self.reload(run_id))
+        self.db.commit()
+        complete(self, run_id)
+
+    monkeypatch.setattr(RunLifecycle, "complete_run", with_legacy_checkpoint)
 
 
 def evaluate(stages=None, **config):
@@ -160,7 +186,7 @@ def test_settings_permissions_validation_audit_and_stale_writes(client, db_sessi
 
 
 @pytest.mark.parametrize("mode,expected,blocked", [("off", "not_evaluated", False), ("observe", "hold", False), ("enforce", "hold", True)])
-def test_run_snapshots_and_delivery_survive_mode_changes(client, db_session_factory, mode, expected, blocked):
+def test_run_snapshots_and_delivery_survive_mode_changes(client, db_session_factory, mode, expected, blocked, legacy_date_at_completion):
     publish(db_session_factory, mode)
     auth, digest = setup_schedule(client)
     fake = RecordingRadarClient()
@@ -222,7 +248,7 @@ def test_enforced_warning_delivers_and_evaluator_failure_holds(client, db_sessio
     assert len(messages) == 1
 
 
-def test_failed_generation_retry_keeps_settings_and_legacy_is_not_evaluated(client, db_session_factory):
+def test_failed_generation_retry_keeps_settings_and_legacy_is_not_evaluated(client, db_session_factory, legacy_date_at_completion):
     publish(db_session_factory, "enforce")
     _, digest = setup_schedule(client)
     fake = RecordingRadarClient(fail_stage=DigestRunStageType.PAPER_SUMMARIES)
