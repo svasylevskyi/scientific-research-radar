@@ -1,12 +1,21 @@
-"""Write the development runner's minimal WireGuard configuration without logging keys."""
+"""Write a deployment runner's minimal WireGuard configuration without logging keys."""
+import argparse
 import base64
 import os
 from pathlib import Path
 import re
-import sys
 
 
-def write_config(path: Path, env) -> None:
+TUNNELS = {
+    "development": ("10.77.0.1", "10.77.0.2"),
+    "production": ("10.78.0.1", "10.78.0.2"),
+}
+
+
+def write_config(path: Path, env, environment: str = "development") -> None:
+    if environment not in TUNNELS:
+        raise ValueError("Unknown deployment environment")
+    server, runner = TUNNELS[environment]
     keys = {}
     for name in ("WG_PRIVATE_KEY", "WG_SERVER_PUBLIC_KEY"):
         value = env.get(name, "")
@@ -21,15 +30,15 @@ def write_config(path: Path, env) -> None:
     match = re.fullmatch(r"([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?):([0-9]{1,5})", endpoint)
     if not match or not 1 <= int(match[2]) <= 65535:
         raise ValueError("WG_ENDPOINT must be an IPv4 address or hostname followed by a valid port")
-    if env.get("DEPLOY_HOST") != "10.77.0.1":
-        raise ValueError("DEV_SSH_HOST must be 10.77.0.1 for the development tunnel")
+    if env.get("DEPLOY_HOST") != server:
+        raise ValueError(f"DEPLOY_HOST must be {server} for the {environment} tunnel")
     config = (
-        "[Interface]\nAddress = 10.77.0.2/32\n"
+        f"[Interface]\nAddress = {runner}/32\n"
         f"PrivateKey = {keys['WG_PRIVATE_KEY']}\n\n"
         "[Peer]\n"
         f"PublicKey = {keys['WG_SERVER_PUBLIC_KEY']}\n"
         f"Endpoint = {endpoint}\n"
-        "AllowedIPs = 10.77.0.1/32\nPersistentKeepalive = 25\n"
+        f"AllowedIPs = {server}/32\nPersistentKeepalive = 25\n"
     )
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as output:
@@ -37,7 +46,11 @@ def write_config(path: Path, env) -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("path", type=Path)
+    parser.add_argument("--environment", choices=tuple(TUNNELS), default="development")
+    args = parser.parse_args()
     try:
-        write_config(Path(sys.argv[1]), os.environ)
+        write_config(args.path, os.environ, args.environment)
     except ValueError as exc:
         raise SystemExit(str(exc)) from None

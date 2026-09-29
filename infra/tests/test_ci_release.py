@@ -49,6 +49,7 @@ class ReleaseTests(unittest.TestCase):
         for changes in (
             {'head_sha': 'd' * 40}, {'head_branch': 'feature/test'},
             {'event': 'pull_request'}, {'path': '.github/workflows/other.yml'},
+            {'event': 'workflow_dispatch', 'path': '.github/workflows/deploy-production.yml'},
             {'head_repository': {'full_name': 'someone/fork'}},
             {'head_repository': None}, {'status': 'in_progress'},
             {'conclusion': 'failure'}, {'conclusion': 'cancelled'}, {'conclusion': 'skipped'},
