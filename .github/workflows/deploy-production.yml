@@ -1,0 +1,168 @@
+name: Deploy production
+run-name: Deploy production · ${{ github.sha }}
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      backend_digest: ${{ steps.manifest.outputs.backend_digest }}
+      web_digest: ${{ steps.manifest.outputs.web_digest }}
+    steps:
+      - name: Require main
+        run: '[[ "$GITHUB_REF" == refs/heads/main ]]'
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Find successful CI for this exact main commit
+        id: ci
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 infra/scripts/ci_release.py find
+      - name: Download its verified release manifest
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: ${{ steps.ci.outputs.artifact }}
+          path: ${{ runner.temp }}/verified-release
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.ci.outputs.run_id }}
+      - name: Validate release identity and image digests
+        id: manifest
+        env:
+          CI_RUN_ID: ${{ steps.ci.outputs.run_id }}
+          CI_RUN_ATTEMPT: ${{ steps.ci.outputs.run_attempt }}
+        run: |
+          python3 infra/scripts/ci_release.py validate \
+            --manifest "$RUNNER_TEMP/verified-release/verified-release.json" \
+            --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT"
+      - name: Record the selected release
+        env:
+          BACKEND_DIGEST: ${{ steps.manifest.outputs.backend_digest }}
+          WEB_DIGEST: ${{ steps.manifest.outputs.web_digest }}
+          DEPLOY_ENABLED: ${{ vars.PROD_SSH_DEPLOY_ENABLED }}
+        run: |
+          {
+            echo "Selected production release: $GITHUB_SHA"
+            echo "Backend: $BACKEND_DIGEST"
+            echo "Web: $WEB_DIGEST"
+            if [[ $DEPLOY_ENABLED != true ]]; then
+              echo 'Production SSH deployment is disabled. No server was contacted or deployed.'
+              echo 'Complete docs/production-deployment-setup.md, then enable PROD_SSH_DEPLOY_ENABLED.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+  deploy:
+    needs: release
+    # Repository variable; enable only after the production environment and host are ready.
+    if: vars.PROD_SSH_DEPLOY_ENABLED == 'true'
+    environment:
+      name: production
+      url: https://getresearchradar.com
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate deployment target and credentials
+        env:
+          DEPLOY_HOST: ${{ vars.PROD_SSH_HOST }}
+          DEPLOY_USER: ${{ vars.PROD_SSH_USER }}
+          DEPLOY_KEY: ${{ secrets.PROD_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          [[ $DEPLOY_HOST == 10.78.0.1 && $DEPLOY_USER == radar-deploy ]]
+          [[ -n $DEPLOY_KEY && -n $KNOWN_HOSTS ]]
+      - name: Install WireGuard
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wireguard-tools
+      - name: Connect production deployment tunnel
+        env:
+          WG_PRIVATE_KEY: ${{ secrets.PROD_WG_PRIVATE_KEY }}
+          WG_SERVER_PUBLIC_KEY: ${{ vars.PROD_WG_SERVER_PUBLIC_KEY }}
+          WG_ENDPOINT: ${{ vars.PROD_WG_ENDPOINT }}
+          DEPLOY_HOST: ${{ vars.PROD_SSH_HOST }}
+        run: |
+          python3 infra/scripts/wireguard_config.py "$RUNNER_TEMP/radar-production-wireguard.conf" --environment production
+          sudo install -d -m 700 /etc/wireguard
+          sudo install -m 600 "$RUNNER_TEMP/radar-production-wireguard.conf" /etc/wireguard/wg-radar-prod.conf
+          rm -f "$RUNNER_TEMP/radar-production-wireguard.conf"
+          sudo wg-quick up wg-radar-prod
+          python3 - <<'PY'
+          import socket, time
+          for attempt in range(10):
+              try:
+                  with socket.create_connection(("10.78.0.1", 22), timeout=2):
+                      break
+              except OSError:
+                  if attempt == 9:
+                      raise SystemExit("Production SSH is unreachable through WireGuard; check UDP 51820, peer keys, and server firewall.")
+                  time.sleep(1)
+          PY
+      - name: Configure production SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.PROD_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Deploy the verified production release
+        id: ssh
+        env:
+          BACKEND_DIGEST: ${{ needs.release.outputs.backend_digest }}
+          WEB_DIGEST: ${{ needs.release.outputs.web_digest }}
+          DEPLOY_HOST: ${{ vars.PROD_SSH_HOST }}
+          DEPLOY_USER: ${{ vars.PROD_SSH_USER }}
+        run: |
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+            "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA scheduled $BACKEND_DIGEST $WEB_DIGEST"
+      - name: Verify public website and API
+        id: health
+        run: |
+          website_status=$(curl --fail --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --retry 5 --retry-connrefused --retry-delay 3 --max-time 15 https://getresearchradar.com/)
+          [[ $website_status == 200 ]] || { echo "Unexpected website HTTP status: $website_status" >&2; exit 1; }
+          api_status=$(curl --fail --silent --show-error --output "$RUNNER_TEMP/production-health.json" --write-out '%{http_code}' \
+            --retry 5 --retry-connrefused --retry-delay 3 --max-time 15 https://getresearchradar.com/health)
+          [[ $api_status == 200 ]] || { echo "Unexpected API HTTP status: $api_status" >&2; exit 1; }
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          health = json.loads((Path(os.environ["RUNNER_TEMP"]) / "production-health.json").read_text())
+          if not isinstance(health, dict) or health.get("status") != "ok":
+              raise SystemExit("The public API did not report a healthy status.")
+          print("Public website and API checks passed.")
+          PY
+      - name: Report deployment outcome
+        if: always()
+        env:
+          SSH_OUTCOME: ${{ steps.ssh.outcome }}
+          HEALTH_OUTCOME: ${{ steps.health.outcome }}
+        run: |
+          {
+            echo "Production release: $GITHUB_SHA (scheduled mode)"
+            echo "Server deployment: ${SSH_OUTCOME:-not started}"
+            echo "Public website/API checks: ${HEALTH_OUTCOME:-not started}"
+            echo 'A failed or interrupted deployment requires inspection; no automatic rollback is performed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove production credentials and tunnel
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts "$RUNNER_TEMP/radar-production-wireguard.conf" "$RUNNER_TEMP/production-health.json"
+          if sudo ip link show wg-radar-prod > /dev/null 2>&1; then
+            sudo wg-quick down wg-radar-prod || sudo ip link delete wg-radar-prod
+          fi
+          sudo rm -f /etc/wireguard/wg-radar-prod.conf

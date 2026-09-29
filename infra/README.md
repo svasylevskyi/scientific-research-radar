@@ -487,8 +487,12 @@ folder. A separate server is required by this initial fixed-port/fixed-proxy-sub
 layout. Use production.env.example as a starting point, provide real SMTP, and set
 RADAR_ENVIRONMENT=production consistently for operations and cron.
 
-For subsequent releases, follow the [manual production update guide](../docs/production-deployment.md)
-to select the successful main CI manifest and deploy its pinned images.
+For subsequent releases, follow the [production update guide](../docs/production-deployment.md)
+to deploy the successful main CI release and its pinned images. The manually
+triggered **Deploy production** workflow requires [one-time setup](../docs/production-deployment-setup.md)
+of a separate production tunnel, restricted SSH command, and GitHub environment.
+It remains disabled until `PROD_SSH_DEPLOY_ENABLED=true` is set as a repository
+variable. The manual SSH deployment path remains available.
 
 Before paid launch, add independent backup storage/alerts, restore drills,
 production monitoring, provider budget controls, safe database upgrades and
