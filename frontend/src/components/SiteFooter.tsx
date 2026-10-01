@@ -17,7 +17,7 @@ export function SiteFooter() {
             <Stack spacing={1}>
               <Typography color="white" fontWeight={700}>Explore</Typography>
               <Link component={RouterLink} to="/" color="inherit" underline="hover">Home</Link>
-              <Link component={RouterLink} to="/plans" color="inherit" underline="hover">Sample plans</Link>
+              <Link component={RouterLink} to="/plans" color="inherit" underline="hover">Subscription Plans</Link>
               {user && <Link component={RouterLink} to="/radar" color="inherit" underline="hover">Your radar</Link>}
             </Stack>
             <Stack spacing={1}>

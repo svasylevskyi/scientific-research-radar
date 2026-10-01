@@ -24,6 +24,22 @@ let theme = createTheme({
     body1: { fontSize: "1rem", lineHeight: 1.6 },
   },
   components: {
+    MuiContainer: {
+      defaultProps: { maxWidth: false },
+      styleOverrides: {
+        root: {
+          width: "100%",
+          minWidth: 0,
+          // Containers are page shells throughout Radar. Override legacy
+          // breakpoint caps centrally; size reading columns and forms inside.
+          "&&": { maxWidth: "none" },
+          "&:not(.MuiContainer-disableGutters)": {
+            paddingLeft: "clamp(16px, 3vw, 48px)",
+            paddingRight: "clamp(16px, 3vw, 48px)",
+          },
+        },
+      },
+    },
     MuiButton: {
       styleOverrides: {
         root: { borderRadius: 12, boxShadow: "none" },

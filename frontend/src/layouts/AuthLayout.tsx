@@ -75,13 +75,15 @@ export function AuthLayout({ children }: PropsWithChildren) {
       </Box>
 
       <Box component="main" sx={{ display: "flex", alignItems: "center", bgcolor: "background.default", py: { xs: 3, sm: 5 } }}>
-        <Container maxWidth="sm" sx={{ px: { xs: 2.5, sm: 4 } }}>
-          <Box sx={{ display: { md: "none" }, mb: 5 }}>
-            <Box component={RouterLink} to="/" aria-label="Scientific Research Radar home" sx={{ display: "inline-block", color: "inherit", textDecoration: "none" }}>
-              <Brand />
+        <Container maxWidth={false}>
+          <Box sx={{ width: "100%", maxWidth: 560, mx: "auto" }}>
+            <Box sx={{ display: { md: "none" }, mb: 5 }}>
+              <Box component={RouterLink} to="/" aria-label="Scientific Research Radar home" sx={{ display: "inline-block", color: "inherit", textDecoration: "none" }}>
+                <Brand />
+              </Box>
             </Box>
+            {children}
           </Box>
-          {children}
         </Container>
       </Box>
     </Box>

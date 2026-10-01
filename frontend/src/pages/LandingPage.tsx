@@ -25,7 +25,7 @@ export function LandingPage() {
             </Typography>
             <Stack direction="row" flexWrap="wrap" useFlexGap gap={2} sx={{ mt: 4 }}>
               <RadarLink />
-              <Button component={RouterLink} to="/plans" endIcon={<ArrowForwardRoundedIcon />}>Explore sample plans</Button>
+              <Button component={RouterLink} to="/plans" endIcon={<ArrowForwardRoundedIcon />}>Subscription Plans</Button>
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>Product preview · Built around your topics and your questions</Typography>
           </Box>
@@ -70,7 +70,7 @@ export function LandingPage() {
         <Container maxWidth="lg" sx={{ pb: { xs: 7, md: 10 } }}>
           <Box component="section" sx={{ bgcolor: "#102f32", color: "white", borderRadius: 4, p: { xs: 4, md: 6 }, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1.3fr 1fr" }, gap: 4, alignItems: "center" }}>
             <Box><Typography component="h2" variant="h3" sx={{ mb: 2 }}>A research habit, shaped around you.</Typography><Typography sx={{ color: "#c1d8d4" }}>Explore a subscription concept for following the subjects that keep you curious.</Typography></Box>
-            <Box><Button component={RouterLink} to="/plans" variant="contained" endIcon={<ArrowForwardRoundedIcon />} sx={{ bgcolor: "#42e6bd", color: "#071a2b", "&:hover": { bgcolor: "#72efd1" } }}>Find your sample plan</Button><Typography variant="caption" sx={{ display: "block", mt: 2, color: "#c1d8d4" }}>Preview only. Subscriptions are not available for purchase yet.</Typography></Box>
+            <Box><Button component={RouterLink} to="/plans" variant="contained" endIcon={<ArrowForwardRoundedIcon />} sx={{ bgcolor: "#42e6bd", color: "#071a2b", "&:hover": { bgcolor: "#72efd1" } }}>Subscription Plans</Button><Typography variant="caption" sx={{ display: "block", mt: 2, color: "#c1d8d4" }}>Preview only. Subscriptions are not available for purchase yet.</Typography></Box>
           </Box>
         </Container>
       </Box>

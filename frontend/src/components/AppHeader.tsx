@@ -59,8 +59,8 @@ export function AppHeader() {
     <AppBar position="sticky" color="inherit" elevation={0}
       sx={{ borderBottom: "1px solid", borderColor: "divider" }}>
       {signOutError && <Alert severity="info" onClose={() => setSignOutError("")}>Sign out has not completed. {signOutError}</Alert>}
-      <Toolbar sx={{ minHeight: { xs: 68, sm: 76 } }}>
-        <Container maxWidth="lg" disableGutters sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+      <Toolbar disableGutters sx={{ minHeight: { xs: 68, sm: 76 } }}>
+        <Container maxWidth={false} sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
           <Box component={MainMenuLink} to="/" aria-label="Scientific Research Radar home"
             sx={{ color: "inherit", textDecoration: "none" }}>
             <Brand compact />
