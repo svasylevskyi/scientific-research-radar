@@ -3,6 +3,7 @@ import { Autocomplete, Button, Chip, Stack, TextField } from "@mui/material";
 import { useRef, useState } from "react";
 
 interface KeywordInputProps {
+  id?: string;
   label: string;
   value: string[];
   onChange: (value: string[]) => void;
@@ -11,6 +12,7 @@ interface KeywordInputProps {
 }
 
 export function KeywordInput({
+  id,
   label,
   value,
   onChange,
@@ -37,6 +39,7 @@ export function KeywordInput({
   return (
     <Stack direction="row" spacing={1} alignItems="flex-start">
       <Autocomplete
+        id={id}
         sx={{ flex: 1, minWidth: 0 }}
         multiple
         freeSolo
@@ -48,7 +51,8 @@ export function KeywordInput({
         renderTags={(keywords, getTagProps) =>
           keywords.map((keyword, index) => {
             const { key, ...tagProps } = getTagProps({ index });
-            return <Chip key={key} label={keyword} size="small" {...tagProps} />;
+            return <Chip key={key} label={keyword} size="small" {...tagProps}
+              sx={{ maxWidth: "100%", height: "auto", "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 } }} />;
           })
         }
         renderInput={(params) => (

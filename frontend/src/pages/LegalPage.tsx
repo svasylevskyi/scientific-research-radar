@@ -105,17 +105,19 @@ export function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
     <Box>
       <MarketingHeader />
       <Container component="main" maxWidth="md" sx={{ py: { xs: 5, md: 8 } }}>
-        <Typography variant="overline" color="primary" fontWeight={800}>Transparency & trust</Typography>
-        <Typography component="h1" variant="h2" sx={{ mt: 1, mb: 2 }}>{title}</Typography>
-        <Typography color="text.secondary" sx={{ mb: 3 }}>Draft for review · Prepared 7 September 2026 · Effective date not yet set</Typography>
-        <Alert severity="warning" sx={{ mb: 4 }}>Draft only. Operator details and operational commitments remain to be completed and reviewed for the jurisdictions served. This page is not a claim of worldwide legal compliance.</Alert>
-        <Stack spacing={4}>
-          {sections.map((section, index) => <Box component="section" key={section.title} aria-labelledby={`${kind}-${index}`}>
-            <Typography id={`${kind}-${index}`} component="h2" variant="h6" sx={{ mb: 1.5 }}>{index + 1}. {section.title}</Typography>
-            {section.paragraphs.map((paragraph) => <Typography key={paragraph} sx={{ mb: 1.5, overflowWrap: "anywhere" }}>{paragraph}</Typography>)}
-          </Box>)}
-        </Stack>
-        <Link component={RouterLink} to={kind === "privacy" ? "/terms" : "/privacy"}>{kind === "privacy" ? "Read the draft Terms of use" : "Read the draft Privacy notice"}</Link>
+        <Box data-page-column="centered" sx={{ width: "100%", maxWidth: 800, minWidth: 0, mx: "auto" }}>
+          <Typography variant="overline" color="primary" fontWeight={800}>Transparency & trust</Typography>
+          <Typography component="h1" variant="h2" sx={{ mt: 1, mb: 2 }}>{title}</Typography>
+          <Typography color="text.secondary" sx={{ mb: 3 }}>Draft for review · Prepared 7 September 2026 · Effective date not yet set</Typography>
+          <Alert severity="warning" sx={{ mb: 4 }}>Draft only. Operator details and operational commitments remain to be completed and reviewed for the jurisdictions served. This page is not a claim of worldwide legal compliance.</Alert>
+          <Stack spacing={4}>
+            {sections.map((section, index) => <Box component="section" key={section.title} aria-labelledby={`${kind}-${index}`}>
+              <Typography id={`${kind}-${index}`} component="h2" variant="h6" sx={{ mb: 1.5 }}>{index + 1}. {section.title}</Typography>
+              {section.paragraphs.map((paragraph) => <Typography key={paragraph} sx={{ mb: 1.5, overflowWrap: "anywhere" }}>{paragraph}</Typography>)}
+            </Box>)}
+          </Stack>
+          <Link component={RouterLink} to={kind === "privacy" ? "/terms" : "/privacy"}>{kind === "privacy" ? "Read the draft Terms of use" : "Read the draft Privacy notice"}</Link>
+        </Box>
       </Container>
     </Box>
   );

@@ -317,9 +317,22 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
           <>
             {admin && <AdminDigestNavigation digestId={digestId} current="details" />}
             <Typography component="h1" variant="h3" sx={{ mb: 1 }}>{digest.topic}</Typography>
-            <Typography color="text.secondary" sx={{ mb: 3 }}>
-              Review and update the research scope and reporting settings.
-            </Typography>
+            {admin ? (
+              <Typography color="text.secondary" sx={{ mb: 3 }}>
+                Review and update the research scope and reporting settings.
+              </Typography>
+            ) : (
+              <Box component="aside" aria-label="How this digest works"
+                sx={{ mb: 3, p: 2, borderLeft: 3, borderColor: "primary.main", bgcolor: "background.paper", width: "100%" }}>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Save</strong> keeps your research preferences; it does not start a manual run.
+                  {" "}<strong>Run now</strong> starts research using the saved settings and your plan’s allowances.
+                  {" "}<strong>Schedule</strong> manages recurring runs and optional email delivery, subject to your plan.
+                  Runs continue in the background: return here to follow progress and explore completed briefings, papers, and sources.
+                  Saving preferences does not cancel an existing schedule.
+                </Typography>
+              </Box>
+            )}
 
             {admin && isAdminDigest(digest) && (
               <Paper variant="outlined" sx={{ p: 2.25, mb: 2.5, borderRadius: 3 }}>
@@ -336,9 +349,6 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
             {!admin && (
               <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3 }, mb: 3, borderRadius: 3 }}>
                 <Typography variant="h6" sx={{ mb: 0.75 }}>Radar controls</Typography>
-                <Typography color="text.secondary" sx={{ mb: 2 }}>
-                  Run research now, schedule recurring runs with optional email delivery, and review past results.
-                </Typography>
                 <AllowanceNotice {...subscription} context="digest" id="digest-allowance-notice" />
                 <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule} exhausted={digest.schedule_exhausted} access={subscription}
                   onSaved={(saved) => {
