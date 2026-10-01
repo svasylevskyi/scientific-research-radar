@@ -29,7 +29,7 @@ export function MarketingHeader() {
       <Container maxWidth="lg" sx={{ py: 2.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
         <Box component={MainMenuLink} to="/" aria-label="Scientific Research Radar home" sx={{ textDecoration: "none" }}><Brand compact /></Box>
         <ResponsiveMainMenu label="Main navigation" items={[
-          { label: "Plans", to: "/plans" },
+          { label: "Subscription Plans", to: "/plans" },
           { label: "About", to: "/about" },
           { label: "Contact", to: user ? "/radar/contact" : "/contact" },
         ]} accountItems={[accountItem]} />

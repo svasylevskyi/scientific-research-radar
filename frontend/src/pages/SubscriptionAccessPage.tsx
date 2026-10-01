@@ -127,7 +127,7 @@ function SubscriberSections() {
                       ends.
                     </Typography>
                     {(access.billing_type === "stripe" || upgrades.upgrade) && <Button component={Link} to="/radar/plans">
-                      Compare available plans
+                      Subscription Plans
                     </Button>}
                   </Paper>
                   {(access.billing_type === "stripe" || upgrades.upgrade) ? (
@@ -136,7 +136,7 @@ function SubscriberSections() {
                     <Paper id="upgrade" tabIndex={-1} variant="outlined" sx={{ p: 3, scrollMarginTop: 100 }}>
                       <Typography variant="h6">Upgrade options</Typography>
                       <Typography>Compare paid plans and their included allowances.</Typography>
-                      <Button component={Link} to="/radar/plans">Compare paid plans</Button>
+                      <Button component={Link} to="/radar/plans">Subscription Plans</Button>
                     </Paper>
                   )}
                   <Box id="changes" tabIndex={-1} sx={{ scrollMarginTop: 100 }}>

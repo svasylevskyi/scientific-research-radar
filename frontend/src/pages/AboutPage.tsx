@@ -22,6 +22,6 @@ export function AboutPage() {
       <Typography component="h2" variant="h6" gutterBottom>A starting point for understanding</Typography>
       <Typography>Radar uses AI, which can miss relevant work or misinterpret findings. Results depend on the available sources and are not an exhaustive review of the literature. Treat summaries as a guide, check important claims against the original papers, and use qualified advice for decisions that need it.</Typography>
     </Paper>
-    <Stack direction="row" gap={2} flexWrap="wrap"><Button component={RouterLink} to="/plans" variant="contained">Explore plans</Button><Button component={RouterLink} to="/contact">Contact us</Button></Stack>
+    <Stack direction="row" gap={2} flexWrap="wrap"><Button component={RouterLink} to="/plans" variant="contained">Subscription Plans</Button><Button component={RouterLink} to="/contact">Contact us</Button></Stack>
   </Container></Box>;
 }

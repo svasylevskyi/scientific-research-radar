@@ -62,7 +62,7 @@ export function SubscriberBilling() {
           <>
             {data.attempt && (
               <Typography>
-                {data.attempt.plan_name} · {data.attempt.interval} ·{" "}
+                {data.attempt.plan_name} · {data.attempt.interval === "annual" ? "Yearly" : data.attempt.interval === "monthly" ? "Monthly" : data.attempt.interval} ·{" "}
                 {data.attempt.subscription_status ??
                   data.attempt.checkout_status}
               </Typography>
@@ -88,7 +88,7 @@ export function SubscriberBilling() {
                 </Button>
               )}
               <Button component={Link} to="/radar/plans">
-                Compare plans
+                Subscription Plans
               </Button>
               {data.resume_allowed && (
                 <Button

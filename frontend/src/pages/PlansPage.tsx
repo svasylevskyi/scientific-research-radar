@@ -11,16 +11,15 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  MenuItem,
   Radio,
   RadioGroup,
   FormControlLabel,
   Stack,
-  TextField,
   Typography,
 } from "@mui/material";
 import { MarketingHeader } from "../components/MarketingHeader";
 import { AppHeader } from "../components/AppHeader";
+import { BillingIntervalTabs, type BillingInterval } from "../components/BillingIntervalTabs";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import { usePollingResource } from "../hooks/usePollingResource";
@@ -55,13 +54,13 @@ function PlansContent({ enrolment, workspace }: { enrolment: boolean; workspace:
   const error = catalogue.error;
   const [actionError, setActionError] = useState("");
   const billingError = account.error || actionError;
-  const [interval, setInterval] = useState("monthly");
+  const [interval, setInterval] = useState<BillingInterval>("monthly");
   const [selection, setSelection] = useState<{
     plan: Plan;
-    interval: string;
+    interval: BillingInterval;
   } | null>(null);
   const [busy, setBusy] = useState(false);
-  const money = (p: Plan, period: string) =>
+  const money = (p: Plan, period: BillingInterval) =>
     new Intl.NumberFormat(undefined, {
       style: "currency",
       currency: p.currency,
@@ -108,14 +107,14 @@ function PlansContent({ enrolment, workspace }: { enrolment: boolean; workspace:
   return (
     <Box>
       {workspace ? <AppHeader /> : <MarketingHeader />}
-      <Container component="main" maxWidth="lg" sx={{ py: 6 }}>
+      <Container component="main" maxWidth={false} sx={{ py: 6 }}>
         <Chip
           label={catalogue.data?.sandbox ? "Sandbox subscriptions" : "Subscriptions"}
           color="primary"
           variant="outlined"
         />
         <Typography component="h1" variant="h3" sx={{ my: 2 }}>
-          {enrolment ? "Choose your first research plan" : "Choose your research plan"}
+          {enrolment ? "Choose your first subscription plan" : "Subscription Plans"}
         </Typography>
         {enrolment && (
           <Typography sx={{ mb: 2 }}>
@@ -152,167 +151,159 @@ function PlansContent({ enrolment, workspace }: { enrolment: boolean; workspace:
             </Button>
           </Alert>
         )}
-        <TextField
-          select
-          label="Billing interval"
-          value={interval}
-          onChange={(e) => setInterval(e.target.value)}
-          sx={{ my: 3, minWidth: 220 }}
-        >
-          <MenuItem value="monthly">Monthly</MenuItem>
-          <MenuItem value="annual">Annual</MenuItem>
-        </TextField>
-        {!plans && !error && (
-          <Typography role="status">Loading plans…</Typography>
-        )}
-        {plans?.length === 0 && (
-          <Typography>
-            No subscription plans are available yet. Please check back later.
-          </Typography>
-        )}
-        <Box
-          component={enrolment ? RadioGroup : "div"}
-          {...(enrolment ? {
-            "aria-label": "Registration plan",
-            value: selectedCode,
-            onChange: (event: ChangeEvent<HTMLInputElement>) => {
-              setSelectedCode(event.target.value);
-              setActionError("");
-            },
-          } : {})}
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
-            gap: 3,
-          }}
-        >
-          {plans?.map((plan) => (
-            <Box
-              component="section"
-              key={plan.code}
-              sx={{
-                p: 3, border: 1, borderRadius: 3,
-                borderColor: enrolment && selectedCode === plan.code
-                  ? "primary.main" : "divider",
-              }}
-            >
-              <Stack spacing={2}>
-                <Typography component="h2" variant="h5">
-                  {plan.name}
-                </Typography>
-                {isCurrentPlan(plan, access, billing) && (
-                  <Chip
-                    label="Current plan"
-                    color="success"
-                    variant="outlined"
-                    sx={{ alignSelf: "flex-start" }}
-                  />
-                )}
-                <Typography>{plan.description}</Typography>
-                <Typography variant="h4">
-                  {plan.billing_type === "free"
-                    ? "Free"
-                    : interval === "annual" && plan.annual_price === null
-                      ? "Unavailable"
-                      : money(plan, interval)}
-                </Typography>
-                <Typography>
-                  {plan.billing_type === "free"
-                    ? "No payment details or checkout required."
-                    : `Per ${interval === "annual" ? "year" : "month"}, tax included.`}
-                </Typography>
-                <Typography>
-                  {plan.max_digests} digests · Up to {plan.max_papers_per_run}{" "}
-                  papers per run
-                </Typography>
-                <Typography>
-                  {plan.runs_per_month} runs per allowance month, including up
-                  to {plan.manual_runs_per_month} manual runs ·{" "}
-                  {plan.papers_per_month} papers total
-                </Typography>
-                <Typography>
-                  Schedules:{" "}
-                  {plan.schedule_frequencies.join(", ") || "not included"}.
-                  Email delivery:{" "}
-                  {plan.email_delivery ? "included" : "not included"}.
-                </Typography>
-                {enrolment ? (
-                  <FormControlLabel
-                    value={plan.code}
-                    control={<Radio />}
-                    label={`Select ${plan.name}`}
-                    disabled={busy || (plan.billing_type !== "free" && !canChoosePaidPlan(plan))}
-                  />
-                ) : plan.billing_type === "free" ? (
-                  <Button
-                    component={Link}
-                    to={user ? "/radar/subscription" : "/radar/register"}
-                    variant="outlined"
-                  >
-                    {user ? "Review subscription" : "Create a free account"}
-                  </Button>
-                ) : !user && !isInitializing ? (
-                  <Button component={Link} to="/radar/login" variant="outlined">
-                    Sign in to continue
-                  </Button>
-                ) : user &&
-                  billing?.attempt &&
-                  !billing.checkout_allowed &&
-                  !billing.resume_allowed ? (
-                  <Button
-                    component={Link}
-                    to="/radar/subscription#plans"
-                    variant="outlined"
-                  >
-                    {isCurrentPlan(plan, access, billing)
-                      ? "Manage current plan"
-                      : "Review plan changes"}
-                  </Button>
-                ) : billing?.resume_allowed ? (
-                  <Button
-                    component={Link}
-                    to="/radar/subscription#billing"
-                    variant="outlined"
-                  >
-                    Resume existing checkout
-                  </Button>
-                ) : (
-                  <Button
-                    variant="contained"
-                    disabled={!canChoosePaidPlan(plan)}
-                    onClick={() => setSelection({ plan, interval })}
-                  >
-                    Choose {plan.name}
-                  </Button>
-                )}
-              </Stack>
-            </Box>
-          ))}
-        </Box>
-        {enrolment && (
-          <Stack spacing={1} sx={{ mt: 3 }}>
-            <Button
-              variant="contained" size="large" disabled={!canContinue}
-              onClick={() => {
-                if (!selectedPlan || !canContinue) return;
-                if (selectedPlan.billing_type === "free") {
-                  navigate("/radar", { replace: true });
-                } else {
-                  setSelection({ plan: selectedPlan, interval });
-                }
-              }}
-            >
-              {selectedPlan?.billing_type === "free" ? "Continue with Free" : "Continue to checkout"}
-            </Button>
-            <Typography variant="body2" color="text.secondary">
-              Choosing a paid plan opens checkout. Your Free access remains until payment is verified.
-              If you cancel checkout, you can continue using Free from Subscription and usage.
+        <BillingIntervalTabs value={interval} onChange={setInterval}>
+          {!plans && !error && (
+            <Typography role="status">Loading plans…</Typography>
+          )}
+          {plans?.length === 0 && (
+            <Typography>
+              No subscription plans are available yet. Please check back later.
             </Typography>
-          </Stack>
-        )}
+          )}
+          <Box
+            component={enrolment ? RadioGroup : "div"}
+            {...(enrolment ? {
+              "aria-label": "Registration plan",
+              value: selectedCode,
+              onChange: (event: ChangeEvent<HTMLInputElement>) => {
+                setSelectedCode(event.target.value);
+                setActionError("");
+              },
+            } : {})}
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+              gap: 3,
+            }}
+          >
+            {plans?.map((plan) => (
+              <Box
+                component="section"
+                key={plan.code}
+                sx={{
+                  p: 3, border: 1, borderRadius: 3, minWidth: 0, overflowWrap: "anywhere",
+                  borderColor: enrolment && selectedCode === plan.code
+                    ? "primary.main" : "divider",
+                }}
+              >
+                <Stack spacing={2}>
+                  <Typography component="h2" variant="h5">
+                    {plan.name}
+                  </Typography>
+                  {isCurrentPlan(plan, access, billing) && (
+                    <Chip
+                      label="Current plan"
+                      color="success"
+                      variant="outlined"
+                      sx={{ alignSelf: "flex-start" }}
+                    />
+                  )}
+                  <Typography>{plan.description}</Typography>
+                  <Typography variant="h4">
+                    {plan.billing_type === "free"
+                      ? "Free"
+                      : interval === "annual" && plan.annual_price === null
+                        ? "Unavailable"
+                        : money(plan, interval)}
+                  </Typography>
+                  <Typography>
+                    {plan.billing_type === "free"
+                      ? "No payment details or checkout required."
+                      : `Per ${interval === "annual" ? "year" : "month"}, tax included.`}
+                  </Typography>
+                  <Typography>
+                    {plan.max_digests} digests · Up to {plan.max_papers_per_run}{" "}
+                    papers per run
+                  </Typography>
+                  <Typography>
+                    {plan.runs_per_month} runs per allowance month, including up
+                    to {plan.manual_runs_per_month} manual runs ·{" "}
+                    {plan.papers_per_month} papers total
+                  </Typography>
+                  <Typography>
+                    Schedules:{" "}
+                    {plan.schedule_frequencies.join(", ") || "not included"}.
+                    Email delivery:{" "}
+                    {plan.email_delivery ? "included" : "not included"}.
+                  </Typography>
+                  {enrolment ? (
+                    <FormControlLabel
+                      value={plan.code}
+                      control={<Radio />}
+                      label={`Select ${plan.name}`}
+                      disabled={busy || (plan.billing_type !== "free" && !canChoosePaidPlan(plan))}
+                    />
+                  ) : plan.billing_type === "free" ? (
+                    <Button
+                      component={Link}
+                      to={user ? "/radar/subscription" : "/radar/register"}
+                      variant="outlined"
+                    >
+                      {user ? "Review subscription" : "Create a free account"}
+                    </Button>
+                  ) : !user && !isInitializing ? (
+                    <Button component={Link} to="/radar/login" variant="outlined">
+                      Sign in to continue
+                    </Button>
+                  ) : user &&
+                    billing?.attempt &&
+                    !billing.checkout_allowed &&
+                    !billing.resume_allowed ? (
+                    <Button
+                      component={Link}
+                      to="/radar/subscription#plans"
+                      variant="outlined"
+                    >
+                      {isCurrentPlan(plan, access, billing)
+                        ? "Manage current plan"
+                        : "Review plan changes"}
+                    </Button>
+                  ) : billing?.resume_allowed ? (
+                    <Button
+                      component={Link}
+                      to="/radar/subscription#billing"
+                      variant="outlined"
+                    >
+                      Resume existing checkout
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="contained"
+                      disabled={!canChoosePaidPlan(plan)}
+                      onClick={() => setSelection({ plan, interval })}
+                    >
+                      Choose {plan.name}
+                    </Button>
+                  )}
+                </Stack>
+              </Box>
+            ))}
+          </Box>
+          {enrolment && (
+            <Stack spacing={1} sx={{ mt: 3 }}>
+              <Button
+                variant="contained" size="large" disabled={!canContinue}
+                onClick={() => {
+                  if (!selectedPlan || !canContinue) return;
+                  if (selectedPlan.billing_type === "free") {
+                    navigate("/radar", { replace: true });
+                  } else {
+                    setSelection({ plan: selectedPlan, interval });
+                  }
+                }}
+              >
+                {selectedPlan?.billing_type === "free" ? "Continue with Free" : "Continue to checkout"}
+              </Button>
+              <Typography variant="body2" color="text.secondary">
+                Choosing a paid plan opens checkout. Your Free access remains until payment is verified.
+                If you cancel checkout, you can continue using Free from Subscription and usage.
+              </Typography>
+            </Stack>
+          )}
+        </BillingIntervalTabs>
         <Typography sx={{ mt: 3 }}>
           Research allowances reset on your account’s monthly anniversary,
-          including annual subscriptions. Plan changes preserve that date and
+          including yearly subscriptions. Plan changes preserve that date and
           already used allowance; unused allowance does not roll over. Eligible
           paid upgrades take effect after the prorated payment is verified.
           Downgrades and monthly/yearly switches take effect at renewal.
