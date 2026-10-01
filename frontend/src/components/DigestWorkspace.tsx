@@ -19,8 +19,9 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
+import { SelectedRunOverview } from "./SelectedRunOverview";
 import { ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi } from "../api/digests";
 import { useAuth } from "../auth/AuthContext";
@@ -34,7 +35,7 @@ import {
   TrendAnalysisResult,
 } from "./DigestRunResults";
 import { defaultRunId, filterRuns, runDate, resultTab } from "../runHistory";
-import { diagnosticTab, queryPath, updateQuery, withReturnTo } from "../navigationContext";
+import { diagnosticTab, queryPath, updateQuery, withReturnTo, paperQuery, selectedPaperId } from "../navigationContext";
 
 export function DigestWorkspace({
   digestId,
@@ -107,6 +108,17 @@ export function DigestWorkspace({
     details: !admin,
   };
   const activeTab = resultTab(tab, available, admin);
+  const targetPaperId = selectedPaperId(search, selectedId);
+  const paperHref = (paperId: string) => queryPath(admin ? `/admin/digests/${digestId}/runs` : `/radar/digests/${digestId}`, paperQuery(search, selectedId, paperId, admin));
+  const previousView = useRef({ tab: activeTab, paper: targetPaperId, runId: selectedId });
+  useEffect(() => {
+    // Back from a paper link restores a useful focus point. Polling does not move focus.
+    if (run && previousView.current.runId === selectedId && previousView.current.tab === "papers"
+      && previousView.current.paper && activeTab !== "papers") {
+      document.getElementById(`output-tab-${activeTab}`)?.focus({ preventScroll: true });
+    }
+    previousView.current = { tab: activeTab, paper: targetPaperId, runId: selectedId };
+  }, [activeTab, targetPaperId, selectedId, !!run]);
   const invalidRange = Boolean(from && to && from > to);
   const filtered = filterRuns(runs, from, to).filter((item) => {
     if (item.status === "queued" || item.status === "running")
@@ -121,7 +133,10 @@ export function DigestWorkspace({
 
   function changeView(values: Record<string, string | null>) {
     // Pin the displayed run so copied tab links do not drift to a newer run.
-    setSearch(current => updateQuery(current, { run_id: selectedId || null, ...values }), { preventScrollReset: true });
+    const leavesPaper = (values.run_id != null && values.run_id !== selectedId)
+      || (values.output_tab != null && values.output_tab !== "papers");
+    setSearch(current => updateQuery(current, { run_id: selectedId || null,
+      ...(leavesPaper ? { paper_id: null, paper_run_id: null } : {}), ...values }), { preventScrollReset: true });
   }
   const benchmarkPath = withReturnTo("/admin/research-quality", queryPath(`/admin/digests/${digestId}/runs`,
     updateQuery(search, { run_id: selectedId || null, run_section: "diagnostics", diagnostic_tab: "quality" }))) + "#benchmarks";
@@ -251,7 +266,7 @@ export function DigestWorkspace({
                     <Typography fontWeight={700}>
                       {runDate(item.started_at).toLocaleString()}
                     </Typography>
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
                       <Chip
                         size="small"
                         label={admin && item.quality_delivery_blocked ? "generated · held" : item.status}
@@ -281,9 +296,8 @@ export function DigestWorkspace({
       </Paper>
       <Box sx={{ minWidth: 0, width: "100%", flex: 1 }}>
         {run && (
-          <Typography color="text.secondary" sx={{ mb: 2 }}>
-            Run: {runDate(run.started_at).toLocaleString()} · {run.status}
-          </Typography>
+          <SelectedRunOverview run={run} admin={admin}
+            older={runs.some((item) => runDate(item.started_at).getTime() > runDate(run.started_at).getTime())} />
         )}
         {admin && <Stack component="nav" aria-label="Run sections" direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 3 }}>
           <Button variant={adminSection === "diagnostics" ? "contained" : "text"}
@@ -318,6 +332,7 @@ export function DigestWorkspace({
             variant="scrollable"
             scrollButtons="auto"
             aria-label={admin ? "Run output" : "Digest results and settings"}
+            sx={{ "& .MuiTab-root.Mui-focusVisible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 } }}
           >
             <Tab
               value="briefing"
@@ -347,7 +362,7 @@ export function DigestWorkspace({
             {!admin && <Tab value="details" label="Digest Details" id="output-tab-details" aria-controls="digest-details-panel" />}
           </Tabs>
         </Paper>
-        {!admin && <Box role="tabpanel" id="digest-details-panel" aria-labelledby="output-tab-details" hidden={activeTab !== "details"}>
+        {!admin && <Box role="tabpanel" id="digest-details-panel" aria-labelledby="output-tab-details" tabIndex={0} hidden={activeTab !== "details"}>
           {details}
         </Box>}
         {activeTab !== "details" &&
@@ -355,11 +370,11 @@ export function DigestWorkspace({
             <CircularProgress aria-label="Loading run" />
           ) : (
             run && (
-              <Box role="tabpanel" id="digest-output-panel" aria-labelledby={activeTab === "none" ? undefined : `output-tab-${activeTab}`}>
+              <Box role="tabpanel" id="digest-output-panel" tabIndex={0} sx={{ outlineOffset: 2, minWidth: 0 }} aria-labelledby={activeTab === "none" ? undefined : `output-tab-${activeTab}`}>
                 {activeTab === "none" && <Alert severity="info">No research output is available for this run. Check Run Diagnostics for execution details.</Alert>}
-                {activeTab === "briefing" && <DigestBriefingResult run={run} />}
-                {activeTab === "trends" && <TrendAnalysisResult run={run} />}
-                {activeTab === "papers" && <PaperSummariesResult run={run} />}
+                {activeTab === "briefing" && <DigestBriefingResult key={run.id} run={run} paperHref={paperHref} />}
+                {activeTab === "trends" && <TrendAnalysisResult key={run.id} run={run} paperHref={paperHref} />}
+                {activeTab === "papers" && <PaperSummariesResult key={run.id} run={run} targetPaperId={targetPaperId} />}
                 {activeTab === "steps" && (
                   <Stack spacing={2}>
                     <DigestRunProgress run={run} />
