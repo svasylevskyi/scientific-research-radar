@@ -116,14 +116,13 @@ function PlansContent({ enrolment, workspace }: { enrolment: boolean; workspace:
         <Typography component="h1" variant="h3" sx={{ my: 2 }}>
           {enrolment ? "Choose your first subscription plan" : "Subscription Plans"}
         </Typography>
-        <Typography color="text.secondary" sx={{ maxWidth: "70ch", mb: 1 }}>
+        <Typography color="text.secondary" sx={{ width: "100%", mb: 1 }}>
           {enrolment
             ? "Your account is ready. Free is preselected and needs no payment details. Choose a paid plan now or upgrade later."
             : "Compare research allowances, scheduling options, and email delivery to find your plan."}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Free is assigned after registration. Prices include tax.
-          Research allowances reset monthly, including on Yearly plans.
+          Prices include tax.
         </Typography>
         {catalogue.data?.sandbox && (
           <Alert severity="warning" sx={{ mb: 3 }}>
@@ -324,7 +323,8 @@ function PlansContent({ enrolment, workspace }: { enrolment: boolean; workspace:
             </Stack>
           )}
         </BillingIntervalTabs>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 3, maxWidth: "85ch" }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 3, width: "100%" }}>
+          Research allowances reset monthly, including on Yearly plans.
           Manual runs are included in the total monthly run allowance, not added to it.
           Scheduled runs use that same total. Scheduling frequency does not increase your allowances.
         </Typography>
@@ -334,7 +334,7 @@ function PlansContent({ enrolment, workspace }: { enrolment: boolean; workspace:
             "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 4 } }}>
             How billing and plan changes work
           </Box>
-          <Stack spacing={1.5} sx={{ mt: 2, maxWidth: "85ch" }}>
+          <Stack spacing={1.5} sx={{ mt: 2, width: "100%" }}>
             <Typography variant="body2">
               Research allowances reset on your account’s monthly anniversary, including yearly subscriptions.
               Unused allowance does not roll over. Plan changes preserve that reset date and already used allowance.
