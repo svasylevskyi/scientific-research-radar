@@ -77,33 +77,36 @@ export function HeroSampleGallery({ samples = heroSamples }: { samples?: readonl
           <Stack direction="row" justifyContent="space-between" alignItems="center" gap={0.5} sx={{ mt: 1 }}>
             <Button aria-label="Previous sample" startIcon={<ArrowBackRoundedIcon />}
               onClick={() => setIndex((current) => moveSampleIndex(current, -1, samples.length))}
-              sx={{ minHeight: 44, px: 1, ...focusStyle }}>
+              sx={{ minHeight: 44, px: 1, flexShrink: 0, ...focusStyle }}>
               Previous
             </Button>
-            <Typography role="status" aria-live="polite" aria-atomic="true" variant="caption">
-              Sample {index + 1} of {samples.length}
-            </Typography>
+            <Box role="group" aria-label="Choose a sample"
+              sx={{ display: "flex", flex: 1, minWidth: 0, flexWrap: "wrap", justifyContent: "center" }}>
+              {samples.map((item, position) => (
+                <ButtonBase key={item.id} type="button" disableRipple
+                  aria-label={`Show sample ${position + 1} of ${samples.length}: ${item.title}`}
+                  aria-controls={slideId(position)} aria-current={position === index ? "true" : undefined}
+                  aria-disabled={position === index ? true : undefined}
+                  onClick={() => { if (position !== index) setIndex(position); }}
+                  sx={{ width: 28, height: 28, flexShrink: 0, borderRadius: "50%", ...focusStyle }}>
+                  <Box component="span" aria-hidden="true" sx={{ width: position === index ? 12 : 8,
+                    height: position === index ? 12 : 8, borderRadius: "50%", border: "1px solid",
+                    borderColor: "primary.dark", bgcolor: position === index ? "primary.dark" : "transparent" }} />
+                </ButtonBase>
+              ))}
+            </Box>
             <Button aria-label="Next sample" endIcon={<ArrowForwardRoundedIcon />}
               onClick={() => setIndex((current) => moveSampleIndex(current, 1, samples.length))}
-              sx={{ minHeight: 44, px: 1, ...focusStyle }}>
+              sx={{ minHeight: 44, px: 1, flexShrink: 0, ...focusStyle }}>
               Next
             </Button>
           </Stack>
-          <Box role="group" aria-label="Choose a sample"
-            sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center" }}>
-            {samples.map((item, position) => (
-              <ButtonBase key={item.id} type="button" disableRipple
-                aria-label={`Show sample ${position + 1} of ${samples.length}: ${item.title}`}
-                aria-controls={slideId(position)} aria-current={position === index ? "true" : undefined}
-                aria-disabled={position === index ? true : undefined}
-                onClick={() => { if (position !== index) setIndex(position); }}
-                sx={{ width: 28, height: 28, borderRadius: "50%", ...focusStyle }}>
-                <Box component="span" aria-hidden="true" sx={{ width: position === index ? 12 : 8,
-                  height: position === index ? 12 : 8, borderRadius: "50%", border: "1px solid",
-                  borderColor: "primary.dark", bgcolor: position === index ? "primary.dark" : "transparent" }} />
-              </ButtonBase>
-            ))}
-          </Box>
+          {/* Keep position announcements for screen readers without a visible counter. */}
+          <Typography component="span" role="status" aria-live="polite" aria-atomic="true"
+            sx={{ position: "absolute", width: 1, height: 1, p: 0, m: -1,
+              overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}>
+            Sample {index + 1} of {samples.length}
+          </Typography>
         </>
       )}
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md"
