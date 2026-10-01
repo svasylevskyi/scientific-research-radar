@@ -126,6 +126,7 @@ test("multiple interval tab groups use different IDs", () => {
   assert.notEqual(find(first, n => n.type === "Tab").props.id, find(second, n => n.type === "Tab").props.id);
 });
 
+const planPresentation = await load("../src/planPresentation.ts");
 const paid = {
   code: "explorer", name: "Explorer", revision: 7, billing_type: "stripe", currency: "EUR",
   monthly_price: "9.00", annual_price: "90.00", description: "Follow research",
@@ -144,6 +145,7 @@ async function plansHarness({ plans = [free, paid], enrolment = false, user = { 
   const { PlansPage } = await load("../src/pages/PlansPage.tsx", {
     react: {
       useCallback: fn => fn,
+      useId: () => "plans-test",
       useState(initial) {
         const index = cursor++;
         if (!(index in state)) state[index] = initial;
@@ -159,6 +161,7 @@ async function plansHarness({ plans = [free, paid], enrolment = false, user = { 
     "../api/client": { ApiError: class ApiError extends Error {} },
     "../api/subscriptions": { subscriptionsApi: api },
     "../subscriptionPresentation": { isCurrentPlan: () => false },
+    "../planPresentation": planPresentation,
     "../hooks/usePollingResource": {
       usePollingResource: loader => loader === api.plans || loader === api.enrolmentPlans
         ? { data: plans === null ? null : { items: plans, sandbox: false }, error: catalogueError }
@@ -179,7 +182,8 @@ test("yearly prices and checkout use the existing annual API contract", async ()
   tree = app.render();
   const card = find(tree, n => n.props.component === "section" && n.key === "explorer");
   assert.ok(text(card).includes(new Intl.NumberFormat(undefined, { style: "currency", currency: "EUR" }).format(90)));
-  assert.match(text(card), /Per year/);
+  assert.match(text(card), /\/ year/);
+  assert.match(text(card), /Billed yearly/);
   assert.doesNotMatch(text(tree), /\bannual\b/i);
   button(tree, "Choose Explorer").props.onClick();
   tree = app.render();
@@ -198,7 +202,7 @@ test("plans without a yearly price remain unavailable in the Yearly view", async
   app.interval(app.render(), "annual");
   const tree = app.render();
   assert.equal(button(tree, "Choose Explorer").props.disabled, true);
-  assert.match(text(tree), /Unavailable/);
+  assert.match(text(tree), /Yearly billing not available/);
   assert.equal(app.requests.length, 0);
 });
 test("free registration still continues without checkout, including in the Yearly view", async () => {
