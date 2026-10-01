@@ -1,0 +1,482 @@
+[
+  {
+    "id": "sample-01",
+    "topic": "Reliable retrieval-augmented generation",
+    "title": "Reliable retrieval-augmented generation — evaluation, routing, and the persistent faithfulness gap",
+    "generatedOn": "2026-09-25",
+    "reportingPeriod": {
+      "to": "2026-09-25",
+      "from": "2026-09-11"
+    },
+    "paperCount": 8,
+    "summary": "Current evidence shows coordinated progress on evaluating and improving citation/factual accuracy in retrieval-augmented generation (RAG): high-quality, rubric-based benchmarks and system-level telemetry are emerging alongside methods (task-conditioned routing, multi-tool agents) and stress-testing toolkits. However, a persistent retrieval→generation faithfulness gap remains: good retrieval metrics do not guarantee correct, well-cited generated outputs. Builders should prioritize mixed evaluation (automated telemetry + synthetic stress tests + human rubrics), instrument operational telemetry before architectural changes, and pilot routing/multi-index designs cautiously due to operational trade-offs and security concerns.",
+    "highlights": [
+      "Main signal: Evaluation and system-design work are converging to measure and mitigate citation/factuality failures in RAG, but end-to-end faithfulness still lags retrieval quality.",
+      "Top actionable artifacts: ScholarQABench / OpenScholar (doi:10.1038/s41586-025-10072-4), RAGe evaluation harness (arXiv:2605.27445), and ORDER task-conditioned routing (arXiv:2609.17012).",
+      "Practical tools to adopt: synthetic stress testing (PRISM — zenodo:22759205) to surface brittle behaviors and CiteRAG (arXiv:2601.14949) to measure citation placement.",
+      "Weak but important operational signal: CoRe-DoS (doi:10.1016/j.comnet.2026.112567) reports inference-time DoS threats for RAG (paywalled)."
+    ],
+    "sourceBasis": "mixed",
+    "transparencyNote": "This briefing was produced only from the supplied paper evidence and the provided trend analysis. Several items are preprints or paywalled and could not be fully verified; readers should consult original papers, code repositories, and license statements before implementing, publishing, or operationalizing recommendations.",
+    "warnings": [
+      "Small curated sample (8 items) — not a comprehensive literature sweep; may miss dissenting work.",
+      "Several items are preprints or repository records (arXiv/Zenodo); paywalled items limit direct verification of methods and artifacts.",
+      "Domain skew toward scientific/academic citation, ESG, and clinical case studies — generalization to other domains is unverified."
+    ],
+    "sources": [
+      {
+        "title": "Synthesizing scientific literature with retrieval-augmented language models",
+        "url": "https://www.nature.com/articles/s41586-025-10072-4",
+        "publishedOn": "2026-02-04",
+        "summaryBasis": "abstract_only"
+      },
+      {
+        "title": "Toward Trustworthy Retrieval-Grounded AI through Synthetic Stress Testing",
+        "url": "https://zenodo.org/records/22759205",
+        "publishedOn": "2026-09-15",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "ORDER: Task-Conditioned Routing for Retrieval-Augmented Generation",
+        "url": "https://arxiv.org/abs/2609.17012",
+        "publishedOn": "2026-09-15",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "What Should I Cite? A RAG Benchmark for Academic Citation Prediction",
+        "url": "https://arxiv.org/abs/2601.14949",
+        "publishedOn": "2026-01-21",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "RAGe: A Retrieval-Augmented Generation Evaluation Framework",
+        "url": "https://arxiv.org/abs/2605.27445",
+        "publishedOn": "2026-05-23",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Empirical Evaluation of Open-Source Large Language Models for Retrieval-Augmented Generation in ESG Domain",
+        "url": "https://arxiv.org/abs/2609.15242",
+        "publishedOn": "2026-09-14",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "CoRe-DoS: Inference-time denial-of-service attack against retrieval-augmented generation",
+        "url": "https://www.sciencedirect.com/science/article/abs/pii/S1389128626005797",
+        "publishedOn": "2026-09-01",
+        "summaryBasis": "metadata_only"
+      },
+      {
+        "title": "ClinAgent: A ReAct-Based Agent for Conversational Access to Clinical Trial Information",
+        "url": "https://arxiv.org/abs/2609.13860",
+        "publishedOn": "2026-09-12",
+        "summaryBasis": "open_full_text"
+      }
+    ]
+  },
+  {
+    "id": "sample-02",
+    "topic": "Prompt injection defenses for research assistants",
+    "title": "Prompt injection defenses for research assistants — practical guidance for implementers",
+    "generatedOn": "2026-09-15",
+    "reportingPeriod": {
+      "to": "2026-09-15",
+      "from": "2026-09-01"
+    },
+    "paperCount": 5,
+    "summary": "Main signal: Indirect prompt injection (IPI) that forces retrieval is a practical, low-cost threat to RAG/agent systems; the strongest reported protections come from layered defense-in-depth combining ingestion/retriever hardening, token-level sanitization (attention-driven where available, rule-based otherwise), and execution-layer gating (isolated planner + verifier). NDSS peer-reviewed work (RENNERVATE) shows precise token-level detection when model internals are available; black-box embedding attacks (arXiv:2601.07072) demonstrate near-100% trigger retrieval in reported setups; PlanGuard-style execution gating stops actionable tool misuse even when earlier layers fail. Builders should prioritize low-cost ingestion controls and rule-based sanitization immediately, reproduce key attacks against their production retriever/embedder, and prototype execution gating for high-risk actions while measuring utility, latency, and maintenance burden.",
+    "highlights": [
+      "Main signal: Retrieval-stage attacks are practical and defense-in-depth reduces end-to-end attack success most effectively (supporting IDs: doi:10.14722/ndss.2026.240394, arXiv:2601.07072, arXiv:2604.10134).",
+      "Black-box two-fragment IPI can force retrieval of compact triggers and achieve high downstream ASR in reported experiments (arXiv:2601.07072).",
+      "RENNERVATE (NDSS 2026) uses attention-derived token signals for targeted sanitization—high precision but requires access to model internals (doi:10.14722/ndss.2026.240394).",
+      "Execution-layer defenses (PlanGuard) separate planning from untrusted context and apply hierarchical verification to block malicious tool calls with low FPR in benchmark tests (arXiv:2604.10134).",
+      "Large-scale thesis experiments show a full mitigation stack can reduce ASR from ~40.6% to ~0.2%; rule-based sanitization was the most effective single layer in that evaluation (escholarship:qt8zq0952f)."
+    ],
+    "sourceBasis": "mixed",
+    "transparencyNote": "This briefing was generated from the supplied five-paper evidence set and accompanying trend analysis. It does not add external papers. Readers must verify claims, reproduce attacks and defenses on their production stack, and consult original papers before citation or deployment; several items are preprints or a thesis and need independent reproduction. Licensing and access restrictions for each paper remain as provided by the original sources.",
+    "warnings": [
+      "Small, targeted sample (5 papers) with many preprints and one thesis; results need reproduction on production stacks before operational reliance.",
+      "Heterogeneous access levels (open-model internals vs. closed APIs) and benchmarks complicate cross-paper quantitative aggregation.",
+      "Some methods require model internals or instrumentation that closed commercial APIs may not provide."
+    ],
+    "sources": [
+      {
+        "title": "Overcoming the Retrieval Barrier: Indirect Prompt Injection in the Wild for LLM Systems",
+        "url": "https://arxiv.org/abs/2601.07072",
+        "publishedOn": "2026-01-11",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "PlanGuard: Defending Agents against Indirect Prompt Injection via Planning-based Consistency Verification",
+        "url": "https://arxiv.org/abs/2604.10134",
+        "publishedOn": "2026-04-11",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Attention is All You Need to Defend Against Indirect Prompt Injection Attacks in LLMs (RENNERVATE)",
+        "url": "https://www.ndss-symposium.org/wp-content/uploads/2026-f394-paper.pdf",
+        "publishedOn": "2026-02-23",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "A Layered Security Framework Against Prompt Injection in RAG-Based Chatbots",
+        "url": "https://arxiv.org/abs/2606.19660",
+        "publishedOn": "2026-06-17",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Evaluating Mitigation Strategies Against Indirect Prompt Injection in Tool-Using RAG Agents",
+        "url": "https://escholarship.org/content/qt8zq0952f/qt8zq0952f.pdf",
+        "publishedOn": "2026-01-01",
+        "summaryBasis": "open_full_text"
+      }
+    ]
+  },
+  {
+    "id": "sample-03",
+    "topic": "Strength and mobility adaptations in adults",
+    "title": "Resistance training and range-of-motion adaptations in adults — briefing",
+    "generatedOn": "2026-09-10",
+    "reportingPeriod": {
+      "to": "2026-09-10",
+      "from": "2026-08-27"
+    },
+    "paperCount": 5,
+    "summary": "Across two open meta-analyses and randomized trials in the supplied evidence set, resistance training (RT) commonly produces measurable improvements in joint range of motion (ROM) in adults. Meta-analyses report moderator signals (intensity, contraction type, trainee status) that may influence effect size. Trial-level data suggest low-volume full–ROM RT can match brief static stretching for posterior-chain flexibility in young active adults, while partial-ROM strategies can yield short-term strength gains with different kinematics. Confidence in precise magnitudes and moderator strength is medium because ROM measures are heterogeneous and one trial’s full text was inaccessible here.",
+    "highlights": [
+      "Main signal: Resistance training typically increases joint range of motion in adults (supported by two open meta-analyses).",
+      "Program features (intensity, contraction emphasis, and trainee status) are reported as likely moderators of RT -> ROM effects in both meta-analyses.",
+      "One RCT (pmid:42589887) found low-volume full-ROM RT produced sit-and-reach gains comparable to short static stretching in 18–25-year-old active participants.",
+      "Partial-/progressive-ROM strength training can produce equivalent short-term 1RM gains to full-ROM training but changes bar kinematics (pmid:41718200); this does not directly indicate passive flexibility improvements.",
+      "A clinical RCT in firefighters (pmid:42336366) is reported in metadata to show ROM and strength gains, but the paywalled full text was not available for verification."
+    ],
+    "sourceBasis": "mixed",
+    "transparencyNote": "This briefing was generated from the five supplied papers and their supplied metadata/abstracts only. I used open-access full texts where available (pmcid:PMC9935664; pmcid:PMC11841725; pmid:41718200; pmid:42589887 appears via PubMed abstract) and relied on supplied metadata for a paywalled trial (pmid:42336366). Confirm numeric pooled estimates, moderator tables, and trial-level statistics by consulting the original full texts before citation, guideline changes, or clinical/program decisions.",
+    "warnings": [
+      "Small curated evidence set (5 supplied papers) — not a comprehensive literature search.",
+      "Heterogeneous ROM outcome measures were pooled across studies (sit-and-reach, active/passive goniometry, joint-specific tests).",
+      "One trial (pmid:42336366) is paywalled in the supplied evidence; full-text numeric verification and risk-of-bias assessment were not possible for that study."
+    ],
+    "sources": [
+      {
+        "title": "Resistance Training Induces Improvements in Range of Motion: A Systematic Review and Meta-Analysis",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9935664/",
+        "publishedOn": "2022-12-01",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "The Influence of Resistance Training on Joint Flexibility in Healthy Adults: A Systematic Review, Meta-analysis, and Meta-regression",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11841725/",
+        "publishedOn": "2025-01-01",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Effects of Low-Volume Static Stretching and Full Range-of-Motion Resistance Training on Flexibility in Physically Active Young Adults: A Randomized Controlled Trial",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/42589887/",
+        "publishedOn": "2026-07-23",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "The effects of an 8-week resistance training program on shoulder strength and range of motion in firefighters with subacromial impingement syndrome: a randomized controlled trial",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/42336366/",
+        "publishedOn": "2026-06-23",
+        "summaryBasis": "metadata_only"
+      },
+      {
+        "title": "Progressively Increased Range of Motion Confers Similar Strength Improvements but Not Bar Kinematics as Full Range of Motion Bench Press",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12921985/",
+        "publishedOn": "2025-02-01",
+        "summaryBasis": "open_full_text"
+      }
+    ]
+  },
+  {
+    "id": "sample-04",
+    "topic": "Efficient small language models",
+    "title": "Efficient small language models — quantization, kernels, and system mitigations",
+    "generatedOn": "2026-09-10",
+    "reportingPeriod": {
+      "to": "2026-09-10",
+      "from": "2026-08-27"
+    },
+    "paperCount": 3,
+    "summary": "Main signal: Quantization + runtime/kernel availability determine whether small language models (SLMs) can run effectively on local/edge hardware. Two actionable paths emerge: (A) aggressive, format-aware low-bit quantization coupled with fused high-performance kernels (MR-GPTQ + QuTLASS) can unlock large GPU throughput gains where such kernels exist (arXiv:2509.23202); (B) a low-cost, device-profile-driven per-layer ranking (SQNR + roofline) can guide mixed-precision quantization to reduce tuning cost and predict speedups (arXiv:2608.26926). When kernels or device support are unavailable, hybrid/speculative inference (Multi-SPIN) is a practical mitigation to boost token goodput at the system level (arXiv:2608.29618). Recommended immediate action for builders: run a focused 4–8 week pilot reproducing kernels and device profiling on representative targets; for executives: fund the pilot to de-risk procurement and roadmap choices.",
+    "highlights": [
+      "Primary deployment lever: quantization + matching runtime kernels control whether memory savings become usable throughput/latency gains (supported by all three papers).",
+      "MR-GPTQ + QuTLASS (arXiv:2509.23202) reports FP4-aware algorithmic fixes and fused GPU kernels with large measured GPU throughput gains on tested NVIDIA cards; portability unproven.",
+      "SQNR + roofline per-layer metric (arXiv:2608.26926) is a low-cost approach to rank layers for mixed-precision assignment and predicted device speedups with modest error on the profiled device.",
+      "Multi-SPIN (arXiv:2608.29618) offers a hybrid/speculative system design to improve token goodput when full local verification/inference is infeasible, but it depends on server-side verification and network assumptions."
+    ],
+    "sourceBasis": "abstracts_only",
+    "transparencyNote": "This briefing summarizes the supplied arXiv preprints only. Verify original papers, code, kernel availability, and licensing before citation, implementation, or procurement decisions. Performance claims are device- and workload-specific until reproduced.",
+    "warnings": [
+      "Small sample (3 arXiv preprints) — limited generalizability until reproduced.",
+      "None of the supplied records confirm kernel/license availability or peer review; treat performance claims as device- and workload-specific."
+    ],
+    "sources": [
+      {
+        "title": "A Layer Importance Metric for Quantization Accounting for the Speed-Quality Trade-off in Autoregressive Models",
+        "url": "https://arxiv.org/abs/2608.26926",
+        "publishedOn": "2026-08-27",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Multi-Access Speculative Inference: Uplink or Downlink?",
+        "url": "https://arxiv.org/abs/2608.29618",
+        "publishedOn": "2026-08-30",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Bridging the Gap Between Promise and Performance for Microscaling FP4 Quantization",
+        "url": "https://arxiv.org/abs/2509.23202",
+        "publishedOn": "2025-09-27",
+        "summaryBasis": "open_full_text"
+      }
+    ]
+  },
+  {
+    "id": "sample-05",
+    "topic": "Strength and mobility adaptations in adults",
+    "title": "Resistance training and range-of-motion adaptations in adults",
+    "generatedOn": "2026-09-10",
+    "reportingPeriod": {
+      "to": "2026-09-10",
+      "from": "2026-08-27"
+    },
+    "paperCount": 5,
+    "summary": "Across two independent systematic reviews/meta-analyses and three randomized trials in the current evidence set, resistance training (RT) is repeatedly reported to produce measurable improvements in joint range of motion (ROM) in adults. Meta-analyses report moderator analyses implicating program features (intensity, contraction type, trainee status) as likely modifiers. Trial-level evidence includes a recent head-to-head RCT comparing full-ROM RT vs low-volume static stretching in active young adults and clinical/training-specific trials showing ROM gains with RT. Confidence in precise effect sizes, moderator magnitudes, and certainty is medium because most syntheses and trials were examined at abstract/metadata level in this run; retrieve full texts to quantify effects and appraise bias before definitive guidance or protocol changes.",
+    "highlights": [
+      "Main signal: Resistance training commonly increases joint ROM in adults (supported by two meta-analyses and trial reports).",
+      "Moderators reported: intensity, contraction type (e.g., eccentric emphasis), and participant training status may change RT -> ROM effects.",
+      "Head-to-head trial exists comparing full-ROM RT to low-volume static stretching in active young adults; full-text needed to judge equivalence claims.",
+      "Strength-focused ROM manipulations (progressive/partial vs full ROM) can yield similar strength gains but different movement kinematics; this is not direct evidence of passive flexibility change.",
+      "Key limitations: heterogeneity of ROM measures and RT protocols, small or population-specific trials, and constrained access to numeric pooled estimates and RoB tables in this run."
+    ],
+    "sourceBasis": "mixed",
+    "transparencyNote": "This briefing used only the five supplied paper records and the provided trend analysis. Many summaries were limited to abstracts or metadata in this run; verify and extract full texts (authors' tables, meta-regression outputs, RoB/GRADE statements, and exact intervention details) before formal citation, guideline changes, or clinical implementation. Licenses and reuse terms for full texts were not verified here.",
+    "warnings": [
+      "Most source summaries available to this run were limited to abstracts, metadata, or constrained copies; full-text effect sizes, heterogeneity statistics, and formal risk-of-bias/GRADE assessments were not extracted for several items.",
+      "Heterogeneous populations (healthy/active, trained males, symptomatic firefighters), ROM outcome types (active vs passive not consistently reported), and RT prescriptions limit direct generalizability and prescriptive detail."
+    ],
+    "sources": [
+      {
+        "title": "Resistance Training Induces Improvements in Range of Motion: A Systematic Review and Meta-Analysis",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9935664/",
+        "publishedOn": null,
+        "summaryBasis": "abstract_only"
+      },
+      {
+        "title": "The Influence of Resistance Training on Joint Flexibility in Healthy Adults: A Systematic Review, Meta-analysis, and Meta-regression",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11841725/",
+        "publishedOn": null,
+        "summaryBasis": "abstract_only"
+      },
+      {
+        "title": "Effects of Low-Volume Static Stretching and Full Range-of-Motion Resistance Training on Flexibility in Physically Active Young Adults: A Randomized Controlled Trial",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/42589887/",
+        "publishedOn": "2026-07-23",
+        "summaryBasis": "abstract_only"
+      },
+      {
+        "title": "The effects of an 8-week resistance training program on shoulder strength and range of motion in firefighters with subacromial impingement syndrome: a randomized controlled trial",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/42336366/",
+        "publishedOn": "2026-06-23",
+        "summaryBasis": "abstract_only"
+      },
+      {
+        "title": "Progressively Increased Range of Motion Confers Similar Strength Improvements but Not Bar Kinematics as Full Range of Motion Bench Press",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/41718200/",
+        "publishedOn": null,
+        "summaryBasis": "abstract_only"
+      }
+    ]
+  },
+  {
+    "id": "sample-06",
+    "topic": "Wearable sensors for movement analysis",
+    "title": "Wearable sensors for movement analysis — validation-focused briefing",
+    "generatedOn": "2026-09-10",
+    "reportingPeriod": {
+      "to": "2026-09-10",
+      "from": "2026-08-27"
+    },
+    "paperCount": 4,
+    "summary": "Main supported signal: validations performed in controlled settings (lab/treadmill or camera-based captures) do not reliably translate to free-living wearable measurements without method adaptation or using native IMU endpoints. Evidence from head-to-head comparisons and benchmarked wrist-accelerometer work supports prioritizing free-living validation and consistent reference reporting. Confidence: medium.",
+    "highlights": [
+      "Main signal — lab-to-free-living translation gap: controlled-condition accuracy often overestimates real-world agreement (supporting papers: doi:10.1016/j.gaitpost.2026.110232; doi:10.1038/s41746-026-02528-2; doi:10.1016/j.mlwa.2026.100945).",
+      "Markerless multi-camera vs IMU rigs: markerless pipeline compared to a 17-sensor Xsens rig showed suitability for movement-pattern detection but larger absolute-angle disagreements for joint-angle values (doi:10.3390/s26175492).",
+      "Benchmarks available: ElderNet + Mobilise‑D TVS provide open benchmarks (MAE, ICC) for wrist-worn accelerometer gait assessments and are practical references for algorithm targets (doi:10.1038/s41746-026-02528-2).",
+      "Emerging ML kinetics: LSTM prediction of knee adduction moment (KAM) from a single foot accelerometer is a promising proof-of-concept but is early-stage and treadmill-trained on a small cohort (doi:10.1016/j.mlwa.2026.100945)."
+    ],
+    "sourceBasis": "mixed",
+    "transparencyNote": "This briefing summarizes the supplied paper evidence only. Verify each cited paper's full text (methods, numeric results, cohort, synchronization, sensor models, and license terms) before citation, clinical use, procurement, or regulatory submission. One record (doi:10.1016/j.gaitpost.2026.110232) was accessible only via metadata in this run; extract stratified errors and methods from the full text where needed.",
+    "warnings": [
+      "Small curated paper set (n=4) — signals may reflect selection, not the full field.",
+      "One paper (doi:10.1016/j.gaitpost.2026.110232) was summarized from metadata only because full text was paywalled in this run; numeric methods/results should be verified in the full text before operational decisions.",
+      "Do not assume papers use identical endpoint definitions, synchronization methods, or cohort characteristics — heterogeneous references limit direct comparability."
+    ],
+    "sources": [
+      {
+        "title": "Concurrent Validation of a Multi-Camera Markerless Motion Capture System Against Inertial Sensors for Upper- and Lower-Limb Joint Kinematics",
+        "url": "https://www.mdpi.com/1424-8220/26/17/5492",
+        "publishedOn": "2026-09-01",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Continuous assessment of daily-living gait using self-supervised learning of wrist-worn accelerometer data",
+        "url": "https://www.nature.com/articles/s41746-026-02528-2",
+        "publishedOn": "2026-03-01",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Comparing gait metrics from in-lab gait analyses to free-living assessment from wearable sensors in end-stage osteoarthritis patients",
+        "url": "https://doi.org/10.1016/j.gaitpost.2026.110232",
+        "publishedOn": "2026-09-01",
+        "summaryBasis": "metadata_only"
+      },
+      {
+        "title": "Prediction of knee adduction moment using foot acceleration: Toward personalized gait retraining for knee osteoarthritis management",
+        "url": "https://doi.org/10.1016/j.mlwa.2026.100945",
+        "publishedOn": "2026-09-01",
+        "summaryBasis": "metadata_only"
+      }
+    ]
+  },
+  {
+    "id": "sample-07",
+    "topic": "Efficient small language models",
+    "title": "Efficient small language models — quantization, kernels, and deployment bottlenecks",
+    "generatedOn": "2026-09-09",
+    "reportingPeriod": {
+      "to": "2026-09-09",
+      "from": "2026-08-26"
+    },
+    "paperCount": 3,
+    "summary": "Main supported signal: quantization remains the primary lever to enable capable small language models (SLMs) for local deployment, but practical deployment is gated by low-level runtime kernels and per-device profiling. Two complementary technical threads appear in the supplied evidence: (1) format-aware algorithm+kernel co-design for FP4 microscaling (MR-GPTQ + QuTLASS) that recovers accuracy and enables GPU throughput gains (arXiv:2509.23202), and (2) a lightweight per-layer importance metric combining normalized SQNR and a roofline throughput proxy to prioritize layerwise mixed-precision (arXiv:2608.26926). A systems-level complement (Multi-SPIN) shows speculative on-device/server drafting can improve token-goodput but does not obviate quantization or kernel requirements (arXiv:2608.29618). Confidence: medium. Key operational implication: verify kernel availability and reproduce device profiling on your target hardware before committing to a quantization format or architecture.",
+    "highlights": [
+      "Main signal: Quantization + kernels + profiling determine whether SLMs run well on-device (support: arXiv:2509.23202, arXiv:2608.26926).",
+      "MR-GPTQ proposes FP4 format-aware GPTQ plus fused GPU kernels (QuTLASS) to recover accuracy and realize GPU speedups (arXiv:2509.23202).",
+      "Layer importance metric (normalized SQNR + roofline throughput) predicts speed-quality trade-offs and can reduce mixed-precision search (arXiv:2608.26926).",
+      "Multi-SPIN frames uplink vs downlink speculative inference for multi-device edge scenarios; useful as a complementary systems optimization (arXiv:2608.29618).",
+      "Practical bottleneck: availability, portability, and licensing of fused low-bit kernels and the need to re-profile per-target device."
+    ],
+    "sourceBasis": "abstracts_only",
+    "transparencyNote": "This briefing is based only on the three supplied arXiv preprints (arXiv:2509.23202, arXiv:2608.26926, arXiv:2608.29618). Implementation artifacts, kernels, and licenses referenced by those papers were not verified here. Verify original papers, code repositories, and licensing before making procurement, implementation, or publication decisions.",
+    "warnings": [
+      "Small sample (3 arXiv preprints); results are preliminary and rely on authors' reported experiments.",
+      "Kernel/tool availability, build instructions, and license status are not verified in the supplied evidence.",
+      "Device validation is limited (specific GPUs and Gemma 3 1B); portability to CPUs/ARM/NPUs is unproven."
+    ],
+    "sources": [
+      {
+        "title": "A Layer Importance Metric for Quantization Accounting for the Speed-Quality Trade-off in Autoregressive Models",
+        "url": "https://arxiv.org/abs/2608.26926",
+        "publishedOn": "2026-08-27",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Multi-Access Speculative Inference: Uplink or Downlink?",
+        "url": "https://arxiv.org/abs/2608.29618",
+        "publishedOn": "2026-08-30",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Bridging the Gap Between Promise and Performance for Microscaling FP4 Quantization",
+        "url": "https://arxiv.org/abs/2509.23202",
+        "publishedOn": "2025-09-27",
+        "summaryBasis": "open_full_text"
+      }
+    ]
+  },
+  {
+    "id": "sample-08",
+    "topic": "Efficient small language models",
+    "title": "Efficient small language models — quantization + kernels are the deployment gate",
+    "generatedOn": "2026-09-09",
+    "reportingPeriod": {
+      "to": "2026-09-09",
+      "from": "2026-08-26"
+    },
+    "paperCount": 3,
+    "summary": "Quantization remains the primary lever for deploying capable small language models (SLMs) in constrained environments. Two complementary, actionable strands appear in the current evidence: (1) format-aware algorithm+kernel work to unlock FP4 (MR-GPTQ; arXiv:2509.23202) that can recover accuracy and yield large GPU throughput gains when FP4 kernels exist, and (2) a profiling-driven layer-prioritization metric (SQNR + roofline; arXiv:2608.26926) that predicts where lowering precision gives the best speed-quality trade-off. System-level speculative/hybrid inference (Multi-SPIN; arXiv:2608.29618) can change end-to-end latency/bandwidth trade-offs but does not remove low-bit kernel or portability constraints. Main operational risk: portability of FP4 and fused kernels to target devices (CPU/ARM/NPUs) and the need to reproduce reported kernels/profiles before productization.",
+    "highlights": [
+      "Main signal: Quantization + runtime/kernels are the decisive bottleneck for practical on-device SLMs (supported by arXiv:2509.23202, arXiv:2608.26926).",
+      "MR-GPTQ (arXiv:2509.23202): an FP4-aware GPTQ variant with block-wise Hadamard rotations + fused GPU kernels; improves MXFP4 accuracy toward NVFP4 and shows layer/end-to-end GPU speedups on tested devices.",
+      "SQNR + roofline metric (arXiv:2608.26926): a lightweight, profiling-driven layer-importance score that predicted measured speedups with ~4% error in the authors' profiling and helps prioritize per-layer quantization.",
+      "Multi-SPIN (arXiv:2608.29618): a speculative multi-device edge scheme improving token goodput by combining on-device drafting with edge verification—useful when network/verifier costs dominate.",
+      "Actionable implication: reproduce kernels and profiling on representative target devices before committing to FP4- or layer-selection-based deployment paths."
+    ],
+    "sourceBasis": "abstracts_only",
+    "transparencyNote": "This briefing was created from metadata and concise summaries of three arXiv preprints supplied for this run (arXiv:2509.23202, arXiv:2608.26926, arXiv:2608.29618). Readers must verify original papers, reproduce kernels and profiling on representative hardware, and confirm code licenses before citation, procurement, or production deployment. Code and license availability were not confirmed from the supplied evidence.",
+    "warnings": [
+      "Small sample (3 arXiv preprints) — limited peer-review assurance.",
+      "Paper code, kernels, and licenses not verified from supplied metadata; portability and reproducibility are unconfirmed.",
+      "Hardware/throughput claims are device-dependent in the supplied evidence."
+    ],
+    "sources": [
+      {
+        "title": "Bridging the Gap Between Promise and Performance for Microscaling FP4 Quantization",
+        "url": "https://arxiv.org/abs/2509.23202",
+        "publishedOn": "2026-03-03",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "A Layer Importance Metric for Quantization Accounting for the Speed-Quality Trade-off in Autoregressive Models",
+        "url": "https://arxiv.org/abs/2608.26926",
+        "publishedOn": "2026-08-27",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Multi-Access Speculative Inference: Uplink or Downlink?",
+        "url": "https://arxiv.org/abs/2608.29618",
+        "publishedOn": "2026-08-30",
+        "summaryBasis": "open_full_text"
+      }
+    ]
+  },
+  {
+    "id": "sample-09",
+    "topic": "Efficient small language models",
+    "title": "Efficient small language models: quantization, co-design, and the kernel bottleneck",
+    "generatedOn": "2026-09-09",
+    "reportingPeriod": {
+      "to": "2026-09-09",
+      "from": "2026-08-26"
+    },
+    "paperCount": 3,
+    "summary": "Main signal: recent work converges on two enabling levers for practical local LLM deployment — aggressive low-bit quantization (sub-4-bit / FP4) with format- and layer-aware corrections, and model + runtime co-design to reduce working memory. Quantization algorithm advances (D^2Quant, MR-GPTQ) promise large memory savings but require matching kernels; SmallThinker shows a promising end-to-end co-design (sparse MoE + runtime prefetching) targeted at consumer CPUs. Recommendation: fund a short pilot to validate one quantization method and one co-designed small model on representative hardware before scaling engineering or product commitments.",
+    "highlights": [
+      "Main signal: Quantization + runtime/kernel availability determine whether memory savings translate to usable on-device latency and throughput (supporting: arXiv:2509.23202, arXiv:2602.02546, arXiv:2507.20984).",
+      "D^2Quant (arXiv:2602.02546) — weight-only PTQ with Dual-Scale Quantizer and Deviation-Aware Correction aimed at reliable sub-4-bit accuracy retention; promising for CPU/ARM if low-bit kernels exist.",
+      "MR-GPTQ (arXiv:2509.23202) — format-aware GPTQ and GPU kernels that recover FP4 accuracy and show accelerator speedups; valuable where FP4-capable GPUs are available.",
+      "SmallThinker (arXiv:2507.20984) — model + runtime co-design (sparse MoE, sparse FFN, pre-attention router, NoPE-RoPE) claiming Q4_0 quantized operation on consumer CPUs; treat as actionable but single-paper evidence needing reproduction."
+    ],
+    "sourceBasis": "abstracts_only",
+    "transparencyNote": "This briefing summarizes only the supplied papers (arXiv:2507.20984, arXiv:2509.23202, arXiv:2602.02546). Readers must verify original sources, repositories, benchmark scripts, and license terms before citation, implementation, or deployment. Operational claims (throughput, memory) are unverified here and depend on runtime kernels and hardware.",
+    "warnings": [
+      "Small sample (3 papers); conclusions are provisional.",
+      "Evidence is primarily recent preprints / conference outputs; independent reproduction and code/license verification required.",
+      "Operational claims (tokens/s, memory footprints) depend on runtime kernels and hardware specifics not validated here."
+    ],
+    "sources": [
+      {
+        "title": "SmallThinker: A Family of Efficient Large Language Models Natively Trained for Local Deployment",
+        "url": "https://arxiv.org/abs/2507.20984",
+        "publishedOn": "2025-07-28",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "D$^2$Quant: Accurate Low-bit Post-Training Weight Quantization for LLMs",
+        "url": "https://arxiv.org/abs/2602.02546",
+        "publishedOn": "2026-01-30",
+        "summaryBasis": "open_full_text"
+      },
+      {
+        "title": "Bridging the Gap Between Promise and Performance for Microscaling FP4 Quantization",
+        "url": "https://arxiv.org/abs/2509.23202",
+        "publishedOn": "2025-09-27",
+        "summaryBasis": "open_full_text"
+      }
+    ]
+  }
+]
