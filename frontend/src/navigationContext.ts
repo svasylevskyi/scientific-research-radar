@@ -45,3 +45,18 @@ export function qualitySection(hash: string) {
   // Preserve links published before the workspace gained its own tab.
   return hash === "#benchmarks" || hash === "#benchmark-review" ? "benchmarks" : "settings";
 }
+
+/** Keep list filters, return_to and diagnostics while pinning both run and paper. */
+export function paperQuery(search: URLSearchParams, runId: string, paperId: string, admin = false): URLSearchParams {
+  const next = new URLSearchParams(search);
+  next.set("run_id", runId);
+  next.set("output_tab", "papers");
+  next.set("paper_run_id", runId);
+  next.set("paper_id", paperId);
+  if (admin) next.set("run_section", "output");
+  return next;
+}
+
+export function selectedPaperId(search: URLSearchParams, runId: string): string | null {
+  return search.get("paper_run_id") === runId ? search.get("paper_id") || null : null;
+}
