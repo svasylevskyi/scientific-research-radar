@@ -121,9 +121,6 @@ function PlansContent({ enrolment, workspace }: { enrolment: boolean; workspace:
             ? "Your account is ready. Free is preselected and needs no payment details. Choose a paid plan now or upgrade later."
             : "Compare research allowances, scheduling options, and email delivery to find your plan."}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Prices include tax.
-        </Typography>
         {catalogue.data?.sandbox && (
           <Alert severity="warning" sx={{ mb: 3 }}>
             Paid subscriptions are in sandbox testing: use Stripe test payment details only. No real payment is collected.

@@ -11,17 +11,19 @@ const steps = [
 
 export function AboutPage() {
   return <Box><MarketingHeader /><Container component="main" maxWidth="md" sx={{ py: { xs: 4, md: 7 } }}>
-    <Typography component="h1" variant="h3" gutterBottom>About Scientific Research Radar</Typography>
-    <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>A simpler way to follow science that matters to you.</Typography>
-    <Typography sx={{ mb: 4 }}>Research keeps growing. Radar helps curious readers, researchers, and teams turn a broad topic into a focused, readable overview, without having to sort through every paper themselves.</Typography>
-    <Stack spacing={3}>{steps.map(([title, description], index) => <Box key={title}>
-      <Typography component="h2" variant="h6" gutterBottom>{index + 1}. {title}</Typography>
-      <Typography color="text.secondary">{description}</Typography>
-    </Box>)}</Stack>
-    <Paper variant="outlined" sx={{ p: 3, my: 4 }}>
-      <Typography component="h2" variant="h6" gutterBottom>A starting point for understanding</Typography>
-      <Typography>Radar uses AI, which can miss relevant work or misinterpret findings. Results depend on the available sources and are not an exhaustive review of the literature. Treat summaries as a guide, check important claims against the original papers, and use qualified advice for decisions that need it.</Typography>
-    </Paper>
-    <Stack direction="row" gap={2} flexWrap="wrap"><Button component={RouterLink} to="/plans" variant="contained">Subscription Plans</Button><Button component={RouterLink} to="/contact">Contact us</Button></Stack>
-  </Container></Box>;
+        <Box data-page-column="centered" sx={{ width: "100%", maxWidth: 800, minWidth: 0, mx: "auto" }}>
+          <Typography component="h1" variant="h3" gutterBottom>About Scientific Research Radar</Typography>
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>A simpler way to follow science that matters to you.</Typography>
+          <Typography sx={{ mb: 4 }}>Research keeps growing. Radar helps curious readers, researchers, and teams turn a broad topic into a focused, readable overview, without having to sort through every paper themselves.</Typography>
+          <Stack spacing={3}>{steps.map(([title, description], index) => <Box key={title}>
+            <Typography component="h2" variant="h6" gutterBottom>{index + 1}. {title}</Typography>
+            <Typography color="text.secondary">{description}</Typography>
+          </Box>)}</Stack>
+          <Paper variant="outlined" sx={{ p: 3, my: 4 }}>
+            <Typography component="h2" variant="h6" gutterBottom>A starting point for understanding</Typography>
+            <Typography>Radar uses AI, which can miss relevant work or misinterpret findings. Results depend on the available sources and are not an exhaustive review of the literature. Treat summaries as a guide, check important claims against the original papers, and use qualified advice for decisions that need it.</Typography>
+          </Paper>
+          <Stack direction="row" gap={2} flexWrap="wrap"><Button component={RouterLink} to="/plans" variant="contained">Subscription Plans</Button><Button component={RouterLink} to="/contact">Contact us</Button></Stack>
+        </Box>
+      </Container></Box>;
 }

@@ -51,9 +51,11 @@ test("monthly-reset reminder is in the shared prompt after the plans, not the he
   assert.match(prompt.getText(file), /Scheduled runs use that same total\. Scheduling frequency does not increase your allowances\./);
 });
 
-test("registration-assignment copy is removed without dropping tax or detailed billing terms", () => {
+test("redundant header tax and registration copy are removed without dropping billing terms", () => {
   assert.doesNotMatch(source, /Free is assigned after registration/);
-  assert.match(source, /Prices include tax\./);
+  assert.doesNotMatch(source, /Prices include tax\./);
+  assert.match(source, /price.note/);
+  assert.match(source, /month"}, tax\s+included/);
   assert.match(detailsCopy.getText(file), /Research allowances reset on your account’s monthly anniversary, including yearly subscriptions\./);
   assert.match(detailsCopy.getText(file), /Unused allowance does not roll over\./);
   assert.match(detailsCopy.getText(file), /Paid subscriptions renew until canceled\./);

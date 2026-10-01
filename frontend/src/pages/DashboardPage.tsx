@@ -51,7 +51,7 @@ export function DashboardPage() {
             <Typography component="h1" variant="h2" sx={{ mb: 1, overflowWrap: "anywhere" }}>
               Welcome, {user?.full_name.split(" ")[0]}.
             </Typography>
-            <Typography color="text.secondary" sx={{ maxWidth: "65ch" }}>
+            <Typography color="text.secondary" sx={{ width: "100%" }}>
               This is your personal research workspace. Create digests for the topics you follow,
               run or schedule research, and return here to explore your results.
             </Typography>
