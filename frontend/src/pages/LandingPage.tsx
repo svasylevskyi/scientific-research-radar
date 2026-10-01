@@ -1,6 +1,7 @@
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
-import { Box, Button, Chip, Container, Stack, Typography } from "@mui/material";
+import { Box, Button, Container, Stack, Typography } from "@mui/material";
 import { Link as RouterLink } from "react-router-dom";
+import { HeroSampleGallery } from "../components/HeroSampleGallery";
 import { MarketingHeader, RadarLink } from "../components/MarketingHeader";
 
 const steps = [
@@ -14,13 +15,17 @@ export function LandingPage() {
     <Box sx={{ bgcolor: "#fbfcf9" }}>
       <MarketingHeader />
       <Box component="main">
-        <Container maxWidth="lg" sx={{ py: { xs: 7, md: 11 }, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1.05fr 1fr" }, gap: { xs: 6, md: 7 }, alignItems: "center" }}>
-          <Box>
+        <Box component="section" aria-label="Discover Research Radar"
+          sx={{ px: { xs: 2, sm: "clamp(24px, 6vw, 160px)" }, py: { xs: 5, lg: 8 } }}>
+          <Box sx={{ display: "grid", maxWidth: 1680, mx: "auto",
+            gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "minmax(0, 0.86fr) minmax(0, 1.14fr)" },
+            gap: { xs: 4, lg: "clamp(32px, 3vw, 48px)" }, alignItems: "center" }}>
+          <Box sx={{ minWidth: 0 }}>
             <Typography variant="overline" color="primary" fontWeight={800} letterSpacing={2}>A personal lens on scientific research</Typography>
-            <Typography component="h1" sx={{ fontWeight: 800, fontSize: { xs: "2.8rem", sm: "3.8rem", md: "4.2rem" }, lineHeight: 1.06, letterSpacing: "-0.055em", mt: 2, mb: 3 }}>
+            <Typography component="h1" sx={{ fontWeight: 800, fontSize: { xs: "clamp(2.5rem, 8vw, 3.75rem)", lg: "clamp(2.85rem, 3.75vw, 5rem)" }, lineHeight: 1.06, letterSpacing: "-0.055em", mt: 2, mb: 3 }}>
               Follow the science.<br /><Box component="span" sx={{ color: "primary.main" }}>Find your signal.</Box>
             </Typography>
-            <Typography color="text.secondary" sx={{ fontSize: "1.15rem", maxWidth: 500 }}>
+            <Typography color="text.secondary" sx={{ fontSize: "1.15rem", maxWidth: { xs: "65ch", lg: "none" } }}>
               Turn a growing world of papers into a focused research briefing. Discover what is relevant, understand the findings, and see how the ideas connect.
             </Typography>
             <Stack direction="row" flexWrap="wrap" useFlexGap gap={2} sx={{ mt: 4 }}>
@@ -29,28 +34,9 @@ export function LandingPage() {
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>Personalized research digests · Built around your topics and your questions</Typography>
           </Box>
-          <Box sx={{ bgcolor: "#e6eee7", borderRadius: 5, p: { xs: 2, sm: 4 }, position: "relative" }}>
-            <Box sx={{ bgcolor: "white", border: "1px solid #d6e2da", borderRadius: 3, p: { xs: 2.5, sm: 3.5 }, boxShadow: "0 24px 48px #10233312" }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
-                <Typography variant="overline" color="primary" fontWeight={800}>Your research briefing</Typography>
-                <Chip label="Sample" size="small" variant="outlined" />
-              </Stack>
-              <Typography component="h2" variant="h5" sx={{ fontFamily: "Georgia, serif", fontSize: "1.85rem", lineHeight: 1.2, my: 2 }}>A clearer picture of our changing oceans</Typography>
-              <Typography variant="body2" color="text.secondary">Ocean observation · Research overview</Typography>
-              <Box sx={{ my: 3, p: 2, bgcolor: "#f0f6f2", borderLeft: "3px solid #087d67" }}>
-                <Typography fontWeight={750} variant="body2">The question in focus</Typography>
-                <Typography variant="body2" sx={{ mt: 0.5 }}>How can satellite observations and autonomous sensors help us understand ocean change?</Typography>
-              </Box>
-              {[ ["DISCOVER", "Relevant papers, brought together"], ["UNDERSTAND", "Key findings, context, and limitations"], ["CONNECT", "Shared themes and questions to explore"] ].map(([label, title]) => (
-                <Box key={label} sx={{ py: 1.5, borderTop: "1px solid", borderColor: "divider" }}>
-                  <Typography sx={{ fontSize: "0.65rem", letterSpacing: 1.5, color: "primary.main", fontWeight: 800 }}>{label}</Typography>
-                  <Typography variant="body2" fontWeight={650} sx={{ mt: 0.5 }}>{title}</Typography>
-                </Box>
-              ))}
-              <Typography variant="caption" color="text.secondary">Illustrative preview, not a generated research result.</Typography>
-            </Box>
+          <HeroSampleGallery />
           </Box>
-        </Container>
+        </Box>
         <Box sx={{ borderTop: "1px solid", borderBottom: "1px solid", borderColor: "divider", py: 3, bgcolor: "white" }}>
           <Container maxWidth="lg"><Stack direction="row" flexWrap="wrap" useFlexGap gap={{ xs: 2, sm: 4 }} justifyContent="center">
             {["For curious minds", "Researchers", "Technical teams", "Science communicators", "Decision makers"].map((text) => <Typography key={text} variant="body2" color="text.secondary" fontWeight={650}>{text}</Typography>)}
