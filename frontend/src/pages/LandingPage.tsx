@@ -27,7 +27,7 @@ export function LandingPage() {
               <RadarLink />
               <Button component={RouterLink} to="/plans" endIcon={<ArrowForwardRoundedIcon />}>Subscription Plans</Button>
             </Stack>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>Product preview · Built around your topics and your questions</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>Personalized research digests · Built around your topics and your questions</Typography>
           </Box>
           <Box sx={{ bgcolor: "#e6eee7", borderRadius: 5, p: { xs: 2, sm: 4 }, position: "relative" }}>
             <Box sx={{ bgcolor: "white", border: "1px solid #d6e2da", borderRadius: 3, p: { xs: 2.5, sm: 3.5 }, boxShadow: "0 24px 48px #10233312" }}>
@@ -69,8 +69,8 @@ export function LandingPage() {
         </Container>
         <Container maxWidth="lg" sx={{ pb: { xs: 7, md: 10 } }}>
           <Box component="section" sx={{ bgcolor: "#102f32", color: "white", borderRadius: 4, p: { xs: 4, md: 6 }, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1.3fr 1fr" }, gap: 4, alignItems: "center" }}>
-            <Box><Typography component="h2" variant="h3" sx={{ mb: 2 }}>A research habit, shaped around you.</Typography><Typography sx={{ color: "#c1d8d4" }}>Explore a subscription concept for following the subjects that keep you curious.</Typography></Box>
-            <Box><Button component={RouterLink} to="/plans" variant="contained" endIcon={<ArrowForwardRoundedIcon />} sx={{ bgcolor: "#42e6bd", color: "#071a2b", "&:hover": { bgcolor: "#72efd1" } }}>Subscription Plans</Button><Typography variant="caption" sx={{ display: "block", mt: 2, color: "#c1d8d4" }}>Preview only. Subscriptions are not available for purchase yet.</Typography></Box>
+            <Box><Typography component="h2" variant="h3" sx={{ mb: 2 }}>A research habit, shaped around you.</Typography><Typography sx={{ color: "#c1d8d4" }}>Choose a subscription plan to follow the subjects that matter to you. Compare research allowances, scheduling options, and email delivery.</Typography></Box>
+            <Box><Button component={RouterLink} to="/plans" variant="contained" endIcon={<ArrowForwardRoundedIcon />} sx={{ bgcolor: "#42e6bd", color: "#071a2b", "&:hover": { bgcolor: "#72efd1" } }}>Subscription Plans</Button><Typography variant="caption" sx={{ display: "block", mt: 2, color: "#c1d8d4" }}>Subscriptions are available now. Find the plan that fits your research needs.</Typography></Box>
           </Box>
         </Container>
       </Box>
