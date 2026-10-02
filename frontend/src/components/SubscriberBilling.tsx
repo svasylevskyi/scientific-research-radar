@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -14,18 +14,21 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { subscriptionsApi } from "../api/subscriptions";
 import { useSubscription } from "./SubscriptionData";
+import { savedCheckoutLabel } from "../checkoutChoices";
 export function SubscriberBilling() {
   const [params] = useSearchParams();
   const { billing: data, busy, perform } = useSubscription();
+  const locked = useRef(false);
   const [error, setError] = useState("");
   const [confirmCancel, setConfirmCancel] = useState(false);
   async function action(name: "refresh" | "portal" | "resume" | "cancel") {
-    if (busy) return;
+    if (busy || locked.current || (name === "resume" && (!data.resume_allowed || !data.attempt?.id))) return;
+    locked.current = true;
     setError("");
     try {
       if (name === "refresh") await perform(subscriptionsApi.refreshBilling);
       else {
-        const { url } = await perform(() => subscriptionsApi.openBilling(name));
+        const { url } = await perform(() => name === "resume" ? subscriptionsApi.resumeCheckout(data.attempt!.id!, data.replacement?.id ?? null) : subscriptionsApi.openBilling(name));
         window.location.assign(url);
       }
     } catch (e) {
@@ -34,7 +37,7 @@ export function SubscriberBilling() {
           ? e.message
           : "Could not open billing. Try again.",
       );
-    }
+    } finally { locked.current = false; }
   }
   return (
     <Paper variant="outlined" sx={{ p: 3 }}>
@@ -68,6 +71,10 @@ export function SubscriberBilling() {
               </Typography>
             )}
             {data.reason && <Typography>{data.reason}</Typography>}
+            {data.resume_allowed && data.attempt && <Typography variant="body2">
+              {data.replacement ? "Saved replacement: " : "Saved checkout: "}{savedCheckoutLabel(data.replacement ?? data.attempt)}.
+              Resuming uses these saved terms, not the currently displayed catalogue price.
+            </Typography>}
             {data.cancel_at_period_end && (
               <Alert severity="info">
                 Renewal is cancelled. Free will apply after paid access ends
@@ -92,10 +99,10 @@ export function SubscriberBilling() {
               </Button>
               {data.resume_allowed && (
                 <Button
-                  disabled={busy || !!error}
+                  disabled={busy || !!error || !data.attempt?.id}
                   onClick={() => void action("resume")}
                 >
-                  Resume checkout
+                  Resume Checkout
                 </Button>
               )}
               <Button

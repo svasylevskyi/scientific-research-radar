@@ -1350,6 +1350,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subscription/billing/checkout/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace Checkout */
+        post: operations["replace_checkout_api_v1_subscription_billing_checkout_replace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subscription/billing/notifications": {
         parameters: {
             query?: never;
@@ -2361,10 +2378,16 @@ export interface components {
             checkout_status: string;
             /** Code */
             code: string;
+            /** Currency */
+            currency?: string | null;
+            /** Id */
+            id?: string | null;
             /** Interval */
             interval: string;
             /** Plan Name */
             plan_name: string;
+            /** Price */
+            price?: string | null;
             /** Revision */
             revision: number;
             /** Subscription Status */
@@ -2436,6 +2459,12 @@ export interface components {
             portal_allowed: boolean;
             /** Reason */
             reason: string;
+            /**
+             * Replace Allowed
+             * @default false
+             */
+            replace_allowed?: boolean;
+            replacement?: components["schemas"]["PendingCheckoutReplacementRead"] | null;
             /** Resume Allowed */
             resume_allowed: boolean;
             /** Sandbox */
@@ -2609,6 +2638,23 @@ export interface components {
             /** Checkout Id */
             checkout_id: string;
         };
+        /** CheckoutReplacement */
+        CheckoutReplacement: {
+            /** Code */
+            code: string;
+            /**
+             * Expected Attempt Id
+             * Format: uuid
+             */
+            expected_attempt_id: string;
+            /**
+             * Interval
+             * @enum {string}
+             */
+            interval: "monthly" | "annual";
+            /** Revision */
+            revision: number;
+        };
         /** CheckoutRequest */
         CheckoutRequest: {
             /**
@@ -2618,6 +2664,16 @@ export interface components {
             interval: "monthly" | "annual";
             /** Revision */
             revision: number;
+        };
+        /** CheckoutResume */
+        CheckoutResume: {
+            /**
+             * Expected Attempt Id
+             * Format: uuid
+             */
+            expected_attempt_id: string;
+            /** Expected Replacement Id */
+            expected_replacement_id?: string | null;
         };
         /** ClaimReviewCaseRead */
         ClaimReviewCaseRead: {
@@ -3837,6 +3893,31 @@ export interface components {
             paid_through: string | null;
             /** Status */
             status: string;
+        };
+        /** PendingCheckoutReplacementRead */
+        PendingCheckoutReplacementRead: {
+            /** Code */
+            code: string;
+            /** Currency */
+            currency: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Interval */
+            interval: string;
+            /** Plan Name */
+            plan_name: string;
+            /** Price */
+            price: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Source Attempt Id
+             * Format: uuid
+             */
+            source_attempt_id: string;
         };
         /**
          * PlanConfigurationRead
@@ -8123,6 +8204,39 @@ export interface operations {
             };
         };
     };
+    replace_checkout_api_v1_subscription_billing_checkout_replace_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutReplacement"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedirectRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     notifications_api_v1_subscription_billing_notifications_get: {
         parameters: {
             query?: never;
@@ -8190,7 +8304,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CheckoutResume"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -8199,6 +8317,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RedirectRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

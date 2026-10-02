@@ -10,6 +10,7 @@ from app.schemas.subscriber_responses import (
 )
 from app.schemas.api_common import RedirectRead
 from typing import Literal
+from uuid import UUID
 from fastapi import APIRouter, Response
 from pydantic import BaseModel, ConfigDict, Field
 from app.api.dependencies import CurrentUser, DbSession, AppSettings
@@ -24,6 +25,16 @@ class Selection(BaseModel):
     code: str = Field(pattern=r'^[a-z][a-z0-9-]{0,59}$')
     revision: int = Field(ge=1)
     interval: Literal['monthly', 'annual']
+
+
+class CheckoutResume(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    expected_attempt_id: UUID
+    expected_replacement_id: UUID | None = None
+
+
+class CheckoutReplacement(Selection):
+    expected_attempt_id: UUID
 
 
 @router.get('/plans', response_model=PublicPlansRead, response_model_exclude_unset=True)
@@ -50,10 +61,18 @@ def checkout(payload: Selection, actor: CurrentUser, db: DbSession, settings: Ap
     return call(db, service.checkout, settings, actor.id, payload.code, payload.revision, payload.interval)
 
 
-@router.post('/billing/resume', response_model=RedirectRead, response_model_exclude_unset=True)
-def resume(actor: CurrentUser, db: DbSession, settings: AppSettings):
+@router.post('/billing/checkout/replace', response_model=RedirectRead, response_model_exclude_unset=True)
+def replace_checkout(payload: CheckoutReplacement, actor: CurrentUser, db: DbSession, settings: AppSettings):
     limit(db, settings, actor)
-    return call(db, service.resume, settings, actor.id)
+    return call(db, service.replace_checkout, settings, actor.id,
+        payload.expected_attempt_id, payload.code, payload.revision, payload.interval)
+
+
+@router.post('/billing/resume', response_model=RedirectRead, response_model_exclude_unset=True)
+def resume(actor: CurrentUser, db: DbSession, settings: AppSettings, payload: CheckoutResume | None = None):
+    limit(db, settings, actor)
+    return call(db, service.resume, settings, actor.id, payload.expected_attempt_id if payload else None,
+        payload.expected_replacement_id if payload else None)
 
 
 @router.post('/billing/refresh', response_model=BillingStatusRead, response_model_exclude_unset=True)
@@ -75,7 +94,6 @@ def cancel(actor: CurrentUser, db: DbSession, settings: AppSettings):
 
 
 from datetime import datetime
-from uuid import UUID
 from app.services import subscription_change_service as changes
 
 

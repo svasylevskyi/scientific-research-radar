@@ -177,16 +177,61 @@ def sync_attempt(db, client, row):
     return None
 
 
-def start_checkout(db, settings, user_id, revision, interval, *, client=None, code="explorer", subscriber=False):
+def checkout_plan(db, client, code, revision, interval, *, subscriber=True):
+    """Validate the reviewed target before invalidating any existing checkout."""
+    if interval not in {"monthly", "annual"}:
+        raise Error("Choose Monthly or Yearly billing.", 422)
+    plan = db.scalar(select(SubscriptionPlanRevision).where(SubscriptionPlanRevision.code == code).order_by(SubscriptionPlanRevision.revision.desc()).limit(1))
+    if not plan or plan.revision != revision:
+        raise Error("The plan changed. Reload and review its latest revision.", 409)
+    if subscriber:
+        if not available(plan):
+            raise Error("This plan is not available for subscriber checkout. Review the current plans.", 409)
+    if plan.configuration.get("billing_type") == "free":
+        raise Error("The Free tier is managed in Radar and does not use Stripe Checkout.", 422)
+    if plan.configuration["state"] == "archived":
+        raise Error("Archived plans cannot be tested.", 422)
+    # Trial/quota settings remain catalogue-only in this initial paid test.
+    if plan.configuration.get("trial_days", 0):
+        raise Error("Checkout requires a plan revision with no trial.", 422)
+    price_key = "monthly_price" if interval == "monthly" else "annual_price"
+    mapping_key = "monthly_price_id" if interval == "monthly" else "annual_price_id"
+    price = (plan.configuration.get("stripe_sandbox") or {}).get(mapping_key)
+    if plan.configuration.get(price_key) is None or not price:
+        raise Error("This interval has no mapped price.", 422)
+    report = client.mapping(plan.configuration)
+    if not report["matches"]:
+        raise Error("The saved plan revision no longer matches Stripe: " + "; ".join(report["issues"]), 422)
+    return plan, price
+
+
+def replacement_pending(row):
+    return bool(row and (row.replacement_intent or {}).get("state") == "pending")
+
+
+def start_checkout(db, settings, user_id, revision, interval, *, client=None, code="explorer", subscriber=False,
+                   expected_attempt_id=None, replacement_source_id=None):
     ensure_database_mode(db, settings)
     enabled(settings)
     client = client or StripeSandboxClient(settings)
     lock_account(db, user_id)
-    if upgrade_pending(db, user_id=user_id):
-        raise Error('Resolve the pending upgrade before starting another checkout.', 409)
+    if upgrade_pending(db, user_id=user_id) or blocking(db, user_id=user_id):
+        raise Error('Resolve the pending subscription change before starting another checkout.', 409)
     if subscriber:
         require_opt_in(db, user_id=user_id)
     row = latest(db, user_id)
+    if expected_attempt_id is not None and (not row or row.id != expected_attempt_id):
+        raise Error("Checkout changed in another window. Refresh and review it.", 409)
+    replacement_source = None
+    if replacement_source_id is not None:
+        intent = (row.replacement_intent or {}) if row else {}
+        if (not row or row.id != replacement_source_id or row.checkout_status != "expired"
+            or row.subscription_id or intent.get("state") != "pending"
+            or (intent.get("code"), intent.get("revision"), intent.get("interval")) != (code, revision, interval)):
+            raise Error("The checkout replacement is no longer available. Refresh billing.", 409)
+        replacement_source = row
+    elif replacement_pending(row):
+        raise Error("Checkout replacement is being verified. Resume the saved replacement first.", 409)
     if row:
         value = sync_attempt(db, client, row)
         if row.subscription_id and row.subscription_status not in TERMINAL:
@@ -207,27 +252,12 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None, co
                 db.commit()
                 raise Error("This unresolved checkout is too old to retry safely. An operator must reconcile it in Stripe before another checkout can start.", 409)
         else:
+            if expected_attempt_id is not None and replacement_source is None:
+                db.commit()
+                raise Error("The saved checkout has finished. Refresh before choosing again.", 409)
             row = None
     if row is None:
-        plan = db.scalar(select(SubscriptionPlanRevision).where(SubscriptionPlanRevision.code == code).order_by(SubscriptionPlanRevision.revision.desc()).limit(1))
-        if not plan or plan.revision != revision:
-            raise Error("The plan changed. Reload and review its latest revision.", 409)
-        if subscriber:
-            if not available(plan):
-                raise Error("This plan is not available for subscriber checkout. Review the current plans.", 409)
-        if plan.configuration.get("billing_type") == "free":
-            raise Error("The Free tier is managed in Radar and does not use Stripe Checkout.", 422)
-        if plan.configuration["state"] == "archived":
-            raise Error("Archived plans cannot be tested.", 422)
-        # Trial/quota settings remain catalogue-only in this initial paid test.
-        if plan.configuration.get("trial_days", 0):
-            raise Error("Checkout requires a plan revision with no trial.", 422)
-        report = client.mapping(plan.configuration)
-        if not report["matches"]:
-            raise Error("The saved plan revision no longer matches Stripe: " + "; ".join(report["issues"]), 422)
-        price = plan.configuration["stripe_sandbox"].get("monthly_price_id" if interval == "monthly" else "annual_price_id")
-        if not price:
-            raise Error("This interval has no mapped price.", 422)
+        plan, price = checkout_plan(db, client, code, revision, interval, subscriber=subscriber)
         attempt_id = uuid4()
         base = settings.frontend_base_url + ("/radar/subscription" if subscriber else "/admin/subscription-testing")
         params = {"mode": "subscription", "payment_method_types[0]": "card",
@@ -245,9 +275,20 @@ def start_checkout(db, settings, user_id, revision, interval, *, client=None, co
         row = SandboxCheckout(id=attempt_id, user_id=user_id, plan_revision_id=plan.id,
                               interval=interval, price_id=price, parameters=params)
         db.add(row)
-        db.commit()  # Durable intent before external side effect.
+        if replacement_source is not None:
+            replacement_source.replacement_intent = {
+                **replacement_source.replacement_intent,
+                "state": "replaced", "successor_id": str(attempt_id),
+            }
+        db.commit()  # Both successor intent and predecessor linkage survive a timeout.
         lock_account(db, user_id)
         db.refresh(row)
+        current = latest(db, user_id)
+        if not current or current.id != row.id or replacement_pending(current):
+            raise Error("Checkout changed in another window. Refresh and review it.", 409)
+        if row.subscription_id and row.subscription_status not in TERMINAL:
+            db.commit()
+            raise Error("You already have a subscription. Review billing before choosing another.", 409)
         if row.checkout_id:  # A concurrent retry/webhook already received it.
             value = sync_attempt(db, client, row)
             db.commit()

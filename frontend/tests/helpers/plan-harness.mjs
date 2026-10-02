@@ -40,6 +40,7 @@ export function hooks(){
 export const subscription = await load('subscriptionPresentation.ts');
 export const choices = await load('planChoices.ts',{'./subscriptionPresentation':subscription});
 export const presentation = await load('planPresentation.ts');
+export const checkoutChoices = await load('checkoutChoices.ts');
 export const paid = {
   code:'explorer', name:'Explorer', revision:7, billing_type:'stripe', currency:'EUR', monthly_price:'9.00', annual_price:'90.00',
   description:'Follow research', tax_display:'inclusive',max_digests:2,max_papers_per_run:20,papers_per_month:50,runs_per_month:5,
@@ -65,15 +66,18 @@ export async function harness(options={}){
   const settings={plans:[free,paid],enrolment:false,workspace:false,user:{id:'user'},isInitializing:false,
     access:{billing_type:'free'},billing:{checkout_allowed:true,resume_allowed:false,attempt:null,reason:''},
     catalogueError:'',accountError:'',sandbox:false,accountLoading:false,...options};
-  const requests=[],destinations=[],refreshes=[],selectedChanges=[];const state=hooks();
+  const requests=[],destinations=[],refreshes=[],selectedChanges=[],replacements=[],resumes=[];const state=hooks();
   const api={plans(){},enrolmentPlans(){},async checkout(body){requests.push(body);if(settings.checkoutFailure)throw Error('provider error');
-    if(settings.pendingCheckout)await settings.pendingCheckout;return {url:'https://checkout.stripe.com/example'};}};
+    if(settings.pendingCheckout)await settings.pendingCheckout;return {url:'https://checkout.stripe.com/example'};},
+    async replaceCheckout(body){replacements.push(plain(body));if(settings.checkoutFailure)throw Error('provider error');if(settings.pendingCheckout)await settings.pendingCheckout;return {url:'https://checkout.stripe.com/replacement'};},
+    async resumeCheckout(id,replacementId=null){resumes.push([id,replacementId]);if(settings.checkoutFailure)throw Error('provider error');if(settings.pendingCheckout)await settings.pendingCheckout;return {url:'https://checkout.stripe.com/resumed'};}
+  };
   const definitions = await load('pages/PlansPage.tsx',{
     react:state.react,'react-router-dom':{Link:'Link',Navigate:'Navigate',useNavigate:()=> (...args)=>destinations.push(args)},
     '../components/ResourceNotice':{ResourceNotice:'ResourceNotice'},'../components/MarketingHeader':{MarketingHeader:'MarketingHeader'},
     '../components/AppHeader':{AppHeader:'AppHeader'},'../components/BillingIntervalTabs':{BillingIntervalTabs:'BillingIntervalTabs'},
     '../auth/AuthContext':{useAuth:()=>({user:settings.user,isInitializing:settings.isInitializing})},'../api/client':{ApiError:class extends Error{}},
-    '../api/subscriptions':{subscriptionsApi:api},'../subscriptionPresentation':subscription,'../planPresentation':presentation,'../planChoices':choices,
+    '../api/subscriptions':{subscriptionsApi:api},'../checkoutChoices':checkoutChoices,'../subscriptionPresentation':subscription,'../planPresentation':presentation,'../planChoices':choices,
     '../components/PlanChangeDialog':{usePlanChangeDialog:()=>({busy:false,choose:choice=>selectedChanges.push(choice),dialog:null,status:null})},
     '../components/SubscriptionData':{useSubscription:()=>({...settings,perform:async fn=>fn(),refresh:async()=>{}})},
     '../hooks/usePollingResource':{usePollingResource(loader){const catalogue=loader===api.plans||loader===api.enrolmentPlans;
@@ -81,7 +85,7 @@ export async function harness(options={}){
         {data:settings.user&&!settings.accountLoading?{billing:settings.billing,access:settings.access,changes:settings.changes,upgrades:settings.upgrades,freeDigests:settings.freeDigests}:null,
           loading:settings.accountLoading,error:settings.accountError,refresh:async()=>refreshes.push('account')};}},
   },{window:{location:{assign:url=>destinations.push(url)}}});
-  return {settings,requests,destinations,refreshes,selectedChanges,render(){state.reset();const page=settings.embedded?definitions.SubscriptionPlanCatalogue():definitions.PlansPage(settings);return page.type(page.props);},
+  return {settings,requests,destinations,refreshes,selectedChanges,replacements,resumes,render(){state.reset();const page=settings.embedded?definitions.SubscriptionPlanCatalogue():definitions.PlansPage(settings);return page.type(page.props);},
     interval(value){find(this.render(),n=>n.type==='BillingIntervalTabs').props.onChange(value);}};
 }
 export async function dialogHarness(options={}){

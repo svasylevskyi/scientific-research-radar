@@ -35,6 +35,9 @@ class SandboxCheckout(Base):
     subscription_status: Mapped[str | None] = mapped_column(String(30))
     customer_id: Mapped[str | None] = mapped_column(String(255))
     notification_state: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Durable intent to expire this initial checkout before creating its successor.
+    # Never added to provider parameters or used as payment/entitlement evidence.
+    replacement_intent: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     cancel_at_period_end: Mapped[bool] = mapped_column(default=False)
     price_matches: Mapped[bool] = mapped_column(default=True)
     latest_invoice_id: Mapped[str | None] = mapped_column(String(255))

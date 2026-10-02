@@ -49,6 +49,10 @@ export const subscriptionsApi = {
     post<Schemas["RedirectRead"]>("/billing/" + action),
   checkout: (body: { code: string; revision: number; interval: string }) =>
     post<Schemas["RedirectRead"]>("/billing/checkout", body),
+  replaceCheckout: (body: { code: string; revision: number; interval: string; expected_attempt_id: string }) =>
+    post<Schemas["RedirectRead"]>("/billing/checkout/replace", body),
+  resumeCheckout: (expected_attempt_id: string, expected_replacement_id: string | null = null) =>
+    post<Schemas["RedirectRead"]>("/billing/resume", { expected_attempt_id, expected_replacement_id }),
   schedule: (body: {
     code: string;
     revision: number;

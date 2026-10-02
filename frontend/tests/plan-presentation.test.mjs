@@ -79,8 +79,8 @@ test("Free fallback highlights Free rather than an old paid attempt and blocks d
  assert.equal(button(card(tree,"explorer"),"Upgrade to Explorer").props.disabled,true);assert.equal(button(card(tree,"free"),"Review Subscription").props.to,"/radar/subscription#billing");
 });
 test("pending checkout still resumes existing checkout; terminal subscriptions can select again",async()=>{
- const app=await harness({billing:{checkout_allowed:false,resume_allowed:true,reason:"Unfinished checkout",attempt:{code:"explorer"}}});const tree=app.render();
- assert.equal(button(card(tree,"explorer"),"Resume existing checkout").props.to,"/radar/subscription#billing");assert.ok(!nodes(tree).some(n=>n.type==="Button"&&text(n)==="Choose Explorer"));assert.ok(nodes(tree).some(n=>n.type==="Alert"&&text(n).includes("Unfinished checkout")));
+ const app=await harness({billing:{checkout_allowed:false,resume_allowed:true,reason:"Unfinished checkout",attempt:{id:"pending",code:"explorer",interval:"monthly",revision:7,plan_name:"Explorer",price:"9.00",currency:"EUR"}}});const tree=app.render();
+ assert.equal(button(card(tree,"explorer"),"Resume Checkout").props.to,undefined);button(card(tree,"explorer"),"Resume Checkout").props.onClick();await tick();assert.deepEqual(app.resumes,[["pending",null]]);assert.ok(!nodes(tree).some(n=>n.type==="Button"&&text(n)==="Choose Explorer"));assert.ok(nodes(tree).some(n=>n.type==="Alert"&&text(n).includes("Unfinished checkout")));
  assert.equal(button((await harness({billing:{checkout_allowed:true,attempt:{code:"explorer",subscription_status:"canceled"}}})).render(),"Upgrade to Explorer").props.disabled,false);
 });
 test("checkout disabled, session restoration, missing account data and read errors keep paid choice gated",async()=>{
@@ -112,7 +112,7 @@ test("in-flight checkout disables duplicate confirmation, and late billing restr
  const late=await harness();button(late.render(),"Upgrade to Explorer").props.onClick();late.settings.billing.checkout_allowed=false;tree=late.render();assert.equal(payment(tree).props.disabled,true);payment(tree).props.onClick();assert.equal(late.requests.length,0);
 });
 test("action failures keep recovery controls and do not leave a misleading open confirmation",async()=>{
- const app=await harness({checkoutFailure:true});button(app.render(),"Upgrade to Explorer").props.onClick();payment(app.render()).props.onClick();await tick();const tree=app.render();assert.equal(find(tree,n=>n.type==="Dialog").props.open,false);assert.ok(nodes(tree).some(n=>n.type==="Alert"&&n.props.severity==="error"));assert.equal(button(tree,"Review billing").props.to,"/radar/subscription#billing");button(tree,"Retry").props.onClick();assert.deepEqual(app.refreshes,["account","catalogue"]);
+ const app=await harness({checkoutFailure:true});button(app.render(),"Upgrade to Explorer").props.onClick();payment(app.render()).props.onClick();await tick();const tree=app.render();assert.equal(find(tree,n=>n.type==="Dialog").props.open,false);assert.ok(nodes(tree).some(n=>n.type==="Alert"&&n.props.severity==="error"));assert.equal(button(tree,"Review billing").props.to,"/radar/subscription#billing");button(tree,"Retry").props.onClick();assert.deepEqual(app.refreshes,["account","account","catalogue"]);
 });
 test("enrolled paid and complimentary users retain the existing redirect",async()=>{
  for(const access of [{billing_type:"stripe"},{mode:"complimentary"}]){const tree=(await harness({enrolment:true,access})).render();assert.equal(tree.type,"Navigate");assert.equal(tree.props.to,"/radar/subscription");assert.equal(tree.props.replace,true);}
