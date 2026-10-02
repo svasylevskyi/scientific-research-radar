@@ -92,7 +92,7 @@ const preview = { state: "scheduled", as_of: "2030-02-10T10:00:00Z", next_schedu
 function access(overrides = {}) {
   return { mode: "sandbox", billing_type: "stripe", allowed: true, reason: "Access enabled", period_end: "2030-03-01T12:00:00Z", grace_until: null,
     plan: { name: "Current saved revision", configuration: { runs_per_month: 10, manual_runs_per_month: 3, papers_per_month: 100, max_digests: 5, max_papers_per_run: 20, schedule_frequencies: ["weekly", "monthly"], email_delivery: true } },
-    remaining: { runs: 5, manual_runs: 1, papers: 60, digests: 2 }, usage: { completed_runs: 4, reserved_runs: 1, manual_runs: 2, completed_papers: 25, reserved_papers: 15 },
+    remaining: { runs: 5, manual_runs: 1, papers: 60, digests: 2 }, usage: { completed_runs: 4, manual_runs: 2, completed_papers: 25, reserved_runs: 1, reserved_papers: 15 },
     digest_count: 3, retained_digest_count: 7, schedule_allowed: true, ...overrides };
 }
 
@@ -340,12 +340,21 @@ test("successful delete calls the existing endpoint and does not cancel an activ
 
 async function overview(overrides = {}) {
   const model = { access: access(), billing: { period_end: "2031-02-01T12:00:00Z", attempt: { interval: "annual", subscription_status: "active" }, cancel_at_period_end: false }, changes: {}, upgrades: {}, ...overrides };
+  const helpers = await load("../src/planChoices.ts", { "./subscriptionPresentation": { isCurrentPlan: () => false } });
+  const { PendingPlanChange } = await load("../src/components/PendingPlanChange.tsx", {
+    "react-router-dom": { Link: "RouterLink" }, "./SubscriptionData": { useSubscription: () => model },
+    "../allowancePresentation": { allowanceDate: value => `DATE:${value}` }, "../planChoices": helpers,
+    "./PlanChangeDialog": { usePlanChangeDialog: () => ({ busy: false, notice: "", error: "", reviewing: false, dialog: null, cancelChange: noop }) },
+  });
   const { SubscriptionOverview } = await load("../src/components/SubscriptionOverview.tsx", {
     "react-router-dom": { Link: "RouterLink" }, "./SubscriptionData": { useSubscription: () => model },
     "../allowancePresentation": { allowanceDate: value => `DATE:${value}`, allowanceText: value => value },
     "../subscriptionPresentation": { subscriptionAction: () => overrides.action ?? null }, "../usagePresentation": usageHelpers,
+    "./PendingPlanChange": { PendingPlanChange: "PendingPlanChange" },
   });
-  return SubscriptionOverview();
+  const tree = SubscriptionOverview();
+  Object.assign(find(tree, n => n.type === "PendingPlanChange"), PendingPlanChange());
+  return tree;
 }
 test("overview separates yearly renewal from monthly reset and uses the current saved limits", async () => {
   const tree = await overview();
@@ -365,10 +374,12 @@ test("manual counted usage is not mislabeled completed and digest capacity does 
   assert.equal(button(slots, "Manage active digests").props.to, "#digests");
 });
 test("scheduled plan change and the existing priority action remain actionable", async () => {
-  const tree = await overview({ changes: { change: { state: "scheduled", plan_name: "Researcher", interval: "annual", effective_at: "2031-02-01T12:00:00Z" } },
+  const tree = await overview({ changes: { change: { id: "planned", state: "scheduled", plan_name: "Researcher", price: "200.00", currency: "EUR", undo_allowed: true, interval: "annual", effective_at: "2031-02-01T12:00:00Z" } },
     action: { text: "Payment is pending", label: "Complete upgrade payment", hash: "#upgrade" } });
   assert.match(text(tree), /Scheduled plan change/);
-  assert.equal(button(tree, "Review or undo").props.to, "#changes");
+  assert.equal(button(tree, "Review change details").props.to, "#changes");
+  assert.equal(button(tree, "Cancel requested change").props.disabled, false);
+  assert.match(text(tree), /does not cancel your subscription/);
   assert.equal(button(tree, "Complete upgrade payment").props.to, "#upgrade");
   assert.equal(button(tree, "Complete upgrade payment").props.variant, "outlined");
 });

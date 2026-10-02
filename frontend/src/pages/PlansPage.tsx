@@ -166,6 +166,9 @@ function PlansContent({ enrolment, workspace, embedded = false, subscription }: 
                       <Button variant="contained" disabled={unavailable || working || !choice} onClick={() => { if (choice) changes.choose(choice); }}>
                         {choice ? choiceLabel(choice) : `${direction} to ${plan.name}`}
                       </Button>
+                      {choice?.kind === "renewal" && choice.direction === "Upgrade" && <Typography variant="caption" color="text.secondary">
+                        Starts at your next renewal. No charge today.
+                      </Typography>}
                       {!choice && <Typography variant="caption" color="text.secondary">
                         {otherIntervalUpgrade ? `For this upgrade, select ${otherIntervalUpgrade.interval === "annual" ? "Yearly" : "Monthly"} to keep your current billing interval.`
                           : interval === "annual" && plan.billing_type !== "free" && plan.annual_price === null ? "Yearly billing not available."
@@ -205,8 +208,9 @@ function PlansContent({ enrolment, workspace, embedded = false, subscription }: 
           <Stack spacing={1.5} sx={{ mt: 2, width: "100%" }}>
             <Typography variant="body2">Research allowances reset on your account’s monthly anniversary, including yearly subscriptions.
               Unused allowance does not roll over. Plan changes preserve that reset date and already used allowance.</Typography>
-            <Typography variant="body2">Paid subscriptions renew until canceled. Eligible paid upgrades take effect after the prorated
-              payment is verified. Downgrades and monthly/yearly switches take effect at renewal.</Typography>
+            <Typography variant="body2">Paid subscriptions renew until canceled. Immediate paid upgrades take effect after the prorated
+              payment is verified. You can also schedule eligible upgrades at renewal, including a change of billing interval.
+              Scheduled upgrades require verified renewal payment before higher benefits start. Downgrades and monthly/yearly switches take effect at renewal.</Typography>
             <Typography variant="body2">The cards show the latest published terms. Existing subscriptions keep their purchased revision;
               review Subscription and usage for your own plan’s allowances and billing status.</Typography>
           </Stack>

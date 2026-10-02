@@ -1,4 +1,4 @@
-import type { Access, BillingStatus, ChangeData, ChangeOption, FreeChoices, PublicPlan, UpgradeData, UpgradeOption } from "./types/subscription";
+import type { Access, BillingStatus, Change, ChangeData, ChangeOption, FreeChoices, PublicPlan, UpgradeData, UpgradeOption } from "./types/subscription";
 import type { BillingInterval } from "./components/BillingIntervalTabs";
 import { isCurrentPlan } from "./subscriptionPresentation";
 
@@ -11,9 +11,11 @@ export type PlanAccount = {
   freeDigests?: FreeChoices;
 };
 type ChoicePlan = Pick<PublicPlan, "code" | "revision" | "name" | "billing_type">;
+export type RenewalChoice = { kind: "renewal"; plan: ChoicePlan; option: ChangeOption;
+  effectiveAt: string; origin: string; intervalOnly: boolean; direction: "Upgrade" | "Downgrade" | "Change" };
 export type PlanChoice =
-  | { kind: "upgrade"; plan: ChoicePlan; option: UpgradeOption; origin: string }
-  | { kind: "renewal"; plan: ChoicePlan; option: ChangeOption; effectiveAt: string; origin: string; intervalOnly: boolean }
+  | { kind: "upgrade"; plan: ChoicePlan; option: UpgradeOption; origin: string; atRenewal?: RenewalChoice }
+  | RenewalChoice
   | { kind: "free"; plan: ChoicePlan; origin: string };
 
 const limits = ["max_digests", "max_papers_per_run", "papers_per_month", "runs_per_month", "manual_runs_per_month"] as const;
@@ -57,20 +59,27 @@ export function planChoice(plan: PublicPlan, interval: BillingInterval, account:
     const option = account.changes?.items.find(o => o.code === account.billing.attempt?.code &&
       o.revision === account.billing.attempt?.revision && o.interval === interval && interval !== account.billing.attempt?.interval);
     return option && account.changes?.effective_at
-      ? { kind: "renewal", plan, option, effectiveAt: account.changes.effective_at, origin, intervalOnly: true } : null;
+      ? { kind: "renewal", plan, option, effectiveAt: account.changes.effective_at, origin, intervalOnly: true, direction: "Change" } : null;
   }
-  const upgrade = account.upgrades?.items.find(o => samePrice(plan, o, interval));
-  if (upgrade) return { kind: "upgrade", plan, option: upgrade, origin };
   const change = account.changes?.items.find(o => samePrice(plan, o, interval));
-  return change && account.changes?.effective_at
-    ? { kind: "renewal", plan, option: change, effectiveAt: account.changes.effective_at, origin, intervalOnly: false } : null;
+  const direction = planDirection(plan, account);
+  // Existing server-authorized downgrades may lower price with equal benefits.
+  const renewalDirection = direction === "Change" && account.access.plan && includes(account.access.plan.configuration, plan)
+    ? "Downgrade" : direction;
+  const renewal: RenewalChoice | null = change && account.changes?.effective_at
+    ? { kind: "renewal", plan, option: change, effectiveAt: account.changes.effective_at, origin,
+        intervalOnly: false, direction: renewalDirection } : null;
+  const upgrade = account.upgrades?.items.find(o => samePrice(plan, o, interval));
+  if (upgrade) return { kind: "upgrade", plan, option: upgrade, origin,
+    ...(renewal?.direction === "Upgrade" ? { atRenewal: renewal } : {}) };
+  return renewal;
 }
 export function choiceLabel(choice: PlanChoice): string {
   if (choice.kind === "upgrade") return `Upgrade to ${choice.plan.name}`;
   if (choice.kind === "free") return `Downgrade to ${choice.plan.name}`;
   return choice.intervalOnly
     ? `Switch to ${choice.option.interval === "annual" ? "Yearly" : "Monthly"}`
-    : `Downgrade to ${choice.plan.name}`;
+    : `${choice.direction} to ${choice.plan.name}`;
 }
 export function choiceStillAvailable(choice: PlanChoice, account: PlanAccount | null): boolean {
   if (!account || choice.origin !== planOrigin(account)) return false;
@@ -93,5 +102,14 @@ export function currentIntervalChoices(account: PlanAccount | null): PlanChoice[
   return account.changes.items.filter(o => o.code === attempt.code && o.revision === attempt.revision && o.interval !== attempt.interval)
     .map(option => ({ kind: "renewal" as const,
       plan: { code: option.code, revision: option.revision, name: option.name, billing_type: "stripe" as const },
-      option, effectiveAt: account.changes!.effective_at!, origin: planOrigin(account), intervalOnly: true }));
+      option, effectiveAt: account.changes!.effective_at!, origin: planOrigin(account), intervalOnly: true, direction: "Change" as const }));
+}
+
+/** A browser cutoff prevents stale dialogs being submitted; the server rechecks. */
+export function canCancelPlanChange(change: Change | null | undefined, now = Date.now()): boolean {
+  return !!change && change.state === "scheduled" && change.undo_allowed &&
+    Date.parse(change.effective_at) > now + 30_000;
+}
+export function hasPendingPlanChange(change: Change | null | undefined): boolean {
+  return !!change && !["applied", "undone", "stopped"].includes(change.state);
 }

@@ -3,13 +3,13 @@ import { Link } from "react-router-dom";
 import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Typography } from "@mui/material";
 import { ApiError } from "../api/client";
 import { subscriptionsApi } from "../api/subscriptions";
-import { choiceLabel, choiceStillAvailable, planOrigin, selectionIdsValid, type PlanAccount, type PlanChoice } from "../planChoices";
+import { canCancelPlanChange, hasPendingPlanChange, choiceLabel, choiceStillAvailable, planOrigin, selectionIdsValid, type PlanAccount, type PlanChoice } from "../planChoices";
 import type { Change, Upgrade } from "../types/subscription";
 
 export type PerformPlanAction = <T>(action: () => Promise<T>) => Promise<T>;
 type Review = { kind: "choice"; choice: PlanChoice; quote: Upgrade | null }
   | { kind: "quote"; quote: Upgrade; origin: string }
-  | { kind: "undo"; change: Change };
+  | { kind: "undo"; change: Change; origin: string };
 const money = (value: number, currency: string) => new Intl.NumberFormat(undefined,
   { style: "currency", currency: currency.toUpperCase() }).format(value);
 const date = (value: string) => Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : "Not available";
@@ -54,6 +54,12 @@ export function usePlanChangeDialog(account: PlanAccount | null, disabled: boole
       if (mounted.current) setReview({ kind: "choice", choice, quote: freezeReview(quote) });
     });
   }
+  function cancelChange(requested: Change) {
+    if (disabled || locked.current || !account || !canCancelPlanChange(requested) ||
+        JSON.stringify(requested) !== JSON.stringify(account.changes?.change)) return;
+    setError(""); setNotice("");
+    setReview({ kind: "undo", change: freezeReview(requested), origin: planOrigin(account) });
+  }
   function close() { if (!locked.current) { setReview(null); setError(""); } }
   function reviewQuote(quote: Upgrade) {
     if (disabled || locked.current || !account) return;
@@ -77,16 +83,17 @@ export function usePlanChangeDialog(account: PlanAccount | null, disabled: boole
   const quoteOrigin = review?.kind === "quote" ? review.origin : choice?.origin;
   const quoteValid = !!quote && quote.confirm_allowed && Date.parse(quote.expires_at) > Date.now() &&
     !!account && account.access.billing_type === "stripe" && account.access.allowed && !account.access.payment_issue && !account.access.grace_until && quoteOrigin === planOrigin(account) && account.upgrades?.upgrade?.id === quote.id &&
-    !!account.upgrades.upgrade.confirm_allowed;
+    !!account.upgrades.upgrade.confirm_allowed && !hasPendingPlanChange(account.changes?.change);
   const choiceValid = !!choice && choiceStillAvailable(choice, account);
   const renewal = choice?.kind === "renewal" ? choice : null;
   const validIds = !!renewal && selectionIdsValid(ids, renewal.option, account?.changes?.digests ?? []);
   const undo = review?.kind === "undo" ? review.change : null;
-  const undoValid = !!undo && account?.changes?.change?.id === undo.id && !!account.changes.change.undo_allowed;
+  const undoValid = !!undo && !!account && review?.kind === "undo" && review.origin === planOrigin(account) &&
+    JSON.stringify(undo) === JSON.stringify(account.changes?.change) && canCancelPlanChange(account.changes?.change);
   const allowed = !disabled && !busy && (quote ? quoteValid : renewal ? choiceValid && validIds : undo ? undoValid : choice?.kind === "free" && choiceValid);
 
   async function confirm() {
-    if (!allowed || locked.current || (quote && Date.parse(quote.expires_at) <= Date.now())) return;
+    if (!allowed || locked.current || (quote && Date.parse(quote.expires_at) <= Date.now()) || (undo && !canCancelPlanChange(undo))) return;
     await run(async () => {
       if (quote) {
         // The exact, server-priced quote is confirmed. Never call Checkout for a paid upgrade.
@@ -102,8 +109,13 @@ export function usePlanChangeDialog(account: PlanAccount | null, disabled: boole
           interval: renewal.option.interval, expected_period_end: renewal.effectiveAt, digest_ids: ids }));
         if (mounted.current) { setReview(null); setNotice("Change request submitted for renewal. Review its saved status below; no payment was requested now."); }
       } else if (undo) {
-        await perform(() => subscriptionsApi.changeAction(undo.id, "undo"));
-        if (mounted.current) { setReview(null); setNotice("Undo request submitted. Review the saved status below."); }
+        const result = await perform(() => subscriptionsApi.changeAction(undo.id, "undo"));
+        if (mounted.current) {
+          setReview(null);
+          setNotice(result.state === "undone"
+            ? "Requested change cancelled. Your current plan and billing interval continue; your subscription is not cancelled. You can now choose a different plan."
+            : "Cancellation of the requested change is not yet confirmed. Review its saved status before choosing another plan.");
+        }
       } else if (choice?.kind === "free") {
         const result = await perform(() => subscriptionsApi.openBilling("cancel"));
         if (mounted.current) window.location.assign(result.url);
@@ -134,7 +146,7 @@ export function usePlanChangeDialog(account: PlanAccount | null, disabled: boole
         {c.error && <Typography>{c.error}</Typography>}
         {c.state === "awaiting_payment" && <Typography>Payment verification is pending. Use Manage billing to update your payment method if needed.</Typography>}
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-          {c.undo_allowed && <Button disabled={disabled || busy} onClick={() => { setError(""); setReview({ kind: "undo", change: c }); }}>Undo scheduled change</Button>}
+          {c.undo_allowed && <Button disabled={disabled || busy || !canCancelPlanChange(c)} onClick={() => cancelChange(c)}>Undo scheduled change</Button>}
           {c.retry_allowed && <Button disabled={disabled || busy} onClick={() => void run(async () => {
             await perform(() => subscriptionsApi.changeAction(c.id, "retry"));
             if (mounted.current) setNotice("Saved change checked. Review its verified status.");
@@ -143,8 +155,8 @@ export function usePlanChangeDialog(account: PlanAccount | null, disabled: boole
       </Alert>}
     </Box>
   </Stack>;
-  const title = quote || choice?.kind === "upgrade" ? "Continue to Payment?" : undo ? "Undo the scheduled change?"
-    : choice?.kind === "free" ? `Downgrade to ${choice.plan.name}?` : "Confirm change at renewal";
+  const title = quote || choice?.kind === "upgrade" ? "Continue to Payment?" : undo ? "Cancel requested change?"
+    : choice?.kind === "free" ? `Downgrade to ${choice.plan.name}?` : renewal?.direction === "Upgrade" ? "Schedule upgrade at renewal?" : "Confirm change at renewal";
   const dialog = <Dialog open={!!review} onClose={close} fullWidth maxWidth="sm"
     aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}>
     <DialogTitle id={`${id}-title`}>{title}</DialogTitle>
@@ -164,11 +176,17 @@ export function usePlanChangeDialog(account: PlanAccount | null, disabled: boole
           <Alert severity="info">Continue to Payment attempts the displayed charge using your saved Stripe payment method. If authentication or another payment method is needed, you will continue securely with Stripe. Benefits start only after payment verification. Monthly reset date and used allowance stay the same; paused schedules remain paused.</Alert>
           {!quoteValid && !busy && <Alert severity="warning">This preview is expired or no longer current. Close this dialog and review the saved request or obtain a new preview.</Alert>}
         </>}
+        {choice?.kind === "upgrade" && choice.atRenewal && <Box>
+          <Typography variant="body2">Prefer to keep your current plan until renewal? You can schedule this upgrade without paying now.</Typography>
+          <Button variant="outlined" disabled={disabled || busy || !choiceStillAvailable(choice.atRenewal, account)}
+            onClick={() => { if (choice.atRenewal) choose(choice.atRenewal); }}>Schedule this upgrade at renewal instead</Button>
+        </Box>}
         {renewal && <>
           <Typography variant="h6">{choiceLabel(renewal)}</Typography>
           {renewal.intervalOnly && <Typography variant="body2">This interval-only change keeps your purchased plan revision. Its price and allowances can differ from the latest published cards.</Typography>}
           <Typography>{renewal.option.name} · {money(Number(renewal.option.price), renewal.option.currency)} / {intervalName(renewal.option.interval)}, tax included, starting {date(renewal.effectiveAt)}.</Typography>
           <Typography>No charge or proration now. The subscription renews at this recurring price. Current benefits continue under their existing payment terms until renewal. Monthly reset date and used allowance stay the same; lower limits can leave zero allowance until the next reset.</Typography>
+          {renewal.direction === "Upgrade" && <Alert severity="info">Higher-plan benefits start only after the renewal invoice is paid and verified, not when you schedule this change. If payment fails or needs authentication, higher benefits remain unavailable until payment is verified. Yearly billing still has monthly research allowances, not a year's allowance upfront.</Alert>}
           <Typography variant="body2">{renewal.option.max_digests} active digests · {renewal.option.runs_per_month} runs/month ({renewal.option.manual_runs_per_month} manual within that total) · {renewal.option.papers_per_month} papers/month · {renewal.option.max_papers_per_run} papers/run.</Typography>
           <Typography variant="body2">Schedules: {renewal.option.schedule_frequencies.join(", ") || "none"}. Email delivery: {renewal.option.email_delivery ? "included" : "not included"}. All saved research is retained. Incompatible schedules pause and require explicit resumption.</Typography>
           {(account?.changes?.digests.length ?? 0) > renewal.option.max_digests && <Box>
@@ -185,18 +203,24 @@ export function usePlanChangeDialog(account: PlanAccount | null, disabled: boole
           <Button component={Link} to="/radar/subscription#digests" onClick={close} disabled={busy}>Review active digest preferences</Button>
           <Alert severity="info">You will confirm cancellation on Stripe’s next screen. Closing this dialog or returning from Stripe does not confirm cancellation.</Alert>
         </>}
-        {undo && <Typography>Your current plan and billing interval will continue after the undo is confirmed. Undo is unavailable during the final 30 seconds before renewal while the change starts.</Typography>}
+        {undo && <>
+          <Typography>Cancel the requested change to {undo.plan_name} ({undo.interval === "annual" ? "Yearly" : "Monthly"}) on {date(undo.effective_at)}?</Typography>
+          <Typography>Your current plan and billing interval will continue after cancellation of this change is confirmed. This does not cancel your subscription or request a refund.</Typography>
+          <Typography variant="body2">To downgrade to a different plan, cancel this request first, wait for confirmation, then select the new target. For example, cancel Professional → Researcher before choosing Professional → Explorer.</Typography>
+          <Typography variant="body2">Cancellation is unavailable during the final 30 seconds before renewal while the change starts.</Typography>
+          {!undoValid && !busy && <Alert severity="warning">This request has changed or can no longer be cancelled. Refresh billing and review its current status.</Alert>}
+        </>}
         {choice && !choiceValid && !busy && <Alert severity="warning">This option or your subscription has changed. Close this dialog and review the refreshed plans before continuing.</Alert>}
         {disabled && !busy && <Alert severity="warning">Refresh subscription and catalogue data before continuing. Changes are unavailable while account data is loading or in error.</Alert>}
         {error && <Alert severity="error" tabIndex={-1} ref={feedback}>{error}</Alert>}
       </Stack>
     </DialogContent>
     <DialogActions sx={{ flexWrap: "wrap", gap: 1 }}>
-      <Button disabled={busy} onClick={close}>Cancel</Button>
+      <Button autoFocus={!!undo} disabled={busy} onClick={close}>{undo ? "Keep requested change" : "Cancel"}</Button>
       <Button variant="contained" color="success" disabled={!allowed} onClick={() => void confirm()}>
-        {busy ? "Please wait…" : quote || choice?.kind === "upgrade" ? "Continue to Payment" : choice?.kind === "free" ? "Continue to cancellation" : undo ? "Confirm undo" : "Confirm change at renewal"}
+        {busy ? "Please wait…" : quote || choice?.kind === "upgrade" ? "Continue to Payment" : choice?.kind === "free" ? "Continue to cancellation" : undo ? "Cancel requested change" : renewal?.direction === "Upgrade" ? "Schedule upgrade" : "Confirm change at renewal"}
       </Button>
     </DialogActions>
   </Dialog>;
-  return { busy, choose, status, dialog };
+  return { busy, choose, cancelChange, notice, error, reviewing: !!review, status, dialog };
 }

@@ -1,5 +1,6 @@
 import { Alert, Box, Button, Chip, Paper, Stack, Typography } from "@mui/material";
 import { Link } from "react-router-dom";
+import { PendingPlanChange } from "./PendingPlanChange";
 import { useSubscription } from "./SubscriptionData";
 import { allowanceDate, allowanceText } from "../allowancePresentation";
 import { subscriptionAction } from "../subscriptionPresentation";
@@ -13,7 +14,6 @@ const noticeStyle = { "& .MuiAlert-message": { minWidth: 0, width: "100%" } };
 export function SubscriptionOverview() {
   const { access, billing, changes, upgrades } = useSubscription();
   const action = subscriptionAction(access, billing, changes, upgrades);
-  const scheduledChange = changes.change?.state === "scheduled" ? changes.change : null;
   const complimentary = access.mode === "complimentary";
   const renewalLabel = billing.cancel_at_period_end && access.billing_type === "stripe" ? "Paid access ends"
     : access.billing_type === "stripe" ? billing.attempt?.subscription_status === "active" ? "Next renewal" : "Billing period ends" : "Billing";
@@ -53,22 +53,13 @@ export function SubscriptionOverview() {
       {billing.cancel_at_period_end && access.billing_type === "stripe" && <Alert severity="info" sx={{ mt: 2, ...noticeStyle }}>
         Renewal is cancelled. Free applies after verified paid access ends; saved research is retained.
       </Alert>}
-      {scheduledChange && <Alert severity="info" sx={{ mt: 2, ...noticeStyle }}>
-        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1}>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="body2" fontWeight={700}>Scheduled plan change</Typography>
-            <Typography variant="body2">{scheduledChange.plan_name} ({scheduledChange.interval === "annual" ? "yearly" : "monthly"}) starts
-              at renewal on {subscriptionDate(scheduledChange.effective_at)}.</Typography>
-          </Box>
-          <Button component={Link} to="#changes" sx={{ minHeight: 44, flexShrink: 0 }}>Review or undo</Button>
-        </Stack>
-      </Alert>}
       {action && <Alert severity="warning" sx={{ mt: 2, ...noticeStyle }}>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1}>
           <Typography variant="body2" sx={{ minWidth: 0 }}>{allowanceText(action.text)}</Typography>
           <Button component={Link} to={action.hash} variant="outlined" sx={{ minHeight: 44, flexShrink: 0, maxWidth: "100%", whiteSpace: "normal" }}>{action.label}</Button>
         </Stack>
       </Alert>}
+      <PendingPlanChange />
     </Paper>
 
     <Paper variant="outlined" sx={cardStyle}>
