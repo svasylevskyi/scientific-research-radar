@@ -69,7 +69,7 @@ function hooks() {
     for (let count = 0; count < 5; count++) {
       cursor = 0; effects = []; dirty = false; tree = fn();
       for (const n of nodes(tree)) if (n.props?.ref && "current" in n.props.ref) n.props.ref.current = {
-        focus: () => events.push(["focus", text(n)]), scrollIntoView: () => events.push(["scroll", text(n)]),
+        focus: () => events.push(["focus", n.props.label ?? text(n)]), scrollIntoView: () => events.push(["scroll", text(n)]),
       };
       effects.forEach(effect => effect()); if (!dirty) return tree;
     }
@@ -99,6 +99,13 @@ async function page({ query = "", admin = false, historyRuns = [run()], active =
   const runtime = hooks(); let serial = 0;
   const router = { search: new URLSearchParams(query), state: null, key: "initial", options: null, digestId: saved.id };
   const requests = [], pollers = [], loaders = [];
+  const frames = new Map(); let nextFrame = 0;
+  const browser = {
+    requestAnimationFrame(callback) { const id = ++nextFrame; frames.set(id, callback); return id; },
+    cancelAnimationFrame(id) { frames.delete(id); },
+    scrollTo(options) { runtime.events.push(["windowScroll", { ...options }]); },
+  };
+  function flushFrames() { const pending = [...frames.values()]; frames.clear(); pending.forEach(fn => fn()); }
   const access = { data: { run_allowed: true, paper_limit: 30, plan: null }, error: "", loading: false };
   const initial = { data: { digestResult: saved, history: historyRuns, accountActiveRun: active,
     latest: active?.digest_id === saved.id ? active : historyRuns[0] ?? null }, loading: false, error: "", refresh: async () => {} };
@@ -127,8 +134,9 @@ async function page({ query = "", admin = false, historyRuns = [run()], active =
     "../components/DigestForm": { DigestForm: "DigestForm", digestToFormValues: formValues },
     ...Object.fromEntries(["ResourceNotice", "AdminDigestNavigation", "AllowanceNotice", "DigestScheduleControl", "AppHeader", "DigestWorkspace"]
       .map(name => [`../components/${name}`, { [name]: name }])),
-  });
-  return { runtime, router, initial, requests, api, pollers, loaders, render: () => runtime.render(() => DigestDetailPage({ admin })) };
+  }, { window: browser });
+  return { runtime, router, initial, requests, api, pollers, loaders, flushFrames, frames,
+    render: () => runtime.render(() => DigestDetailPage({ admin })) };
 }
 const pageTabs = tree => find(tree, n => n.type === "Tabs" && n.props["aria-label"] === "Digest page sections");
 const panel = (tree, value) => find(tree, n => n.props.id === `digest-page-test-panel-${value}`);
@@ -268,15 +276,113 @@ test("new run and retry deliberately reveal progress in output without stale pap
   await component(retryView.render(), "DigestWorkspace").props.onRetry(run("r1", { status: "failed" })); retryView.render();
   assert.equal(retryView.router.search.get("digest_tab"), "output"); assert.equal(retryView.router.search.get("output_tab"), "steps");
 });
-test("only explicit snapshot/editor navigation focuses the live settings heading, once", async () => {
-  const view = await page(); view.render(); assert.equal(view.runtime.events.length, 0);
+test("only explicit editor navigation focuses the page tab and scrolls to page top, once", async () => {
+  const view = await page(); view.render(); view.flushFrames(); assert.equal(view.runtime.events.length, 0);
   view.router.search.set("digest_tab", "details"); view.router.key = "settings-link"; view.router.state = { focusDigestSettingsFor: "d1" };
-  view.render(); assert.ok(view.runtime.events.some(([kind, label]) => kind === "focus" && label === "Current digest details"));
-  const count = view.runtime.events.length; view.render(); assert.equal(view.runtime.events.length, count);
+  view.render(); assert.equal(view.runtime.events.length, 0); view.flushFrames();
+  assert.deepEqual(view.runtime.events, [["focus", "Digest Details"], ["windowScroll", { top: 0, left: 0, behavior: "instant" }]]);
+  const count = view.runtime.events.length; view.render(); view.flushFrames(); assert.equal(view.runtime.events.length, count);
 });
 test("admin details remain on the existing navigation, without user tabs or user run controls", async () => {
   const view = await page({ admin: true, historyRuns: [], saved: { ...digest, owner: { full_name: "Owner", email: "owner@example.test" } } });
   const tree = view.render(); assert.ok(component(tree, "AdminDigestNavigation"));
   assert.equal(nodes(tree).some(n => n.type === "Tabs"), false); assert.equal(component(tree, "DigestForm").props.visible, true);
   assert.equal(nodes(tree).some(n => n.type === "DigestScheduleControl" || n.type === "DigestWorkspace"), false);
+});
+
+
+test("the user editing panel contains only its retained guidance and the live form", async () => {
+  const view = await page({ query: "digest_tab=details" }); const tree = view.render();
+  const details = panel(tree, "details");
+  assert.ok(component(details, "DigestForm"));
+  assert.match(text(details), /Update the saved settings used for future runs/);
+  assert.match(text(details), /Existing runs keep their own read-only settings and results/);
+  assert.doesNotMatch(text(details), /Current digest details|Current topic|Radar controls|Delete digest/);
+  assert.equal(nodes(details).some(n => n.type === "DigestScheduleControl" || n.type === "DigestWorkspace" || n.props.component === "aside"), false);
+  assert.equal(panel(tree, "output").props.hidden, true);
+  assert.equal(component(tree, "DigestScheduleControl").props.visible, false);
+});
+
+test("Output & History owns the topic, explainer, controls, history and separate delete action", async () => {
+  const view = await page(); const tree = view.render(); const output = panel(tree, "output");
+  assert.equal(find(pageTabs(tree), n => n.type === "Tab" && n.props.value === "output").props.label, "Output & History");
+  assert.equal(nodes(tree).filter(n => n.props.component === "h1").length, 1);
+  assert.equal(text(find(output, n => n.props.component === "h1")), "Current topic");
+  assert.ok(component(output, "DigestScheduleControl")); assert.ok(component(output, "DigestWorkspace"));
+  assert.ok(button(output, "Delete digest"));
+  assert.equal(component(output, "DigestScheduleControl").props.visible, true);
+  assert.equal(nodes(output).some(n => n.type === "DigestForm"), false);
+  assert.doesNotMatch(text(tree), /Current digest details/);
+});
+
+test("the compact output explainer links to the editor while keeping the old-run context", async () => {
+  const view = await page({ query: "run_id=old&output_tab=details&run_failed=1&return_to=%2Fradar%3Fpage%3D3" });
+  const intro = find(panel(view.render(), "output"), n => n.props["aria-label"] === "How this digest works");
+  const link = find(intro, n => n.type === "Link" && text(n) === "Digest Details");
+  const url = new URL(link.props.to, "https://radar.example");
+  assert.equal(url.searchParams.get("digest_tab"), "details"); assert.equal(url.searchParams.get("run_id"), "old");
+  assert.equal(url.searchParams.get("output_tab"), "details"); assert.equal(url.searchParams.get("run_failed"), "1");
+  assert.equal(url.searchParams.get("return_to"), "/radar?page=3");
+  assert.equal(link.props.state.focusDigestSettingsFor, "d1");
+  assert.match(text(intro), /To update digest parameters/); assert.match(text(intro), /Run now/); assert.match(text(intro), /Schedule/);
+  assert.equal(nodes(intro).some(n => n.type === "strong" && text(n) === "Save"), false);
+  assert.equal(view.requests.length, 0);
+});
+
+for (const source of ["explainer", "empty state", "snapshot"]) {
+  test(`${source} editing link opens at page top without any save or research request`, async () => {
+    const view = await page({ historyRuns: [], query: "run_id=old&output_tab=details&run_from=2026-08-01" });
+    const tree = view.render();
+    const link = source === "explainer" ? find(tree, n => n.type === "Link" && text(n) === "Digest Details")
+      : source === "empty state" ? button(tree, "Edit current digest details")
+      : button(DigestRunDetails({ run: run("old"), settingsHref: "/radar/digests/d1?digest_tab=details&run_id=old&output_tab=details" }), "Edit current digest details");
+    view.router.search = new URL(link.props.to, "https://radar.example").searchParams;
+    view.router.key = `link-${source}`; view.router.state = link.props.state;
+    view.render(); view.flushFrames();
+    assert.deepEqual(view.runtime.events.at(-1), ["windowScroll", { top: 0, left: 0, behavior: "instant" }]);
+    assert.equal(view.router.search.get("run_id"), "old"); assert.equal(view.requests.length, 0);
+    assert.equal(view.runtime.events.some(([kind]) => kind === "scroll"), false);
+  });
+}
+
+test("a quick return to output cancels a pending editor-link scroll and focus", async () => {
+  const view = await page(); view.render();
+  view.router.search.set("digest_tab", "details"); view.router.key = "link"; view.router.state = { focusDigestSettingsFor: "d1" };
+  view.render(); assert.equal(view.frames.size, 1);
+  view.router.search.set("digest_tab", "output"); view.router.key = "back"; view.router.state = null;
+  view.render(); view.flushFrames(); assert.equal(view.frames.size, 0); assert.equal(view.runtime.events.length, 0);
+});
+
+test("unrelated route state, ordinary tabs and repeated reads do not force page-top navigation", async () => {
+  const view = await page(); let tree = view.render();
+  pageTabs(tree).props.onChange(null, "details"); view.render(); view.flushFrames();
+  assert.equal(view.runtime.events.length, 0);
+  view.router.state = { focusDigestSettingsFor: "another-digest" }; view.router.key = "other";
+  view.render(); view.flushFrames(); assert.equal(view.runtime.events.length, 0);
+});
+
+test("explicit navigation waits for the digest to load before restoring the page top", async () => {
+  const view = await page({ query: "digest_tab=details" });
+  view.router.state = { focusDigestSettingsFor: "d1" }; view.router.key = "loading-link";
+  view.initial.loading = true; view.render(); view.flushFrames(); assert.equal(view.runtime.events.length, 0);
+  view.initial.loading = false; view.render(); view.flushFrames();
+  assert.deepEqual(view.runtime.events.at(-1), ["windowScroll", { top: 0, left: 0, behavior: "instant" }]);
+});
+
+test("the relocated deletion action retains its confirmation and running-digest guard", async () => {
+  const busy = await page({ active: run("active", { status: "running" }) });
+  assert.equal(button(panel(busy.render(), "output"), "Delete digest").props.disabled, true);
+  const view = await page(); let tree = view.render();
+  button(panel(tree, "output"), "Delete digest").props.onClick(); tree = view.render();
+  const confirmation = find(tree, n => n.type === "Dialog" && text(n).includes("Delete this digest?"));
+  assert.equal(confirmation.props.open, true); assert.equal(view.requests.length, 0);
+  await button(confirmation, "Delete permanently").props.onClick();
+  assert.deepEqual(view.requests, [["delete", "d1"], ["navigate", "/radar"]]);
+});
+
+test("admin retains its topic, explanatory text and deletion control without output user links", async () => {
+  const view = await page({ admin: true, historyRuns: [] }); const tree = view.render();
+  assert.equal(text(find(tree, n => n.props.component === "h1")), "Current topic");
+  assert.match(text(tree), /Review and update the research scope and reporting settings/);
+  assert.ok(button(tree, "Delete digest")); assert.equal(nodes(tree).some(n => n.props["aria-label"] === "How this digest works"), false);
 });

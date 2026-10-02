@@ -2,19 +2,23 @@
 
 The user digest page separates two scopes without changing the API or research workflow.
 
-- **Digest Details** edits the current digest. The form and delete control belong to this
-  page-level panel, not to a historical run. Its inner column is centered and capped at
-  960px; the surrounding page and research workspace remain fluid.
-- **Output & history** opens by default, including immediately after creation. It contains
+- **Digest Details** contains only the current edit form and its existing explanatory
+  prompts/save feedback. Its inner column is centered and capped at 960px. No topic
+  heading, Current digest details title, run explainer, Radar controls or deletion block
+  appears in this panel; the surrounding page and research workspace remain fluid.
+- **Output & History** opens by default, including immediately after creation. It contains
   the run history and the existing briefing, trends, papers, steps and feedback views.
   Queued, running and failed-only histories use the same workspace as completed histories.
   No-run digests show an explicit empty state with an editor link; visiting the page does
   not start research.
 
-The title, explanation and Radar controls remain shared digest-level controls. Manual
-execution, scheduling, allowances, retries and deletion confirmations retain their APIs
-and permission rules. Run now, retry and View progress deliberately select the relevant
-run's steps in Output & history. Saving details never starts research.
+The topic heading, compact explanation and Radar controls belong to Output & History.
+Its explainer links to Digest Details to update parameters, followed by the existing
+Run now and Schedule guidance. The separate Delete digest block follows the output
+workspace (including its empty state), outside any individual run. Manual execution,
+scheduling, allowances, retries and deletion confirmations retain their APIs and
+permission rules. Run now, retry and View progress deliberately select the relevant
+run's steps in Output & History. Saving details never starts research.
 
 ## Run-level Digest Details
 
@@ -32,8 +36,11 @@ never substituted for missing history, including while another run is loading or
 to load. Updating the current digest does not modify saved run settings or results.
 
 **Edit current digest details** opens the page-level editor for the same digest, retains
-the selected run/filter context and focuses the current-settings heading. It does not
-copy historical settings into the edit form or save anything automatically.
+the selected run/filter context and opens at the top of the page, with focus on the
+Digest Details page tab rather than the form. The explainer and no-runs editor links
+use the same navigation. It does not copy historical settings into the edit form or
+save anything automatically. The existing route-state marker is retained for older
+history entries; no fragment anchor or scrollIntoView targets the edit form.
 
 ## Navigation and drafts
 
@@ -46,7 +53,10 @@ copy historical settings into the edit form or save anything automatically.
   presentation across page-tab switches. This is not persistence across reload or leaving
   the digest. A different digest or successful settings save resets the editor to the
   appropriate saved values.
-- Hidden form failures and hidden output refreshes do not take keyboard focus. Each
+- Hidden form failures, schedule saves and output refreshes do not take keyboard focus.
+  Explicit editor links restore the page top after panel effects; abandoned navigation
+  cancels that pending restoration. Polling and normal tab activation do not force
+  scrolling to the top. Each
   page tab has a unique linked panel; MUI supplies manual keyboard activation.
 
 Admin digest details and admin output/diagnostics navigation remain unchanged. The shared
@@ -60,7 +70,7 @@ partial histories, deliberate execution navigation and unchanged admin behavior 
 isolated React/router/API substitutes. Existing source-navigation tests remain in place.
 
 Browser acceptance: open an older run, read its saved Digest Details, follow the editor
-link, change the live topic/keywords, switch tabs before saving, save, and return to the
+link, confirm the viewport is at the page top with the selected tab visible, change the live topic/keywords, switch tabs before saving, save, and return to the
 older snapshot. Confirm no historical field changed. Exercise reload, Back/Forward,
 failed saves, missing snapshots, no-run and failed-only digests, and admin navigation.
 Check narrow mobile and wide-desktop layouts and keyboard focus. Existing runs are enough;

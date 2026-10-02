@@ -404,3 +404,23 @@ test("layout reflows and does not introduce forecast timers, automatic writes or
     assert.doesNotMatch(source, /setInterval|saveSchedule\(|deleteSchedule\(|runNow\(|checkout\(|window\.location/);
   }
 });
+
+test("a schedule save failure in the hidden output panel keeps drafts without taking focus", async () => {
+  const view = await controller({}, { async saveSchedule() { throw Error("offline"); } });
+  view.open(); view.runtime.events.length = 0;
+  view.props.visible = false;
+  await view.form().props.onSubmit(event);
+  const hidden = view.form();
+  assert.match(text(hidden), /Schedule not saved/); assert.equal(view.runtime.events.length, 0);
+  assert.equal(field(hidden, "First digest date and time").props.value, scheduleHelpers.localScheduleInput(new Date(schedule.starts_at)));
+  view.props.visible = true; view.form();
+  assert.ok(view.runtime.events.some(([kind]) => kind === "focus"));
+});
+
+test("a schedule save finishing in the hidden output panel does not restore focus there", async () => {
+  const view = await controller(); view.open(); view.runtime.events.length = 0;
+  view.props.visible = false;
+  await view.form().props.onSubmit(event); view.render();
+  assert.equal(view.saved.length, 1); assert.equal(view.runtime.events.length, 0);
+  view.props.visible = true; view.render(); assert.equal(view.runtime.events.length, 0);
+});
