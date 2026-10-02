@@ -40,7 +40,7 @@ test("page copy has no artificial fixed paragraph-width caps outside the deliber
     }
   }
 });
-test("digest explanation is above controls/results and independent of creation or run state", async () => {
+test("output-only digest explanation links to live settings and remains above controls/results", async () => {
   const { file, source, elements, attr } = await page("DigestDetailPage");
   const guide = elements.find(n => attr(n, "aria-label") === '"How this digest works"');
   assert.ok(guide); assert.equal(attr(guide, "component"), '"aside"');
@@ -49,7 +49,11 @@ test("digest explanation is above controls/results and independent of creation o
   assert.ok(parent); assert.equal(parent.condition.getText(file), "admin");
   assert.doesNotMatch(guide.getText(file), /hasRuns|hasSuccessfulRun|routeState|onClose|position: "sticky"/);
   assert.ok(guide.end < source.indexOf("<DigestScheduleControl"));
-  assert.match(guide.getText(file), /does not start a manual run/);
+  assert.match(guide.getText(file), /To update digest parameters/);
+  assert.match(guide.getText(file), /<Link component=\{RouterLink\} to=\{detailsPath\}/);
+  assert.match(guide.getText(file), />Digest Details<\/Link>/);
+  assert.doesNotMatch(guide.getText(file), /<strong>Save<\/strong>/);
+  assert.ok(source.indexOf('id={`${pageId}-panel-output`}') < guide.pos);
   assert.match(guide.getText(file), /plan’s allowances/);
   assert.match(guide.getText(file), /optional email delivery, subject to your plan/);
   assert.match(guide.getText(file), /Saving preferences does not cancel an existing schedule/);

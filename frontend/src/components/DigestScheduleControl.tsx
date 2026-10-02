@@ -16,7 +16,8 @@ function reveal(target: HTMLElement | null) {
   target?.scrollIntoView({ block: "nearest" });
 }
 
-function ScheduleForm({ digestId, schedule, onSaved, onCancel, access }: {
+function ScheduleForm({ digestId, schedule, onSaved, onCancel, access, visible }: {
+  visible: boolean;
   access: AccessState;
   digestId: string;
   schedule: DigestSchedule | null;
@@ -49,9 +50,9 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel, access }: {
   // Pin the editing context and drafts; server polling must not rewrite either.
   const [timeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
   const [savedTimeZone] = useState(schedule?.time_zone ?? null);
-  useEffect(() => { reveal(headingRef.current); }, []);
-  useEffect(() => { if (focusVersion) reveal(errorRef.current); }, [focusVersion]);
-  useEffect(() => { if (deleteFocusVersion) reveal(deleteErrorRef.current); }, [deleteFocusVersion]);
+  useEffect(() => { if (visible) reveal(headingRef.current); }, []);
+  useEffect(() => { if (visible && focusVersion) reveal(errorRef.current); }, [focusVersion, visible]);
+  useEffect(() => { if (visible && deleteFocusVersion) reveal(deleteErrorRef.current); }, [deleteFocusVersion, visible]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -173,7 +174,8 @@ function ScheduleForm({ digestId, schedule, onSaved, onCancel, access }: {
   );
 }
 
-export function DigestScheduleControl({ digestId, schedule, exhausted, onSaved, runButton, access }: {
+export function DigestScheduleControl({ digestId, schedule, exhausted, onSaved, runButton, access, visible = true }: {
+  visible?: boolean;
   access: AccessState;
   runButton: ReactNode;
   exhausted: boolean;
@@ -186,8 +188,11 @@ export function DigestScheduleControl({ digestId, schedule, exhausted, onSaved, 
   const editRef = useRef<HTMLButtonElement>(null);
   const restoreFocus = useRef(false);
   useEffect(() => {
-    if (!editing && restoreFocus.current) { restoreFocus.current = false; editRef.current?.focus(); }
-  }, [editing]);
+    if (!editing && restoreFocus.current) {
+      restoreFocus.current = false;
+      if (visible) editRef.current?.focus();
+    }
+  }, [editing, visible]);
   function finishEditing() { restoreFocus.current = true; setEditing(false); }
   function editSchedule() { setNotice(""); setEditing(true); }
   return (
@@ -213,7 +218,7 @@ export function DigestScheduleControl({ digestId, schedule, exhausted, onSaved, 
       {!editing && schedule && <Box sx={{ mt: 2 }}>
         <ScheduleOutlook key={`${digestId}:${JSON.stringify(schedule)}`} digestId={digestId} schedule={schedule} exhausted={exhausted} onEdit={editSchedule} />
       </Box>}
-      {editing && <ScheduleForm access={access} digestId={digestId} schedule={schedule} onCancel={finishEditing} onSaved={(saved) => {
+      {editing && <ScheduleForm visible={visible} access={access} digestId={digestId} schedule={schedule} onCancel={finishEditing} onSaved={(saved) => {
         onSaved(saved);
         setNotice(saved ? "Schedule saved. Check the planned start and current status below." : "Schedule deleted. Your digest and existing runs are retained; any run already in progress continues.");
         finishEditing();

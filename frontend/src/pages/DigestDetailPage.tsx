@@ -18,6 +18,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  Link,
   Paper,
   Tab,
   Tabs,
@@ -56,7 +57,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const pageId = useId();
   const pageTab = digestPageTab(searchParams);
   const routeState = location.state as { success?: string; focusDigestSettingsFor?: string } | null;
-  const editHeading = useRef<HTMLHeadingElement>(null);
+  const settingsTab = useRef<HTMLButtonElement>(null);
   const focusedSettingsLocation = useRef<string | null>(null);
   const backPath = listReturnTo(searchParams, admin ? "/admin/digests" : "/radar");
   const [digestRecord, setDigest] = useState<Digest | null>(null);
@@ -160,12 +161,17 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   }, [activeRun?.id, admin, digestId, isLoading, isStartingRun, initial.error, !!digest]);
 
   useEffect(() => {
-    // Only the explicit snapshot -> editor link requests focus. Polling never does.
+    // Explicit editor links open at the top of the page, not at the form.
+    // Wait until panels and their effects settle; old validation notices must not
+    // override this navigation. Polling and ordinary tab changes never scroll.
     if (admin || !digest || isLoading || pageTab !== "details" ||
       routeState?.focusDigestSettingsFor !== digestId || focusedSettingsLocation.current === location.key) return;
-    focusedSettingsLocation.current = location.key;
-    editHeading.current?.focus({ preventScroll: true });
-    editHeading.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    const frame = window.requestAnimationFrame(() => {
+      focusedSettingsLocation.current = location.key;
+      settingsTab.current?.focus({ preventScroll: true });
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [admin, digestId, !!digest, isLoading, pageTab, location.key, routeState?.focusDigestSettingsFor]);
 
   async function runNow() {
@@ -252,37 +258,37 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const currentDigestIsRunning = activeRun?.digest_id === digestId;
 
   const digestDetails = digest ? (
-    <>
-      <DigestForm
-        key={`${digest.id}:${digest.updated_at}`}
-        initialValues={digestToFormValues(digest)}
-        paperLimit={Math.max(digest.maximum_papers, access?.paper_limit ?? digest.maximum_papers)}
-        paperHint={access?.plan ? `Plan limit: ${access.plan.configuration.max_papers_per_run} papers per run. Reduce an oversized saved setting before running.` : undefined}
-        submitDisabled={!access || !!subscription.error}
-        visible={admin || pageTab === "details"}
-        submitLabel="Save changes"
-        submitNotice={saveNotice}
-        onEdit={() => setSaveNotice(null)}
-        isSubmitting={isSaving}
-        onSubmit={updateDigest}
-      />
+    <DigestForm
+      key={`${digest.id}:${digest.updated_at}`}
+      initialValues={digestToFormValues(digest)}
+      paperLimit={Math.max(digest.maximum_papers, access?.paper_limit ?? digest.maximum_papers)}
+      paperHint={access?.plan ? `Plan limit: ${access.plan.configuration.max_papers_per_run} papers per run. Reduce an oversized saved setting before running.` : undefined}
+      submitDisabled={!access || !!subscription.error}
+      visible={admin || pageTab === "details"}
+      submitLabel="Save changes"
+      submitNotice={saveNotice}
+      onEdit={() => setSaveNotice(null)}
+      isSubmitting={isSaving}
+      onSubmit={updateDigest}
+    />
+  ) : null;
 
-      <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, mt: 3, borderRadius: 3 }}>
-        <Typography variant="h6" color="error.main" sx={{ mb: 0.75 }}>Delete digest</Typography>
-        <Typography color="text.secondary" sx={{ mb: 2 }}>
-          Permanently removes this digest and its saved configuration.
-        </Typography>
-        <Button
-          color="error"
-          variant="outlined"
-          startIcon={<DeleteOutlineRoundedIcon />}
-          disabled={isSaving || currentDigestIsRunning}
-          onClick={() => setConfirmDelete(true)}
-        >
-          Delete digest
-        </Button>
-      </Paper>
-    </>
+  const deleteControl = digest ? (
+    <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3.5 }, mt: 3, borderRadius: 3 }}>
+      <Typography variant="h6" color="error.main" sx={{ mb: 0.75 }}>Delete digest</Typography>
+      <Typography color="text.secondary" sx={{ mb: 2 }}>
+        Permanently removes this digest and its saved configuration.
+      </Typography>
+      <Button
+        color="error"
+        variant="outlined"
+        startIcon={<DeleteOutlineRoundedIcon />}
+        disabled={isSaving || currentDigestIsRunning}
+        onClick={() => setConfirmDelete(true)}
+      >
+        Delete digest
+      </Button>
+    </Paper>
   ) : null;
 
   return (
@@ -313,28 +319,17 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                 <Tabs value={pageTab} onChange={(_event, tab: DigestPageTab) => changePageTab(tab)}
                   variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile aria-label="Digest page sections"
                   sx={{ "& .MuiTab-root.Mui-focusVisible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 } }}>
-                  <Tab value="details" label="Digest Details" id={`${pageId}-tab-details`} aria-controls={`${pageId}-panel-details`} />
-                  <Tab value="output" label="Output & history" id={`${pageId}-tab-output`} aria-controls={`${pageId}-panel-output`} />
+                  <Tab component="button" type="button" value="details" label="Digest Details" ref={settingsTab} id={`${pageId}-tab-details`} aria-controls={`${pageId}-panel-details`} />
+                  <Tab value="output" label="Output & History" id={`${pageId}-tab-output`} aria-controls={`${pageId}-panel-output`} />
                 </Tabs>
               </Paper>
             )}
-            <Typography component="h1" variant="h3" sx={{ mb: 1 }}>{digest.topic}</Typography>
-            {admin ? (
+            {admin && <>
+              <Typography component="h1" variant="h3" sx={{ mb: 1 }}>{digest.topic}</Typography>
               <Typography color="text.secondary" sx={{ mb: 3 }}>
                 Review and update the research scope and reporting settings.
               </Typography>
-            ) : (
-              <Box component="aside" aria-label="How this digest works"
-                sx={{ mb: 3, p: 2, borderLeft: 3, borderColor: "primary.main", bgcolor: "background.paper", width: "100%" }}>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Save</strong> keeps your research preferences; it does not start a manual run.
-                  {" "}<strong>Run now</strong> starts research using the saved settings and your plan’s allowances.
-                  {" "}<strong>Schedule</strong> manages recurring runs and optional email delivery, subject to your plan.
-                  Runs continue in the background: return here to follow progress and explore completed briefings, papers, and sources.
-                  Saving preferences does not cancel an existing schedule.
-                </Typography>
-              </Box>
-            )}
+            </>}
 
             {admin && isAdminDigest(digest) && (
               <Paper variant="outlined" sx={{ p: 2.25, mb: 2.5, borderRadius: 3 }}>
@@ -345,67 +340,13 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
             )}
             {admin && subscription.error && <Alert severity="warning" sx={{ mb: 2.5 }}>Could not check the owner's subscription allowances. Saving is paused while we retry.</Alert>}
             {admin && subscription.loading && <Typography role="status" sx={{ mb: 2.5 }}>Checking the owner's subscription allowances…</Typography>}
-            {error && <Alert severity="error" sx={{ mb: 2.5 }}>{error}</Alert>}
-            {success && <Alert severity="success" sx={{ mb: 2.5 }}>{success}</Alert>}
+            {admin && error && <Alert severity="error" sx={{ mb: 2.5 }}>{error}</Alert>}
+            {admin && success && <Alert severity="success" sx={{ mb: 2.5 }}>{success}</Alert>}
 
-            {!admin && (
-              <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3 }, mb: 3, borderRadius: 3 }}>
-                <Typography variant="h6" sx={{ mb: 0.75 }}>Radar controls</Typography>
-                <AllowanceNotice {...subscription} context="digest" id="digest-allowance-notice" />
-                <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule} exhausted={digest.schedule_exhausted} access={subscription}
-                  onSaved={(saved) => {
-                    scheduleRevision.current += 1;
-                    setDigest((current) => current?.id === digest.id ? { ...current,
-                      schedule: saved?.schedule ?? null, schedule_next_at: saved?.schedule_next_at ?? null,
-                      schedule_exhausted: saved?.schedule_exhausted ?? false } : current);
-                  }}
-                  runButton={
-                  <Button
-                    variant="contained"
-                    startIcon={isStartingRun ? <CircularProgress size={18} color="inherit" /> : <PlayArrowRoundedIcon />}
-                    disabled={isStartingRun || isSaving || runBlocked || !access?.run_allowed || !!subscription.error}
-                    aria-describedby={!access?.run_allowed || subscription.error ? "digest-allowance-notice" : undefined}
-                    onClick={() => setConfirmRun(true)}
-                  >
-                    {isStartingRun
-                      ? "Starting…"
-                      : currentDigestIsRunning
-                        ? "Run in progress"
-                        : runBlocked
-                          ? "Another run is active"
-                          : "Run now"}
-                  </Button>
-                  }
-                />
-
-                {activeRun && (
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    {currentDigestIsRunning
-                      ? "This digest is running. Starting another digest is temporarily disabled for your account."
-                      : `A run for “${snapshotTopic(activeRun)}” is in progress. Only one digest can run at a time for your account.`}
-                    {!currentDigestIsRunning && (
-                      <Button
-                        component={RouterLink}
-                        to={`/radar/digests/${activeRun.digest_id}`}
-                        size="small"
-                        sx={{ ml: { sm: 1 } }}
-                      >
-                        Open active digest
-                      </Button>
-                    )}
-                    {currentDigestIsRunning && (
-                    <Button size="small" onClick={() => showRunProgress(activeRun.id)}>View progress</Button>
-                    )}
-                  </Alert>
-                )}
-              </Paper>
-            )}
-            {admin ? digestDetails : <>
+            {admin ? <>{digestDetails}{deleteControl}</> : <>
               <Box role="tabpanel" id={`${pageId}-panel-details`} aria-labelledby={`${pageId}-tab-details`}
                 hidden={pageTab !== "details"} tabIndex={0} sx={{ minWidth: 0 }}>
                 <Box sx={{ width: "100%", maxWidth: 960, minWidth: 0, mx: "auto" }}>
-                  <Typography component="h2" variant="h5" ref={editHeading} tabIndex={-1}
-                    sx={{ mb: 1, scrollMarginTop: 24 }}>Current digest details</Typography>
                   <Typography color="text.secondary" sx={{ mb: 3, width: "100%" }}>
                     Update the saved settings used for future runs. Existing runs keep their own read-only settings and results.
                   </Typography>
@@ -414,6 +355,72 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
               </Box>
               <Box role="tabpanel" id={`${pageId}-panel-output`} aria-labelledby={`${pageId}-tab-output`}
                 hidden={pageTab !== "output"} tabIndex={0} sx={{ minWidth: 0 }}>
+                <Typography component="h1" variant="h3" sx={{ mb: 1 }}>{digest.topic}</Typography>
+                <Box component="aside" aria-label="How this digest works"
+                  sx={{ mb: 3, p: 2, borderLeft: 3, borderColor: "primary.main", bgcolor: "background.paper", width: "100%" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    To update digest parameters, open the{" "}
+                    <Link component={RouterLink} to={detailsPath} state={{ focusDigestSettingsFor: digestId }}>Digest Details</Link> tab.
+                    {" "}<strong>Run now</strong> starts research using the saved settings and your plan’s allowances.
+                    {" "}<strong>Schedule</strong> manages recurring runs and optional email delivery, subject to your plan.
+                    Runs continue in the background: return here to follow progress and explore completed briefings, papers, and sources.
+                    Saving preferences does not cancel an existing schedule.
+                  </Typography>
+                </Box>
+                {error && <Alert severity="error" sx={{ mb: 2.5 }}>{error}</Alert>}
+                {success && <Alert severity="success" sx={{ mb: 2.5 }}>{success}</Alert>}
+
+                <Paper variant="outlined" sx={{ p: { xs: 2.25, sm: 3 }, mb: 3, borderRadius: 3 }}>
+                  <Typography variant="h6" sx={{ mb: 0.75 }}>Radar controls</Typography>
+                  <AllowanceNotice {...subscription} context="digest" id="digest-allowance-notice" />
+                  <DigestScheduleControl key={digest.id} digestId={digest.id} schedule={digest.schedule} exhausted={digest.schedule_exhausted} access={subscription}
+                    visible={pageTab === "output"}
+                    onSaved={(saved) => {
+                      scheduleRevision.current += 1;
+                      setDigest((current) => current?.id === digest.id ? { ...current,
+                        schedule: saved?.schedule ?? null, schedule_next_at: saved?.schedule_next_at ?? null,
+                        schedule_exhausted: saved?.schedule_exhausted ?? false } : current);
+                    }}
+                    runButton={
+                    <Button
+                      variant="contained"
+                      startIcon={isStartingRun ? <CircularProgress size={18} color="inherit" /> : <PlayArrowRoundedIcon />}
+                      disabled={isStartingRun || isSaving || runBlocked || !access?.run_allowed || !!subscription.error}
+                      aria-describedby={!access?.run_allowed || subscription.error ? "digest-allowance-notice" : undefined}
+                      onClick={() => setConfirmRun(true)}
+                    >
+                      {isStartingRun
+                        ? "Starting…"
+                        : currentDigestIsRunning
+                          ? "Run in progress"
+                          : runBlocked
+                            ? "Another run is active"
+                            : "Run now"}
+                    </Button>
+                    }
+                  />
+
+                  {activeRun && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      {currentDigestIsRunning
+                        ? "This digest is running. Starting another digest is temporarily disabled for your account."
+                        : `A run for “${snapshotTopic(activeRun)}” is in progress. Only one digest can run at a time for your account.`}
+                      {!currentDigestIsRunning && (
+                        <Button
+                          component={RouterLink}
+                          to={`/radar/digests/${activeRun.digest_id}`}
+                          size="small"
+                          sx={{ ml: { sm: 1 } }}
+                        >
+                          Open active digest
+                        </Button>
+                      )}
+                      {currentDigestIsRunning && (
+                      <Button size="small" onClick={() => showRunProgress(activeRun.id)}>View progress</Button>
+                      )}
+                    </Alert>
+                  )}
+                </Paper>
                 {runs.length > 0 ? (
                   <DigestWorkspace key={digestId} digestId={digestId} runs={runs} latestRun={latestRun}
                     visible={pageTab === "output"} runBlocked={runBlocked || isStartingRun} onRetry={retryRun} onUpdate={updateRun} />
@@ -429,6 +436,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                     </Button>
                   </Paper>
                 )}
+                {deleteControl}
               </Box>
             </>}
 
