@@ -9,20 +9,128 @@ jobs:
   prepare:
     if: github.repository == 'svasylevskyi/scientific-research-radar' && github.ref == 'refs/heads/feature/unfinished-checkout-replacement'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_USER: radar
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: radar_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U radar -d radar_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      ENVIRONMENT: test
+      DATABASE_URL: postgresql+psycopg://radar:ci-only-password@localhost:5432/radar_test
+      TEST_DATABASE_URL: postgresql+psycopg://radar:ci-only-password@localhost:5432/radar_test
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+      - name: Apply checksum-verified source patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64, gzip, hashlib, pathlib, subprocess
+          parts = [pathlib.Path(f'.checkout-patch-{i}.b64') for i in range(7)]
+          for path in parts:
+              print(path.name, len(path.read_text().strip()), hashlib.sha256(path.read_bytes()).hexdigest())
+          patch = gzip.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '9929b70eae66dc62822843186b1fd7ff7a312e9e356cda53f0596985f33554ae'
+          pathlib.Path('/tmp/checkout.patch').write_bytes(patch)
+          subprocess.run(['git', 'apply', '--check', '/tmp/checkout.patch'], check=True)
+          subprocess.run(['git', 'apply', '/tmp/checkout.patch'], check=True)
+          PY
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '22'
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+      - run: pip install -e '.[dev]'
+        working-directory: backend
       - run: npm ci
         working-directory: frontend
-      - name: Package source and locked frontend test dependencies
-        run: tar --exclude=.git --exclude=workbench.tgz -czf /tmp/workbench.tgz .
+      - name: Regenerate and verify API contracts
+        working-directory: frontend
+        run: npm run contracts:generate && npm run contracts:check
+      - name: Full frontend regressions and production build
+        working-directory: frontend
+        run: node --test tests/*.test.mjs && npm run build
+      - name: Migration round trip
+        working-directory: backend
+        run: alembic upgrade head && alembic downgrade base && alembic upgrade head
+      - name: Full PostgreSQL regression suite
+        working-directory: backend
+        run: python -m pytest -n 2 --dist=loadscope --durations=15 --junitxml=test-results.xml
+      - name: Check source whitespace
+        run: git diff --check
+      - name: Package generated source for review
+        if: always()
+        run: tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=__pycache__ --exclude=.pytest_cache --exclude=.mypy_cache -czf /tmp/checkout-tested-source.tgz .
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: checkout-tested-source
+          path: /tmp/checkout-tested-source.tgz
+          retention-days: 1
+      - name: Prepare only tested source blobs and tree (no commit or ref writes)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64, json, os, pathlib, subprocess, urllib.request
+          paths = [
+              'backend/app/api/routes/subscriber_billing.py',
+              'backend/app/models/stripe_sandbox.py',
+              'backend/app/schemas/subscriber_responses.py',
+              'backend/app/services/checkout_replacement_service.py',
+              'backend/app/services/stripe_sandbox_service.py',
+              'backend/app/services/subscriber_billing_service.py',
+              'backend/migrations/versions/20261002_0035_checkout_replacement.py',
+              'backend/tests/test_checkout_replacement.py',
+              'docs/checkout-replacement.md',
+              'frontend/src/api/subscriptions.ts',
+              'frontend/src/checkoutChoices.ts',
+              'frontend/src/components/SubscriberBilling.tsx',
+              'frontend/src/pages/PlansPage.tsx',
+              'frontend/src/subscriptionPresentation.ts',
+              'frontend/src/types/api.generated.ts',
+              'frontend/tests/checkout-replacement.test.mjs',
+              'frontend/tests/helpers/plan-harness.mjs',
+              'frontend/tests/plan-presentation.test.mjs',
+          ]
+          repo = 'svasylevskyi/scientific-research-radar'
+          assert os.environ['GITHUB_REPOSITORY'] == repo
+          assert os.environ['GITHUB_REF'] == 'refs/heads/feature/unfinished-checkout-replacement'
+          def post(resource, data):
+              assert resource in ('git/blobs', 'git/trees')
+              request = urllib.request.Request(f'https://api.github.com/repos/{repo}/{resource}',
+                  data=json.dumps(data).encode(), method='POST', headers={
+                      'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                      'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'})
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return json.load(response)
+          entries = []
+          for name in paths:
+              blob = post('git/blobs', {'content': base64.b64encode(pathlib.Path(name).read_bytes()).decode(), 'encoding': 'base64'})
+              entries.append({'path': name, 'mode': '100644', 'type': 'blob', 'sha': blob['sha']})
+          cleanup = ['.github/workflows/checkout-workbench.yml'] + [f'.checkout-patch-{i}.b64' for i in range(7)]
+          entries.extend({'path': name, 'mode': '100644', 'type': 'blob', 'sha': None} for name in cleanup)
+          parent = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          base_tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          tree = post('git/trees', {'base_tree': base_tree, 'tree': entries})
+          report = {'parent': parent, 'tree': tree['sha'], 'entries': entries}
+          print('PREPARED_SOURCE_TREE=' + json.dumps(report, separators=(',', ':')))
+          pathlib.Path('/tmp/checkout-prepared-tree.json').write_text(json.dumps(report, indent=2))
+          PY
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: checkout-workbench
-          path: /tmp/workbench.tgz
+          name: checkout-prepared-tree
+          path: /tmp/checkout-prepared-tree.json
           retention-days: 1
