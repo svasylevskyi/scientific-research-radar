@@ -19,9 +19,10 @@ async function load(path, dependencies = {}) {
 }
 function elements(tree) {
   if (Array.isArray(tree)) return tree.flatMap(elements);
-  return tree?.props ? [tree, ...elements(tree.props.children)] : [];
+  return tree?.props ? [tree, ...elements(tree.props.children), ...elements(tree.props.actions)] : [];
 }
 const context = await load('../src/navigationContext.ts');
+const support = await load('../src/admin/support.ts');
 const {pageNumber, withReturnTo, listReturnTo, sourceRunReturnTo, updateQuery} = context;
 
 test('list and run return links reject external or unrelated destinations', () => {
@@ -42,7 +43,7 @@ test('digest list links and detail/history navigation carry owner filters and pa
   const requests = [];
   const router = {useSearchParams: () => [search, update => { search = typeof update === 'function' ? update(search) : new URLSearchParams(update); }]};
   const {AdminDigestsPage} = await load('../src/pages/AdminDigestsPage.tsx', {
-    react: {useCallback: fn => fn}, 'react-router-dom': router, '../navigationContext': context,
+    react: {useCallback: fn => fn}, 'react-router-dom': router, '../navigationContext': context, '../admin/support': support,
     '../api/digests': {adminDigestsApi: {list: args => { requests.push(args); }}},
     '../hooks/usePollingResource': {usePollingResource: loader => { loader(); return {data: {items: [], total: 75}, loading: false}; }},
     '../hooks/useListPageBounds': {useListPageBounds: () => {}},
@@ -82,7 +83,7 @@ test('users list restores search text and page from its URL and resets only pagi
   const {AdminUsersPage} = await load('../src/pages/AdminUsersPage.tsx', {
     react: {useCallback: fn => fn, useEffect: fn => fn(), useState: () => [text, value => { text = value; }]},
     'react-router-dom': {Link: 'RouterLink', useSearchParams: () => [search, update => { search = update(search); }]},
-    '../navigationContext': context, '../api/accountClosure': {closureLabels: {}},
+    '../navigationContext': context, '../admin/support': support, '../api/accountClosure': {closureLabels: {}},
     '../api/admin': {adminApi: {listUsers: args => { requests.push(args); }}},
     '../hooks/usePollingResource': {usePollingResource: loader => { loader(); return {data: {items: [{id: 'u', full_name: 'Ada', is_active: true}], total: 61}, loading: false}; }},
     '../hooks/useListPageBounds': {useListPageBounds: () => {}},

@@ -1,5 +1,6 @@
 import { Button, Paper, Stack, Typography } from "@mui/material";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { safeSupportReturn } from "../admin/support";
 export function AdminBillingNavigation({
   current,
   userId,
@@ -9,7 +10,13 @@ export function AdminBillingNavigation({
   userId?: string | null;
   email?: string | null;
 }) {
-  const query = userId ? `?${new URLSearchParams({ user_id: userId })}` : "";
+  const [search] = useSearchParams();
+  const candidate = safeSupportReturn(search.get("support_return"));
+  // Do not point a newly selected account back to a different user's details.
+  const origin = userId && candidate?.split("?")[0] === `/admin/users/${encodeURIComponent(userId)}` ? candidate : null;
+  const params = new URLSearchParams(userId ? { user_id: userId } : {});
+  if (origin) params.set("support_return", origin);
+  const query = params.size ? `?${params}` : "";
   return (
     <Paper variant="outlined" sx={{ p: 2, mb: 3, overflowWrap: "anywhere" }}>
       <Typography variant="overline">
@@ -29,11 +36,7 @@ export function AdminBillingNavigation({
       >
         <Button
           component={Link}
-          to={
-            userId
-              ? `/admin/users/${encodeURIComponent(userId)}`
-              : "/admin/users"
-          }
+          to={origin ?? (userId ? `/admin/users/${encodeURIComponent(userId)}` : "/admin/users")}
         >
           {userId ? "User details" : "Users"}
         </Button>
