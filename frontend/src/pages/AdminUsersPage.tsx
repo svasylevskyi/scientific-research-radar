@@ -4,35 +4,18 @@ import { useListPageBounds } from "../hooks/useListPageBounds";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import ManageAccountsRoundedIcon from "@mui/icons-material/ManageAccountsRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
-import {
-  Box,
-  Button,
-  CircularProgress,
-  Container,
-  InputAdornment,
-  Pagination,
-  Paper,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Container, InputAdornment, Paper, Stack, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link as RouterLink, useSearchParams } from "react-router-dom";
 import { pageNumber, queryPath, updateQuery, withReturnTo } from "../navigationContext";
-
-import { closureLabels } from "../api/accountClosure";
+import { safeSupportReturn } from "../admin/support";
 import { adminApi } from "../api/admin";
 import { AppHeader } from "../components/AppHeader";
 import { UserRoleChip } from "../components/UserRoleChip";
+import { AccountStatusChip, AdminListFooter, AdminPageHeading, AdminSupportReturn } from "../components/AdminSupport";
 
 const PAGE_SIZE = 20;
-
 export function AdminUsersPage() {
   const [search, setSearch] = useSearchParams();
   const page = pageNumber(search);
@@ -47,120 +30,72 @@ export function AdminUsersPage() {
   const users = resource.data?.items ?? [];
   const total = resource.data?.total ?? 0;
   const isLoading = resource.loading;
-
+  const origin = safeSupportReturn(search.get("support_return"));
   function handleSearch(event: FormEvent) {
     event.preventDefault();
     setSearch(current => updateQuery(current, { page: null, query: searchText.trim() || null }), { preventScrollReset: true });
   }
-
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  return (
-    <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
-      <AppHeader />
-      <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="space-between" sx={{ mb: 4 }}>
-          <Box>
-            <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 0.75 }}>
-              <ManageAccountsRoundedIcon color="primary" />
-              <Typography component="h1" variant="h3">User management</Typography>
-            </Stack>
-            <Typography color="text.secondary">Review accounts, access levels, and active status.</Typography>
-          </Box>
-          <Stack component="form" direction="row" onSubmit={handleSearch} spacing={1} sx={{ alignSelf: { sm: "flex-end" } }}>
-            <TextField
-              size="small"
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-              placeholder="Name or email"
-              aria-label="Search users"
-              slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchRoundedIcon /></InputAdornment> } }}
-            />
-            <Button type="submit" variant="contained">Search</Button>
+  function clearSearch() {
+    setSearchText("");
+    setSearch(current => updateQuery(current, { page: null, query: null }), { preventScrollReset: true });
+  }
+  return <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
+    <AppHeader />
+    <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
+      <AdminSupportReturn />
+      <AdminPageHeading title="User management" icon={<ManageAccountsRoundedIcon color="primary" />}
+        description="Review accounts, access levels, active status, and reported subscription plans."
+        actions={<>
+          <Stack component="form" direction="row" onSubmit={handleSearch} spacing={1} useFlexGap flexWrap="wrap"
+            sx={{ flex: "1 1 420px", minWidth: 0 }}>
+            <TextField size="small" label="Name or email" value={searchText} onChange={event => setSearchText(event.target.value)}
+              helperText="Search up to 120 characters." sx={{ flex: "1 1 220px", minWidth: 0 }}
+              slotProps={{ htmlInput: { maxLength: 120 }, input: { startAdornment: <InputAdornment position="start"><SearchRoundedIcon /></InputAdornment> } }} />
+            <Button type="submit" variant="contained" sx={{ minHeight: 40 }}>Search</Button>
+            {(query || searchText) && <Button type="button" onClick={clearSearch} sx={{ minHeight: 40 }}>Clear search</Button>}
           </Stack>
-        </Stack>
-
-        <ResourceNotice {...resource} />
-        {isLoading ? (
-          <Box role="status" aria-label="Loading users" sx={{ py: 10, display: "grid", placeItems: "center" }}>
-            <CircularProgress size={34} />
-          </Box>
-        ) : resource.data ? (
-          <>
+          <Button disabled={isLoading || resource.retrying || resource.retryAt > Date.now()} onClick={() => void resource.refresh()} sx={{ minHeight: 40 }}>Refresh</Button>
+        </>} />
+      {origin?.split("?")[0] === "/admin/messages" && <Alert severity="info" role="note" sx={{ mb: 2 }}>
+        This search uses visitor-supplied contact details. A matching account does not verify the sender’s identity.
+      </Alert>}
+      <ResourceNotice {...resource} />
+      {isLoading ? <Box role="status" aria-label="Loading users" sx={{ py: 10, display: "grid", placeItems: "center" }}><CircularProgress size={34} /></Box>
+        : resource.data ? <>
+          {users.length > 0 ? <>
             <TableContainer component={Paper} variant="outlined" sx={{ display: { xs: "none", md: "block" }, borderRadius: 3 }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Access</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Subscription plan</TableCell>
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {users.map((listedUser) => (
-                    <TableRow key={listedUser.id} hover>
-                      <TableCell><Typography fontWeight={700}>{listedUser.full_name}</Typography></TableCell>
-                      <TableCell>{listedUser.email}</TableCell>
-                      <TableCell><UserRoleChip user={listedUser} /></TableCell>
-                      <TableCell>{listedUser.closure_state ? closureLabels[listedUser.closure_state] : listedUser.is_active ? "Active" : "Inactive"}</TableCell>
-                      <TableCell>{listedUser.subscription_plan_name ?? "No subscription"}</TableCell>
-                      <TableCell align="right">
-                        <Button component={RouterLink} to={withReturnTo(`/admin/users/${listedUser.id}`, returnTo)} endIcon={<ChevronRightRoundedIcon />}>View</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
+              <Table aria-label="User accounts" sx={{ "& th, & td": { overflowWrap: "anywhere" } }}>
+                <TableHead><TableRow>{["Name", "Email", "Access", "Status", "Subscription plan", "Actions"].map(label =>
+                  <TableCell key={label} scope="col" align={label === "Actions" ? "right" : "left"}>{label}</TableCell>)}</TableRow></TableHead>
+                <TableBody>{users.map(listedUser => <TableRow key={listedUser.id} hover>
+                  <TableCell component="th" scope="row"><Typography fontWeight={700}>{listedUser.full_name}</Typography></TableCell>
+                  <TableCell>{listedUser.email}</TableCell>
+                  <TableCell><UserRoleChip user={listedUser} /></TableCell>
+                  <TableCell><AccountStatusChip user={listedUser} /></TableCell>
+                  <TableCell>{listedUser.subscription_plan_name ?? "No subscription"}</TableCell>
+                  <TableCell align="right"><Button component={RouterLink} to={withReturnTo(`/admin/users/${listedUser.id}`, returnTo)}
+                    aria-label={`View user ${listedUser.full_name}`} endIcon={<ChevronRightRoundedIcon />}>View user</Button></TableCell>
+                </TableRow>)}</TableBody>
               </Table>
             </TableContainer>
-
-            <Stack spacing={1.5} sx={{ display: { xs: "flex", md: "none" } }}>
-              {users.map((listedUser) => (
-                <Paper key={listedUser.id} variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-                  <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography fontWeight={750}>{listedUser.full_name}</Typography>
-                      <Typography color="text.secondary" sx={{ overflowWrap: "anywhere", mb: 1.5 }}>{listedUser.email}</Typography>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <UserRoleChip user={listedUser} />
-                        <Typography variant="body2">Plan: {listedUser.subscription_plan_name ?? "No subscription"}</Typography>
-                        <Typography variant="body2" color={listedUser.is_active ? "success.main" : "text.secondary"}>
-                          {listedUser.closure_state ? closureLabels[listedUser.closure_state] : listedUser.is_active ? "Active" : "Inactive"}
-                        </Typography>
-                      </Stack>
-                    </Box>
-                    <Button component={RouterLink} to={withReturnTo(`/admin/users/${listedUser.id}`, returnTo)} aria-label={`View ${listedUser.full_name}`} sx={{ minWidth: 40 }}>
-                      <ChevronRightRoundedIcon />
-                    </Button>
-                  </Stack>
-                </Paper>
-              ))}
-            </Stack>
-
-            {users.length === 0 && (
-              <Paper variant="outlined" sx={{ py: 7, px: 3, textAlign: "center", borderRadius: 3 }}>
-                <Typography variant="h6">No users found</Typography>
-                <Typography color="text.secondary">Try a different name or email.</Typography>
-              </Paper>
-            )}
-
-            {total > PAGE_SIZE && (
-              <Pagination
-                count={pageCount}
-                page={page}
-                onChange={(_event, nextPage) => setPage(nextPage)}
-                color="primary"
-                sx={{ mt: 3, display: "flex", justifyContent: "center" }}
-              />
-            )}
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: "center" }}>
-              {total} {total === 1 ? "account" : "accounts"}
-            </Typography>
-          </>
-        ) : null}
-      </Container>
-    </Box>
-  );
+            <Stack spacing={1.5} sx={{ display: { xs: "flex", md: "none" } }}>{users.map(listedUser =>
+              <Paper key={listedUser.id} variant="outlined" sx={{ p: 2.25, borderRadius: 3, overflowWrap: "anywhere" }}>
+                <Typography fontWeight={750}>{listedUser.full_name}</Typography>
+                <Typography color="text.secondary" sx={{ mb: 1.5 }}>{listedUser.email}</Typography>
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
+                  <UserRoleChip user={listedUser} /><AccountStatusChip user={listedUser} />
+                </Stack>
+                <Typography variant="body2" sx={{ my: 1.5 }}>Plan: {listedUser.subscription_plan_name ?? "No subscription"}</Typography>
+                <Button component={RouterLink} to={withReturnTo(`/admin/users/${listedUser.id}`, returnTo)}
+                  aria-label={`View user ${listedUser.full_name}`} endIcon={<ChevronRightRoundedIcon />}>View user</Button>
+              </Paper>)}</Stack>
+          </> : <Paper variant="outlined" sx={{ py: 7, px: 3, textAlign: "center", borderRadius: 3 }}>
+            <Typography variant="h6">{query ? "No matching users" : "No user accounts to display"}</Typography>
+            <Typography color="text.secondary">{query ? "Try a different name or email, or clear the search." : "Accessible accounts will appear here when available."}</Typography>
+            {query && <Button onClick={clearSearch} sx={{ mt: 1 }}>Clear search</Button>}
+          </Paper>}
+          <AdminListFooter page={page} pageSize={PAGE_SIZE} total={total} count={users.length} noun="accounts" onChange={setPage} />
+        </> : null}
+    </Container>
+  </Box>;
 }
