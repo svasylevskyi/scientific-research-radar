@@ -10,12 +10,18 @@ no additional application header or nested main landmark.
 
 - Current tier: **Review Subscription**, opening the existing billing section.
 - Free → paid: **Upgrade to [name]**, then the initial Checkout confirmation.
-- Eligible paid → higher paid tier: **Upgrade to [name]**, opening a server-priced
-  prorated quote. **Continue to Payment?** and a contained success/green
-  **Continue to Payment** button replace the old payment labels. Continuing can
-  charge the saved Stripe payment method; this is explicit before consent.
-  Additional authentication/payment uses the existing saved-upgrade invoice
-  endpoint. It never starts a second Checkout subscription.
+- Eligible immediate paid → higher paid tier: **Upgrade to [name]**, opening a
+  server-priced prorated quote for the existing billing interval.
+  **Continue to Payment?** and a contained success/green **Continue to Payment**
+  button identify the payment action. Continuing can charge the saved Stripe
+  payment method; this is explicit before consent. Additional authentication or
+  payment uses the existing saved-upgrade invoice endpoint, not a second
+  Checkout subscription.
+- Eligible higher tiers can also start at renewal, including a different billing
+  interval. A cross-interval upgrade opens the renewal confirmation directly;
+  the same-interval payment preview offers scheduling at renewal instead.
+  **Schedule upgrade** does not charge now. Higher benefits require verified
+  renewal payment. See [Scheduled upgrades](scheduled-upgrades.md).
 - Eligible paid downgrade: **Downgrade to [name]**, opening a renewal confirmation
   with exact recurring price, effective date, lower allowances and selection of
   digests to keep active. No payment or proration is requested now, so this dialog
@@ -29,12 +35,13 @@ no additional application header or nested main landmark.
   revision/price is used, even when the public catalogue has a newer revision.
 
 The backend upgrade/change option lists authorize transitions. Price, currency,
-revision and interval must match an offered option. Benefit comparisons only
-supply labels for unavailable cards; they never enable a transition. Incomparable
-plans say Change rather than inventing a hierarchy. Unsupported choices stay
-visible and disabled with guidance; higher-tier upgrades require the existing
-billing interval. Pending checkout retains Resume existing checkout. Complimentary
-or unverified access is not converted into paid access by this interface.
+revision and interval must match an offered option. Benefit comparisons in the
+browser label cards; they never authorize a transition. Incomparable plans say
+Change rather than inventing a hierarchy. Unsupported choices stay visible and
+disabled with guidance. Only immediate paid upgrades require the existing billing
+interval; scheduled higher-tier upgrades can change interval. Pending checkout
+retains Resume existing checkout. Complimentary or unverified access is not
+converted into paid access by this interface.
 
 ## Safety and recovery
 
@@ -47,20 +54,23 @@ confirmation. The server remains the final authority and rechecks all rules.
 
 Saved preview, pending payment, retry, undo and verification status are accessible
 in both catalogue locations. Existing #upgrade and #changes links are retained.
+Requested renewal changes also appear at the bottom of Current plan, where
+Cancel requested change uses the same owner-scoped undo flow. Cancellation keeps
+the current plan and interval; it does not cancel the subscription. Wait for
+confirmed cancellation before choosing another target.
 No browser return grants access and no client-side proration or quota accounting
 is added. Failures remain visible; temporary resource errors disable mutations.
 
 ## Validation
 
-`node --test tests/plan-selection.test.mjs tests/plan-presentation.test.mjs`
+`node --test tests/plan-selection.test.mjs tests/plan-presentation.test.mjs tests/scheduled-upgrades.test.mjs`
 uses synthetic account/offer fixtures with React/MUI/router substitutes. Existing
-price, layout, enrolment and checkout regressions use a shared harness; assertions
-were updated only for the intentional labels, navigation, and embedded catalogue.
+price, layout, enrolment and checkout regressions use a shared harness.
 These tests do not replace full TypeScript/build checks or browser acceptance.
 
 Review on development with sandbox billing: Free/paid/monthly/yearly, unavailable
 annual prices, historical revisions, pending upgrade/checkout, failed reads and
 writes, expiry/renewal drift, active-digest selection, undo and cancellation.
 Check keyboard focus and mobile wrapping. Use sandbox payment details only;
-never simulated payments or test cards in live mode. No production action is
-required to review this frontend change.
+never simulated payments or test cards in live mode. Deploy the scheduled-upgrade
+backend and frontend together; see the linked acceptance checklist.

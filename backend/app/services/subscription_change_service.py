@@ -5,6 +5,7 @@ plan binding. Browser returns and webhook payloads never grant entitlements.
 """
 
 from app.services.billing_types import PlanEntitlements
+from app.services.billing_renewal_policy import is_renewal_upgrade
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -89,7 +90,8 @@ def options(db, settings, uid):
     versions = select(Plan.code, func.max(Plan.revision).label('revision')).group_by(Plan.code).subquery()
     plans = list(db.scalars(select(Plan).join(versions, (Plan.code == versions.c.code) & (Plan.revision == versions.c.revision))))
     # Interval-only changes retain the subscriber's immutable purchased revision.
-    plans = [source] + [p for p in plans if subscribers.available(p) and is_downgrade(source=source, target=p)]
+    plans = [source] + [p for p in plans if subscribers.available(p) and (
+        is_downgrade(source=source, target=p) or is_renewal_upgrade(source=source, target=p))]
     for p in plans:
         c = p.configuration
         for interval in ('monthly', 'annual'):
@@ -99,7 +101,7 @@ def options(db, settings, uid):
                 continue
             # A tier downgrade must also reduce the normalized selected price.
             old_price = Decimal(str(source.configuration['monthly_price' if checkout.interval == 'monthly' else 'annual_price'])) / (12 if checkout.interval == 'annual' else 1)
-            if p.id != source.id and Decimal(str(price)) / (12 if interval == 'annual' else 1) > old_price:
+            if is_downgrade(source=source, target=p) and Decimal(str(price)) / (12 if interval == 'annual' else 1) > old_price:
                 continue
             result['items'].append({'code': p.code, 'revision': p.revision, 'interval': interval,
                 'name': c['name'], 'price': price, 'currency': c['currency'], **{k: c[k] for k in (*LIMITS, 'schedule_frequencies', 'email_delivery')}})

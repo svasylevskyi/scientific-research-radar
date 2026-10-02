@@ -44,12 +44,16 @@ def test_service_dependencies_have_no_cycles():
 def test_billing_foundations_only_depend_on_lower_layers():
     allowed = {
         "billing_types": set(),
+        # Pure entitlement comparison is shared by renewal options and invoice
+        # assessment. It may not depend on provider, observation, or command layers.
+        "billing_renewal_policy": {"billing_types"},
         "billing_provider": {"stripe_catalogue_service", "billing_types"},
         "billing_payment_rules": {"billing_provider", "billing_types"},
         "billing_policy": {"billing_provider", "billing_payment_rules", "billing_types"},
         "billing_invoice_service": {
             "billing_provider",
             "billing_payment_rules",
+            "billing_renewal_policy",
             "stripe_catalogue_service",
         },
         "billing_change_observation": {
@@ -83,6 +87,7 @@ def test_observers_and_payment_rules_leave_transactions_to_callers():
         "billing_change_observation",
         "billing_upgrade_observation",
         "billing_payment_rules",
+        "billing_renewal_policy",
     ):
         for node in ast.walk(ast.parse((SERVICES / f"{name}.py").read_text())):
             if not isinstance(node, ast.Call) or not isinstance(

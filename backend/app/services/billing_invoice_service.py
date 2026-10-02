@@ -192,6 +192,22 @@ def assessment(db, checkout, at, grace_days, *, invoice_id=None, _depth=0):
     if invoice.status == 'paid' and invoice.paid_at and invoice.amount_remaining == 0:
         result.update(covered=utc(invoice.period_start) <= at < utc(invoice.period_end), paid_through=utc(invoice.period_end))
     elif invoice.status == 'open' and invoice.attempt_count > 0 and invoice.billing_reason in {'subscription_cycle', 'subscription_update'}:
+        # A first invoice for a scheduled higher tier cannot borrow grace from
+        # payment for the old lower tier. Binding a verified schedule's price
+        # is not entitlement activation. Later ordinary renewals retain grace.
+        from app.models.subscription_change import SubscriptionChange
+        from app.services.billing_renewal_policy import is_renewal_upgrade
+        transition = db.scalar(select(SubscriptionChange).where(
+            SubscriptionChange.checkout_id == checkout.id,
+            SubscriptionChange.target_revision_id == checkout.plan_revision_id,
+            SubscriptionChange.applied_at.is_not(None),
+            SubscriptionChange.effective_at == invoice.period_start)
+            .order_by(SubscriptionChange.created_at.desc()).limit(1))
+        if transition and is_renewal_upgrade(
+            source=db.get(SubscriptionPlanRevision, transition.source_revision_id),
+            target=db.get(SubscriptionPlanRevision, transition.target_revision_id),
+        ):
+            return result
         candidates = list(db.scalars(select(BillingInvoice).where(
             BillingInvoice.checkout_id == checkout.id, BillingInvoice.id != invoice.id, BillingInvoice.status == 'paid',
             BillingInvoice.issue.is_(None), BillingInvoice.amount_remaining == 0, BillingInvoice.paid_at.is_not(None),

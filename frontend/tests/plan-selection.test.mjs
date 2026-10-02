@@ -138,7 +138,7 @@ test('saved pending upgrades retain payment/retry actions and saved preview revi
 test('saved renewal change can be undone only after explicit confirmation',async()=>{
  const app=await dialogHarness();app.settings.account.changes.change={id:'change',state:'scheduled',plan_name:'Basic',price:'5',currency:'eur',interval:'monthly',effective_at:'2030-12-01',undo_allowed:true,retry_allowed:false};
  button(app.render().status,'Undo scheduled change').props.onClick();assert.equal(app.calls.length,0);
- button(app.render().dialog,'Confirm undo').props.onClick();await tick();assert.deepEqual(plain(app.calls),[['changeAction','change','undo']]);
+ button(app.render().dialog,'Cancel requested change').props.onClick();await tick();assert.deepEqual(plain(app.calls),[['changeAction','change','undo']]);
 });
 test('closing a modal makes no payment or scheduling request',async()=>{
  const app=await dialogHarness();app.render().choose(choices.planChoice(low,'monthly',app.settings.account));button(app.render().dialog,'Cancel').props.onClick();
