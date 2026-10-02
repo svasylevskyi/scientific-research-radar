@@ -22,8 +22,7 @@ import {
   subscriptionDate,
 } from "../components/SubscriptionOverview";
 import { SubscriberBilling } from "../components/SubscriberBilling";
-import { SubscriptionUpgrades } from "../components/SubscriptionUpgrades";
-import { SubscriptionChanges } from "../components/SubscriptionChanges";
+import { SubscriptionPlanCatalogue } from "./PlansPage";
 import { FreeDigestPreferences } from "../components/FreeDigestPreferences";
 import { PaidDigestPreferences } from "../components/PaidDigestPreferences";
 import { AdminSubscriptionAccessPage } from "./AdminSubscriptionAccessPage";
@@ -50,7 +49,7 @@ export function SubscriptionAccessPage({ admin = false }: { admin?: boolean }) {
   );
 }
 function SubscriberSections() {
-  const { access, notices, upgrades, changes } = useSubscription();
+  const { access, notices } = useSubscription();
   const location = useLocation();
   const navigate = useNavigate();
   const section = subscriptionSection(location.hash);
@@ -116,36 +115,7 @@ function SubscriberSections() {
               tabIndex={-1}
               sx={{ scrollMarginTop: 100 }}
             >
-              {name === "plans" && (
-                <>
-                  <Paper variant="outlined" sx={{ p: 3 }}>
-                    <Typography>
-                      Paid upgrades start after the prorated payment is
-                      verified. Downgrades and monthly/yearly switches start at
-                      renewal. Free is available after registration; cancelling
-                      a paid plan moves it to Free after verified paid access
-                      ends.
-                    </Typography>
-                    {(access.billing_type === "stripe" || upgrades.upgrade) && <Button component={Link} to="/radar/plans">
-                      Subscription Plans
-                    </Button>}
-                  </Paper>
-                  {(access.billing_type === "stripe" || upgrades.upgrade) ? (
-                    <SubscriptionUpgrades />
-                  ) : (
-                    <Paper id="upgrade" tabIndex={-1} variant="outlined" sx={{ p: 3, scrollMarginTop: 100 }}>
-                      <Typography variant="h6">Upgrade options</Typography>
-                      <Typography>Compare paid plans and their included allowances.</Typography>
-                      <Button component={Link} to="/radar/plans">Subscription Plans</Button>
-                    </Paper>
-                  )}
-                  <Box id="changes" tabIndex={-1} sx={{ scrollMarginTop: 100 }}>
-                    {(access.billing_type === "stripe" || changes.change) && (
-                      <SubscriptionChanges />
-                    )}
-                  </Box>
-                </>
-              )}
+              {name === "plans" && <SubscriptionPlanCatalogue />}
               {name === "billing" && (
                 <>
                   <SubscriberBilling />
