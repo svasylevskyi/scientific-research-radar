@@ -20,7 +20,7 @@ export function listRange(page: number, pageSize: number, total: number, count: 
 /** Navigation only: never trust a supplied return URL as an authorization or identity claim. */
 export function safeSupportReturn(value: string | null): string | null {
   if (!value || value.length > 8192 || /[\\\u0000-\u001f\u007f#]/.test(value)) return null;
-  const path = value.split("?")[0];
+  const path = value.split("?")[0] ?? "";
   return /^\/admin\/(?:messages|users(?:\/[a-zA-Z0-9-]+)?|digests)$/.test(path) ? value : null;
 }
 
@@ -41,7 +41,7 @@ export function matchingUsersPath(email: string, messagesPath: string): string {
 }
 
 export function withSupportReturn(path: string, origin: string): string {
-  const [pathname, query] = path.split("?");
+  const [pathname = "", query] = path.split("?");
   const params = new URLSearchParams(query);
   const back = safeSupportReturn(origin);
   if (back) params.set("support_return", back);

@@ -127,7 +127,7 @@ export function ManagedUserPage({ userId }: { userId: string }) {
     ["Subscription access", `/admin/subscription-access?user_id=${encodeURIComponent(userId)}`, "Effective access rules and research allowances."],
     ["Billing synchronization", `/admin/billing-sync?user_id=${encodeURIComponent(userId)}`, "Recorded payment state and billing reconciliation tools."],
     ["Subscription observation", `/admin/subscription-observation?user_id=${encodeURIComponent(userId)}`, "Usage comparisons only; observation assignments do not change billing or enforce access."],
-  ];
+  ] as const;
   return <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}><AppHeader />
     <Container component="main" maxWidth="md" sx={{ py: { xs: 3, sm: 6 } }}>
       <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
