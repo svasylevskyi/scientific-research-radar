@@ -208,3 +208,15 @@ test("new digest defaults are unchanged and remain independent of random hints",
   assert.equal(defaults.topic, ""); assert.equal(defaults.maximumPapers, "20");
   assert.deepEqual([...defaults.targetAudience], ["general"]); assert.equal(app.hintCalls(), 0);
 });
+
+test("a hidden page-tab form keeps its draft and defers failure focus until visible", async () => {
+  const app = await harness(); let tree = app.render();
+  topicInput(tree).props.onChange({ target: { value: "Unsaved topic across page tabs" } });
+  tree = app.render({ visible: false, submitNotice: { severity: "error", message: "Save failed" } });
+  assert.equal(topicInput(tree).props.value, "Unsaved topic across page tabs");
+  assert.equal(app.events.length, 0);
+  tree = app.render({ visible: true });
+  assert.equal(topicInput(tree).props.value, "Unsaved topic across page tabs");
+  assert.ok(app.events.some(([kind]) => kind === "focus"));
+  assert.equal(app.requests.length, 0);
+});

@@ -72,6 +72,7 @@ interface DigestFormProps {
   isSubmitting: boolean;
   paperLimit?: number;
   submitDisabled?: boolean;
+  visible?: boolean;
   paperHint?: string;
   submitNotice?: { severity: "success" | "error"; message: string } | null;
   onEdit?: () => void;
@@ -122,6 +123,7 @@ export function DigestForm({
   isSubmitting,
   paperLimit = MAXIMUM_PAPERS_LIMIT,
   submitDisabled = false,
+  visible = true,
   paperHint,
   submitNotice,
   onEdit,
@@ -144,12 +146,12 @@ export function DigestForm({
   const invalidFields = (Object.keys(fieldLabels) as (keyof DigestFormValues)[]).filter((field) => errors[field]);
 
   useEffect(() => {
-    if (validationAttempt > 0) revealAndFocus(validationRef.current);
-  }, [validationAttempt]);
+    if (visible && validationAttempt > 0) revealAndFocus(validationRef.current);
+  }, [validationAttempt, visible]);
   useEffect(() => {
     // Scalar dependencies avoid refocusing whenever a parent constructs a new notice object.
-    if (!isSubmitting && visibleNotice?.severity === "error") revealAndFocus(noticeRef.current);
-  }, [isSubmitting, visibleNotice?.severity, visibleNotice?.message]);
+    if (visible && !isSubmitting && visibleNotice?.severity === "error") revealAndFocus(noticeRef.current);
+  }, [visible, isSubmitting, visibleNotice?.severity, visibleNotice?.message]);
 
   function focusField(field: keyof DigestFormValues) {
     const wrapper = formRef.current?.querySelector(`[data-digest-field="${field}"]`);

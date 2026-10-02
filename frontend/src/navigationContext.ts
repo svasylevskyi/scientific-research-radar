@@ -46,6 +46,16 @@ export function qualitySection(hash: string) {
   return hash === "#benchmarks" || hash === "#benchmark-review" ? "benchmarks" : "settings";
 }
 
+/** Page-level settings are separate from the selected run's output_tab=details. */
+export type DigestPageTab = "details" | "output";
+export function digestPageTab(search: URLSearchParams): DigestPageTab {
+  return search.get("digest_tab") === "details" ? "details" : "output";
+}
+
+export function digestPageQuery(search: URLSearchParams, tab: DigestPageTab, runId?: string | null) {
+  return updateQuery(search, { digest_tab: tab, ...(runId ? { run_id: runId } : {}) });
+}
+
 /** Keep list filters, return_to and diagnostics while pinning both run and paper. */
 export function paperQuery(search: URLSearchParams, runId: string, paperId: string, admin = false): URLSearchParams {
   const next = new URLSearchParams(search);
@@ -54,6 +64,7 @@ export function paperQuery(search: URLSearchParams, runId: string, paperId: stri
   next.set("paper_run_id", runId);
   next.set("paper_id", paperId);
   if (admin) next.set("run_section", "output");
+  else next.set("digest_tab", "output");
   return next;
 }
 

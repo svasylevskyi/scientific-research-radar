@@ -382,13 +382,13 @@ test("target waits for matching paper data and does not focus unknown IDs", asyn
 async function workspaceView(search = "", admin = false) {
   const view = renderer();
   const state = { search: new URLSearchParams(search), options: null, resource: {data: null, error: "", loading: false} };
-  const props = {admin, digestId: "d1", runs: [fixtureRun()], latestRun: fixtureRun(), details: "Editable form", runBlocked: false, onRetry: noop, onUpdate: noop};
+  const props = {admin, digestId: "d1", runs: [fixtureRun()], latestRun: fixtureRun(), runBlocked: false, onRetry: noop, onUpdate: noop};
   const {DigestWorkspace} = await load("../src/components/DigestWorkspace.tsx", {
     react: view.react, "react-router-dom": {useSearchParams: () => [state.search, (update, options) => {
       state.search = typeof update === "function" ? update(state.search) : update; state.options = options;
     }]}, "../api/client": {ApiError: Error}, "../api/digests": {}, "../auth/AuthContext": {useAuth: () => ({user: {id: "u"}})},
     "../hooks/usePollingResource": {usePollingResource: () => state.resource}, "../runHistory": history, "../navigationContext": navigation,
-    ...Object.fromEntries(["ResourceNotice", "RetryRunButton", "DigestRunFeedback", "DigestRunProgress", "AdminRunDiagnostics", "SelectedRunOverview"]
+    ...Object.fromEntries(["ResourceNotice", "RetryRunButton", "DigestRunFeedback", "DigestRunProgress", "AdminRunDiagnostics", "SelectedRunOverview", "DigestRunDetails"]
       .map(name => [`./${name}`, {[name]: name}])),
     "./DigestRunResults": {DigestBriefingResult: "DigestBriefingResult", TrendAnalysisResult: "TrendAnalysisResult", PaperSummariesResult: "PaperSummariesResult"},
   }, {document: view.document});
