@@ -46,8 +46,8 @@ export function subscriptionAction(
     };
   if (billing.resume_allowed)
     return {
-      text: "You have an unfinished checkout. Resume it before choosing another paid plan.",
-      label: "Resume checkout",
+      text: "You have an unfinished checkout. Resume it or choose another plan to replace it after confirmation.",
+      label: "Resume Checkout",
       hash: "#billing",
     };
   if (access.payment_issue || !access.allowed || access.grace_until)
