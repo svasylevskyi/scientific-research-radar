@@ -3,7 +3,6 @@ import { usePollingResource } from "../hooks/usePollingResource";
 import { AdminDigestNavigation } from "../components/AdminDigestNavigation";
 import { useSubscriptionAccess } from "../hooks/useSubscriptionAccess";
 import { AllowanceNotice } from "../components/AllowanceNotice";
-import { RetryRunButton } from "../components/RetryRunButton";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
@@ -20,24 +19,21 @@ import {
   DialogContentText,
   DialogTitle,
   Paper,
-  Stack,
   Tab,
   Tabs,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi, digestsApi } from "../api/digests";
 import { AppHeader } from "../components/AppHeader";
 import { DigestForm, digestToFormValues } from "../components/DigestForm";
-import { DigestRunFeedback } from "../components/DigestRunFeedback";
-import { DigestRunProgress } from "../components/DigestRunProgress";
 import { DigestWorkspace } from "../components/DigestWorkspace";
 import type { AdminDigest, Digest, DigestInput, DigestRunDetail, DigestRunSummary } from "../types/digest";
 import { startPagePolling } from "../pagePolling";
-import { loadRunHistory } from "../runHistory";
-import { listReturnTo, updateQuery } from "../navigationContext";
+import { defaultRunId, loadRunHistory } from "../runHistory";
+import { digestPageQuery, digestPageTab, listReturnTo, queryPath, updateQuery, type DigestPageTab } from "../navigationContext";
 
 interface DigestDetailPageProps {
   admin?: boolean;
@@ -57,7 +53,11 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
-  const routeState = location.state as { success?: string } | null;
+  const pageId = useId();
+  const pageTab = digestPageTab(searchParams);
+  const routeState = location.state as { success?: string; focusDigestSettingsFor?: string } | null;
+  const editHeading = useRef<HTMLHeadingElement>(null);
+  const focusedSettingsLocation = useRef<string | null>(null);
   const backPath = listReturnTo(searchParams, admin ? "/admin/digests" : "/radar");
   const [digestRecord, setDigest] = useState<Digest | null>(null);
   const digest = digestRecord?.id === digestId ? digestRecord : null;
@@ -67,11 +67,17 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const [activeRun, setActiveRun] = useState<DigestRunDetail | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isStartingRun, setIsStartingRun] = useState(false);
-  const [isSavingFeedback, setIsSavingFeedback] = useState(false);
-  const [runTab, setRunTab] = useState(0);
-  const [hasRuns, setHasRuns] = useState(false);
   const [runs, setRuns] = useState<DigestRunSummary[]>([]);
-  const hasSuccessfulRun = runs.some((run) => run.status === "completed");
+  const selectedRunId = searchParams.get("run_id") || defaultRunId(runs) || runs[0]?.id || "";
+  const detailsPath = queryPath(`/radar/digests/${encodeURIComponent(digestId)}`,
+    digestPageQuery(searchParams, "details", selectedRunId));
+  function changePageTab(tab: DigestPageTab) {
+    setSearchParams(current => digestPageQuery(current, tab, selectedRunId), { preventScrollReset: true });
+  }
+  function showRunProgress(runId: string) {
+    setSearchParams(current => updateQuery(current, { digest_tab: "output", run_id: runId,
+      output_tab: "steps", paper_id: null, paper_run_id: null }), { preventScrollReset: true });
+  }
 
   function updateRun(run: DigestRunDetail) {
     setRuns((current) => current.some((item) => item.id === run.id)
@@ -99,13 +105,13 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   const isLoading = initial.loading;
   useEffect(() => {
     setDigest(null); setSaveNotice(null); setError(null);
-    setRuns([]); setLatestRun(null); setActiveRun(null); setRunTab(0); setConfirmRun(false);
+    setRuns([]); setLatestRun(null); setActiveRun(null); setConfirmRun(false);
   }, [admin, digestId]);
   useEffect(() => {
     if (!initial.data) return;
     const { digestResult, history, accountActiveRun, latest } = initial.data;
     setDigest(digestResult); setActiveRun(accountActiveRun);
-    setHasRuns(history.length > 0); setRuns(history); setLatestRun(latest);
+    setRuns(latest && !history.some(item => item.id === latest.id) ? [latest, ...history] : history); setLatestRun(latest);
   }, [initial.data]);
 
   useEffect(() => {
@@ -130,7 +136,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
         if (accountActiveRun) {
           setConfirmRun(false);
           setActiveRun(accountActiveRun);
-          if (accountActiveRun.digest_id === digestId) { setHasRuns(true); setLatestRun(accountActiveRun); updateRun(accountActiveRun); }
+          if (accountActiveRun.digest_id === digestId) { setLatestRun(accountActiveRun); updateRun(accountActiveRun); }
           await scheduleRead;
           return;
         }
@@ -140,7 +146,6 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
           if (!mounted) return;
           setLatestRun(finished);
           updateRun(finished);
-          setHasRuns(true);
           setSuccess(finished.status === "completed" ? "Radar run completed." : null);
         }
         setActiveRun(null);
@@ -155,8 +160,13 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   }, [activeRun?.id, admin, digestId, isLoading, isStartingRun, initial.error, !!digest]);
 
   useEffect(() => {
-    if (runTab === 1 && latestRun?.status !== "completed") setRunTab(0);
-  }, [latestRun?.id, latestRun?.status, runTab]);
+    // Only the explicit snapshot -> editor link requests focus. Polling never does.
+    if (admin || !digest || isLoading || pageTab !== "details" ||
+      routeState?.focusDigestSettingsFor !== digestId || focusedSettingsLocation.current === location.key) return;
+    focusedSettingsLocation.current = location.key;
+    editHeading.current?.focus({ preventScroll: true });
+    editHeading.current?.scrollIntoView({ block: "start", behavior: "auto" });
+  }, [admin, digestId, !!digest, isLoading, pageTab, location.key, routeState?.focusDigestSettingsFor]);
 
   async function runNow() {
     if (isStartingRun || isSaving || activeRun || !access?.run_allowed || subscription.error) return;
@@ -166,12 +176,10 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
     setSuccess(null);
     try {
       const run = await digestRunsApi.runNow(digestId);
-      setRunTab(0);
-      setHasRuns(true);
       setActiveRun(run);
       setLatestRun(run);
       updateRun(run);
-      setSearchParams(current => updateQuery(current, { run_id: run.id }), { preventScrollReset: true });
+      showRunProgress(run.id);
       setSuccess("Radar run started. You can continue using the application.");
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
@@ -193,7 +201,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
     try {
       const retried = await digestRunsApi.retry(digestId, run.id);
       updateRun(retried); setLatestRun(retried); setActiveRun(retried);
-      setSearchParams(current => updateQuery(current, { run_id: retried.id }), { preventScrollReset: true });
+      showRunProgress(retried.id);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "Could not retry this run.");
     } finally {
@@ -223,21 +231,6 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
     }
   }
 
-  async function saveFeedback(feedback: string) {
-    if (!latestRun) return;
-    setIsSavingFeedback(true);
-    setError(null);
-    try {
-      const updated = await digestRunsApi.updateFeedback(digestId, latestRun.id, feedback);
-      setLatestRun(updated);
-      setSuccess("Feedback saved. It will help refine subsequent runs for this digest.");
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not save your feedback.");
-    } finally {
-      setIsSavingFeedback(false);
-    }
-  }
-
   async function deleteDigest() {
     setIsSaving(true);
     setError(null);
@@ -257,16 +250,16 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
 
   const runBlocked = activeRun !== null;
   const currentDigestIsRunning = activeRun?.digest_id === digestId;
-  const displayedRun = currentDigestIsRunning ? activeRun : latestRun;
 
   const digestDetails = digest ? (
     <>
       <DigestForm
-        key={digest.updated_at}
+        key={`${digest.id}:${digest.updated_at}`}
         initialValues={digestToFormValues(digest)}
         paperLimit={Math.max(digest.maximum_papers, access?.paper_limit ?? digest.maximum_papers)}
         paperHint={access?.plan ? `Plan limit: ${access.plan.configuration.max_papers_per_run} papers per run. Reduce an oversized saved setting before running.` : undefined}
         submitDisabled={!access || !!subscription.error}
+        visible={admin || pageTab === "details"}
         submitLabel="Save changes"
         submitNotice={saveNotice}
         onEdit={() => setSaveNotice(null)}
@@ -295,7 +288,7 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
   return (
     <Box sx={{ minHeight: "100%", bgcolor: "background.default" }}>
       <AppHeader />
-      <Container component="main" maxWidth={!admin && hasSuccessfulRun ? "lg" : "md"} sx={{ py: { xs: 3, sm: 6 } }}>
+      <Container component="main" maxWidth={false} sx={{ py: { xs: 3, sm: 6 } }}>
         <Button
           component={RouterLink}
           to={backPath}
@@ -315,7 +308,16 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
           initial.error ? null : <Typography role="status">Opening digest…</Typography>
         ) : (
           <>
-            {admin && <AdminDigestNavigation digestId={digestId} current="details" />}
+            {admin ? <AdminDigestNavigation digestId={digestId} current="details" /> : (
+              <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden", mb: 3 }}>
+                <Tabs value={pageTab} onChange={(_event, tab: DigestPageTab) => changePageTab(tab)}
+                  variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile aria-label="Digest page sections"
+                  sx={{ "& .MuiTab-root.Mui-focusVisible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 } }}>
+                  <Tab value="details" label="Digest Details" id={`${pageId}-tab-details`} aria-controls={`${pageId}-panel-details`} />
+                  <Tab value="output" label="Output & history" id={`${pageId}-tab-output`} aria-controls={`${pageId}-panel-output`} />
+                </Tabs>
+              </Paper>
+            )}
             <Typography component="h1" variant="h3" sx={{ mb: 1 }}>{digest.topic}</Typography>
             {admin ? (
               <Typography color="text.secondary" sx={{ mb: 3 }}>
@@ -391,46 +393,45 @@ export function DigestDetailPage({ admin = false }: DigestDetailPageProps) {
                         Open active digest
                       </Button>
                     )}
-                    {currentDigestIsRunning && hasSuccessfulRun && (
-                    <Button size="small" onClick={() => setSearchParams(current => updateQuery(current, { run_id: activeRun.id }), { preventScrollReset: true })}>View progress</Button>
+                    {currentDigestIsRunning && (
+                    <Button size="small" onClick={() => showRunProgress(activeRun.id)}>View progress</Button>
                     )}
                   </Alert>
                 )}
               </Paper>
             )}
-            {!admin && hasSuccessfulRun ? (
-              <DigestWorkspace key={digestId} digestId={digestId} runs={runs} latestRun={latestRun}
-                details={digestDetails} runBlocked={runBlocked || isStartingRun} onRetry={retryRun} onUpdate={updateRun} />
-            ) : !admin && hasRuns && displayedRun ? (
-              <Box>
-                <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden", mb: 3 }}>
-                  <Tabs
-                    value={runTab}
-                    onChange={(_event, value) => setRunTab(value)}
-                    variant="scrollable"
-                    scrollButtons="auto"
-                    aria-label="Latest radar run, feedback, and digest details"
-                  >
-                    <Tab label={currentDigestIsRunning ? "Current Run" : "Latest Run"} />
-                    <Tab label="Feedback" disabled={displayedRun.status !== "completed"} />
-                    <Tab label="Digest Details" />
-                  </Tabs>
-                </Paper>
-                {runTab === 0 && <Stack spacing={2}>
-                  <DigestRunProgress run={displayedRun} />
-                  {displayedRun.status === "failed" && <RetryRunButton digestId={digestId} runId={displayedRun.id} disabled={runBlocked || isStartingRun} onRetry={() => void retryRun(displayedRun)} />}
-                </Stack>}
-                {runTab === 1 && displayedRun.status === "completed" && (
-                  <DigestRunFeedback
-                    run={displayedRun}
-                    editable={displayedRun.id === latestRun?.id}
-                    isSaving={isSavingFeedback}
-                    onSave={saveFeedback}
-                  />
-                )}
-                {runTab === 2 && digestDetails}
+            {admin ? digestDetails : <>
+              <Box role="tabpanel" id={`${pageId}-panel-details`} aria-labelledby={`${pageId}-tab-details`}
+                hidden={pageTab !== "details"} tabIndex={0} sx={{ minWidth: 0 }}>
+                <Box sx={{ width: "100%", maxWidth: 960, minWidth: 0, mx: "auto" }}>
+                  <Typography component="h2" variant="h5" ref={editHeading} tabIndex={-1}
+                    sx={{ mb: 1, scrollMarginTop: 24 }}>Current digest details</Typography>
+                  <Typography color="text.secondary" sx={{ mb: 3, width: "100%" }}>
+                    Update the saved settings used for future runs. Existing runs keep their own read-only settings and results.
+                  </Typography>
+                  {digestDetails}
+                </Box>
               </Box>
-            ) : digestDetails}
+              <Box role="tabpanel" id={`${pageId}-panel-output`} aria-labelledby={`${pageId}-tab-output`}
+                hidden={pageTab !== "output"} tabIndex={0} sx={{ minWidth: 0 }}>
+                {runs.length > 0 ? (
+                  <DigestWorkspace key={digestId} digestId={digestId} runs={runs} latestRun={latestRun}
+                    visible={pageTab === "output"} runBlocked={runBlocked || isStartingRun} onRetry={retryRun} onUpdate={updateRun} />
+                ) : (
+                  <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
+                    <Typography component="h2" variant="h6" gutterBottom>No research runs yet</Typography>
+                    <Typography color="text.secondary" sx={{ mb: 2 }}>
+                      Your digest settings are saved. Use Run now above to start research, or set a schedule.
+                      Results and run history will appear here. Saving or editing a digest does not start research.
+                    </Typography>
+                    <Button component={RouterLink} to={detailsPath} state={{ focusDigestSettingsFor: digestId }}>
+                      Edit current digest details
+                    </Button>
+                  </Paper>
+                )}
+              </Box>
+            </>}
+
           </>
         )}
       </Container>

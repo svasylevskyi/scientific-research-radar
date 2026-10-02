@@ -178,7 +178,7 @@ test('run views survive copied URLs and history changes, without resetting scrol
     });
     const run = {id: 'r', status: 'completed', started_at: '2026-09-25T10:00:00Z', paper_results: [], briefing: {}};
     return {router, render: () => runtime.render(() => DigestWorkspace({admin, digestId: 'd', runs: [run], latestRun: run,
-      details: 'Digest form', runBlocked: false, onRetry: noop, onUpdate: noop}))};
+      runBlocked: false, onRetry: noop, onUpdate: noop}))};
   }
   const {render, router} = await workspace(true, 'return_to=%2Fadmin%2Fdigests%3Fowner_query%3DAda%26page%3D3');
   let tree = render();

@@ -19,8 +19,9 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { DigestRunDetails } from "./DigestRunDetails";
 import { SelectedRunOverview } from "./SelectedRunOverview";
 import { ApiError } from "../api/client";
 import { adminDigestsApi, digestRunsApi } from "../api/digests";
@@ -35,13 +36,13 @@ import {
   TrendAnalysisResult,
 } from "./DigestRunResults";
 import { defaultRunId, filterRuns, runDate, resultTab } from "../runHistory";
-import { diagnosticTab, queryPath, updateQuery, withReturnTo, paperQuery, selectedPaperId } from "../navigationContext";
+import { diagnosticTab, queryPath, updateQuery, withReturnTo, paperQuery, selectedPaperId, digestPageQuery } from "../navigationContext";
 
 export function DigestWorkspace({
   digestId,
   runs,
   latestRun,
-  details,
+  visible = true,
   runBlocked,
   onRetry,
   onUpdate,
@@ -51,7 +52,7 @@ export function DigestWorkspace({
   digestId: string;
   runs: DigestRunSummary[];
   latestRun: DigestRunDetail | null;
-  details: ReactNode;
+  visible?: boolean;
   runBlocked: boolean;
   onRetry: (run: DigestRunDetail) => Promise<void>;
   onUpdate: (run: DigestRunDetail) => void;
@@ -112,13 +113,14 @@ export function DigestWorkspace({
   const paperHref = (paperId: string) => queryPath(admin ? `/admin/digests/${digestId}/runs` : `/radar/digests/${digestId}`, paperQuery(search, selectedId, paperId, admin));
   const previousView = useRef({ tab: activeTab, paper: targetPaperId, runId: selectedId });
   useEffect(() => {
+    if (!visible) return;
     // Back from a paper link restores a useful focus point. Polling does not move focus.
     if (run && previousView.current.runId === selectedId && previousView.current.tab === "papers"
       && previousView.current.paper && activeTab !== "papers") {
       document.getElementById(`output-tab-${activeTab}`)?.focus({ preventScroll: true });
     }
     previousView.current = { tab: activeTab, paper: targetPaperId, runId: selectedId };
-  }, [activeTab, targetPaperId, selectedId, !!run]);
+  }, [activeTab, targetPaperId, selectedId, !!run, visible]);
   const invalidRange = Boolean(from && to && from > to);
   const filtered = filterRuns(runs, from, to).filter((item) => {
     if (item.status === "queued" || item.status === "running")
@@ -331,7 +333,7 @@ export function DigestWorkspace({
             onChange={(_event, value) => changeView({ output_tab: value })}
             variant="scrollable"
             scrollButtons="auto"
-            aria-label={admin ? "Run output" : "Digest results and settings"}
+            aria-label={admin ? "Run output" : "Selected run output and saved details"}
             sx={{ "& .MuiTab-root.Mui-focusVisible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 } }}
           >
             <Tab
@@ -363,7 +365,10 @@ export function DigestWorkspace({
           </Tabs>
         </Paper>
         {!admin && <Box role="tabpanel" id="digest-details-panel" aria-labelledby="output-tab-details" tabIndex={0} hidden={activeTab !== "details"}>
-          {details}
+          {loading && !run ? <CircularProgress aria-label="Loading saved run details" /> : run ? (
+            <DigestRunDetails run={run} settingsHref={queryPath(`/radar/digests/${encodeURIComponent(digestId)}`,
+              digestPageQuery(search, "details", selectedId))} />
+          ) : <Typography role="status">Saved settings are unavailable for the selected run. No current digest settings have been substituted.</Typography>}
         </Box>}
         {activeTab !== "details" &&
           (loading && !run ? (
@@ -374,7 +379,7 @@ export function DigestWorkspace({
                 {activeTab === "none" && <Alert severity="info">No research output is available for this run. Check Run Diagnostics for execution details.</Alert>}
                 {activeTab === "briefing" && <DigestBriefingResult key={run.id} run={run} paperHref={paperHref} />}
                 {activeTab === "trends" && <TrendAnalysisResult key={run.id} run={run} paperHref={paperHref} />}
-                {activeTab === "papers" && <PaperSummariesResult key={run.id} run={run} targetPaperId={targetPaperId} />}
+                {activeTab === "papers" && <PaperSummariesResult key={run.id} run={run} targetPaperId={visible ? targetPaperId : null} />}
                 {activeTab === "steps" && (
                   <Stack spacing={2}>
                     <DigestRunProgress run={run} />

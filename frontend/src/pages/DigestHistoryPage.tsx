@@ -99,18 +99,6 @@ export function DigestHistoryPage({ admin = false }: { admin?: boolean }) {
                 await resource.refresh();
               }}
               onUpdate={() => void resource.refresh()}
-              details={
-                <Paper variant="outlined" sx={{ p: 3 }}>
-                  <Typography variant="h6">Research scope</Typography>
-                  <Typography>{data.digest.topic}</Typography>
-                  <Button
-                    component={Link}
-                    to={`${admin ? "/admin" : "/radar"}/digests/${digestId}${location.search}`}
-                  >
-                    Open digest details and settings
-                  </Button>
-                </Paper>
-              }
             />
           ) : (
             <Paper variant="outlined" sx={{ p: 3 }}>
