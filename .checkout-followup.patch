@@ -1,0 +1,70 @@
+--- a/backend/app/services/stripe_sandbox_service.py
++++ b/backend/app/services/stripe_sandbox_service.py
+@@ -194,12 +194,14 @@
+     # Trial/quota settings remain catalogue-only in this initial paid test.
+     if plan.configuration.get("trial_days", 0):
+         raise Error("Checkout requires a plan revision with no trial.", 422)
++    price_key = "monthly_price" if interval == "monthly" else "annual_price"
++    mapping_key = "monthly_price_id" if interval == "monthly" else "annual_price_id"
++    price = (plan.configuration.get("stripe_sandbox") or {}).get(mapping_key)
++    if plan.configuration.get(price_key) is None or not price:
++        raise Error("This interval has no mapped price.", 422)
+     report = client.mapping(plan.configuration)
+     if not report["matches"]:
+         raise Error("The saved plan revision no longer matches Stripe: " + "; ".join(report["issues"]), 422)
+-    price = plan.configuration["stripe_sandbox"].get("monthly_price_id" if interval == "monthly" else "annual_price_id")
+-    if not price:
+-        raise Error("This interval has no mapped price.", 422)
+     return plan, price
+ 
+ 
+--- a/backend/app/services/checkout_replacement_service.py
++++ b/backend/app/services/checkout_replacement_service.py
+@@ -101,6 +101,7 @@
+             return replace(db, settings, uid, expected_attempt_id, code, revision, interval, client=client)
+         if not billing.replacement_pending(source):
+             raise billing.Error('The replacement status changed. Refresh billing before retrying.', 409)
++    intent_id = source.replacement_intent['id']
+     try:
+         value = _canonical(db, client, source)
+         if value['status'] == 'open':
+@@ -120,8 +121,13 @@
+         return billing.start_checkout(db, settings, uid, revision, interval, code=code,
+             subscriber=True, client=client, replacement_source_id=source.id)
+     except billing.Error:
++        # _stop may have committed. Never let this request's error overwrite a
++        # different intent accepted while that account lock was released.
++        billing.lock_account(db, uid)
+         current = billing.latest(db, uid)
+-        if current and current.id == source.id and source.checkout_status == 'expired':
++        intent = (current.replacement_intent or {}) if current else {}
++        if (current and current.id == source.id and source.checkout_status == 'expired'
++            and intent.get('id') == intent_id and intent.get('state') == 'pending'):
+             # Expiration is final, but a withdrawn target must not trap the account.
+             source.replacement_intent = {**source.replacement_intent, 'state': 'blocked'}
+             db.commit()
+--- a/backend/tests/test_api_contracts.py
++++ b/backend/tests/test_api_contracts.py
+@@ -15,7 +15,7 @@
+     assert {
+         route.endpoint.__module__.split(".")[-1] for route in routes
+     } == CONTRACT_MODULES
+-    assert len(routes) == 75
++    assert len(routes) == 76
+     for route in routes:
+         assert route.response_model is not None, route.path
+         if route.endpoint.__module__ not in {"app.api.routes.contact", "app.api.routes.research_quality", "app.api.routes.benchmark_review", "app.api.routes.claim_reviews", "app.api.routes.account_closure"}:
+--- a/docs/checkout-replacement.md
++++ b/docs/checkout-replacement.md
+@@ -51,8 +51,9 @@
+ 
+ Deploy backend and frontend together with migration `20261002_0035` (one nullable
+ JSON column; existing records remain unchanged). The migration cannot be rolled
+-back while a replacement intent is pending. Reconcile first or deploy compatible
+-forward code. Existing Checkout Sessions write permission is used for expiration;
++back while a replacement intent is pending. Do not roll the API back to code
++that ignores this fence while a replacement is unresolved. Reconcile first or
++deploy compatible forward code. Existing Checkout Sessions write permission is used for expiration;
+ no new environment variable or Stripe product/price mapping is introduced.
+ 
+ Automated tests use PostgreSQL and a fake Stripe transport, including expiration
