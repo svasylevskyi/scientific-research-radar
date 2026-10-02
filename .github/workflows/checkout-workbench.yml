@@ -31,19 +31,21 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - name: Apply checksum-verified source patch
+      - name: Apply checksum-verified source patches
         shell: bash
         run: |
           python - <<'PY'
           import base64, gzip, hashlib, pathlib, subprocess
           parts = [pathlib.Path(f'.checkout-patch-{i}.b64') for i in range(7)]
-          for path in parts:
-              print(path.name, len(path.read_text().strip()), hashlib.sha256(path.read_bytes()).hexdigest())
           patch = gzip.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts), validate=True))
           assert hashlib.sha256(patch).hexdigest() == '9929b70eae66dc62822843186b1fd7ff7a312e9e356cda53f0596985f33554ae'
           pathlib.Path('/tmp/checkout.patch').write_bytes(patch)
           subprocess.run(['git', 'apply', '--check', '/tmp/checkout.patch'], check=True)
           subprocess.run(['git', 'apply', '/tmp/checkout.patch'], check=True)
+          followup = pathlib.Path('.checkout-followup.patch').read_bytes()
+          assert hashlib.sha256(followup).hexdigest() == 'a8d94a3dd410aea3c3d57233ad338fb10c7e15fc2aeb8f97a16612787ab952e6'
+          subprocess.run(['git', 'apply', '--check', '.checkout-followup.patch'], check=True)
+          subprocess.run(['git', 'apply', '.checkout-followup.patch'], check=True)
           PY
       - uses: actions/setup-node@v7.0.0
         with:
@@ -94,6 +96,7 @@ jobs:
               'backend/app/services/subscriber_billing_service.py',
               'backend/migrations/versions/20261002_0035_checkout_replacement.py',
               'backend/tests/test_checkout_replacement.py',
+              'backend/tests/test_api_contracts.py',
               'docs/checkout-replacement.md',
               'frontend/src/api/subscriptions.ts',
               'frontend/src/checkoutChoices.ts',
@@ -120,7 +123,7 @@ jobs:
           for name in paths:
               blob = post('git/blobs', {'content': base64.b64encode(pathlib.Path(name).read_bytes()).decode(), 'encoding': 'base64'})
               entries.append({'path': name, 'mode': '100644', 'type': 'blob', 'sha': blob['sha']})
-          cleanup = ['.github/workflows/checkout-workbench.yml'] + [f'.checkout-patch-{i}.b64' for i in range(7)]
+          cleanup = ['.github/workflows/checkout-workbench.yml', '.checkout-followup.patch'] + [f'.checkout-patch-{i}.b64' for i in range(7)]
           entries.extend({'path': name, 'mode': '100644', 'type': 'blob', 'sha': None} for name in cleanup)
           parent = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           base_tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
