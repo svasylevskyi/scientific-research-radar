@@ -1,5 +1,5 @@
 import { ResourceNotice } from "../components/ResourceNotice";
-import { useCallback, useId, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import {
   Alert, Box, Button, Chip, Container, Dialog, DialogActions, DialogContent, DialogTitle,
@@ -17,6 +17,7 @@ import { planFeatures, planPrice } from "../planPresentation";
 import { choiceLabel, currentIntervalChoices, planChoice, planDirection, type PlanAccount } from "../planChoices";
 import { usePlanChangeDialog, type PerformPlanAction } from "../components/PlanChangeDialog";
 import { useSubscription } from "../components/SubscriptionData";
+import { canSelectCheckout, checkoutMatches, checkoutStillAvailable, savedCheckoutLabel, selectCheckout, type CheckoutSelection } from "../checkoutChoices";
 import type { PublicPlan as Plan } from "../types/subscription";
 
 export function PlansPage({ enrolment = false, workspace = false }: { enrolment?: boolean; workspace?: boolean }) {
@@ -54,9 +55,12 @@ function PlansContent({ enrolment, workspace, embedded = false, subscription }: 
   const [actionError, setActionError] = useState("");
   const billingError = (subscription ? "" : account.error) || actionError;
   const [interval, setInterval] = useState<BillingInterval>("monthly");
-  const [selection, setSelection] = useState<{ plan: Plan; interval: BillingInterval } | null>(null);
+  const [selection, setSelection] = useState<CheckoutSelection | null>(null);
   const [busy, setBusy] = useState(false);
   const checkoutLock = useRef(false);
+  const latestAccount = useRef(snapshot); latestAccount.current = snapshot;
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const unavailable = isInitializing || !!billingError || !!error || !!subscription?.busy || (!subscription && account.loading);
   const perform: PerformPlanAction = async action => {
     if (subscription) return subscription.perform(action);
@@ -66,24 +70,41 @@ function PlansContent({ enrolment, workspace, embedded = false, subscription }: 
   const working = busy || changes.busy;
   const money = (p: Plan, period: BillingInterval) => new Intl.NumberFormat(undefined,
     { style: "currency", currency: p.currency }).format(Number(period === "annual" ? p.annual_price : p.monthly_price));
+  async function resumeCheckout(attemptId: string) {
+    const current = latestAccount.current?.billing;
+    if (checkoutLock.current || working || unavailable || !current?.resume_allowed || current.attempt?.id !== attemptId) return;
+    checkoutLock.current = true; setBusy(true);
+    try {
+      const { url } = await perform(() => subscriptionsApi.resumeCheckout(attemptId, current.replacement?.id ?? null));
+      if (mounted.current) window.location.assign(url);
+    } catch (e) {
+      if (mounted.current) setActionError(e instanceof ApiError ? e.message : "Checkout could not resume. Refresh billing before retrying.");
+    } finally { checkoutLock.current = false; if (mounted.current) setBusy(false); }
+  }
   async function checkout() {
-    if (!selection || selection.plan.billing_type === "free" || checkoutLock.current || working || unavailable || !billing?.checkout_allowed || access?.billing_type === "stripe") return;
+    if (!selection || selection.plan.billing_type === "free" || checkoutLock.current || working || unavailable || !checkoutStillAvailable(selection, latestAccount.current)) return;
     checkoutLock.current = true; setBusy(true);
     try {
       const body = { code: selection.plan.code, revision: selection.plan.revision, interval: selection.interval };
-      const { url } = await (subscription
-        ? subscription.perform(() => subscriptionsApi.checkout(body))
+      const sourceId = selection.source?.id;
+      const { url } = await perform(() => sourceId
+        ? subscriptionsApi.replaceCheckout({ ...body, expected_attempt_id: sourceId })
         : subscriptionsApi.checkout(body));
-      window.location.assign(url);
+      if (mounted.current) window.location.assign(url);
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "Checkout could not start. Review billing status before retrying.");
-      setSelection(null);
-    } finally { checkoutLock.current = false; setBusy(false); }
+      if (mounted.current) {
+        setActionError(e instanceof ApiError ? e.message : "Checkout could not start. Review billing status before retrying.");
+        setSelection(null);
+      }
+    } finally { checkoutLock.current = false; if (mounted.current) setBusy(false); }
   }
   const selectedPlan = plans?.find(plan => plan.code === selectedCode);
-  const canChoosePaidPlan = (plan: Plan) => !unavailable && !working && !!billing?.checkout_allowed && access?.billing_type !== "stripe" &&
+  const canChoosePaidPlan = (plan: Plan) => !unavailable && !working && canSelectCheckout(snapshot) &&
     (interval !== "annual" || plan.annual_price !== null);
-  const canContinue = !!selectedPlan && !working && (selectedPlan.billing_type === "free" || canChoosePaidPlan(selectedPlan));
+  const canResumePlan = (plan: Plan) => !unavailable && !working && checkoutMatches(plan, interval, billing);
+  const canContinue = !!selectedPlan && !working && (selectedPlan.billing_type === "free" || canChoosePaidPlan(selectedPlan) || canResumePlan(selectedPlan));
+  const pendingAttempt = billing?.resume_allowed ? billing.attempt : null;
+  const replacement = billing?.replacement;
   if (enrolment && access && (access.billing_type === "stripe" || access.mode === "complimentary")) return <Navigate to="/radar/subscription" replace />;
   return (
     <Box>
@@ -115,6 +136,16 @@ function PlansContent({ enrolment, workspace, embedded = false, subscription }: 
           <Button component={Link} to="/radar/subscription#billing">Review Subscription</Button>
           {currentIntervalChoices(snapshot).map(choice => <Button key={choiceLabel(choice)} disabled={unavailable || working} onClick={() => changes.choose(choice)}>{choiceLabel(choice)}</Button>)}
         </Box>}
+        {pendingAttempt && <Alert severity="info" sx={{ my: 2 }}>
+          <Typography variant="body2">
+            {replacement ? "Verifying checkout replacement: " : "Unfinished checkout: "}
+            {savedCheckoutLabel(replacement ?? pendingAttempt)}.
+            {replacement ? " Resume to verify the previous session’s expiration and continue the saved selection safely."
+              : " Resuming keeps its original price and terms. Choosing another plan or billing interval replaces it only after confirmation."}
+          </Typography>
+          {(replacement || !plans?.some(plan => checkoutMatches(plan, interval, billing))) && pendingAttempt.id &&
+            <Button disabled={unavailable || working} onClick={() => void resumeCheckout(pendingAttempt.id!)}>Resume Checkout</Button>}
+        </Alert>}
         <BillingIntervalTabs value={interval} onChange={setInterval}>
           {!plans && !error && <Typography role="status">Loading plans…</Typography>}
           {plans?.length === 0 && <Typography>No subscription plans are available yet. Please check back later.</Typography>}
@@ -124,6 +155,7 @@ function PlansContent({ enrolment, workspace, embedded = false, subscription }: 
             sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 3 }}>
             {plans?.map(plan => {
               const price = planPrice(plan, interval);
+              const resume = checkoutMatches(plan, interval, billing);
               const current = isCurrentPlan(plan, access, billing);
               const selected = enrolment && selectedCode === plan.code;
               const choice = planChoice(plan, interval, snapshot);
@@ -158,7 +190,7 @@ function PlansContent({ enrolment, workspace, embedded = false, subscription }: 
                 </Box>
                 <Box data-plan-section="action" sx={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 1,
                   "& > .MuiButton-root": { width: "100%", minHeight: 44, whiteSpace: "normal" }, "& > .MuiFormControlLabel-root": { m: 0, minHeight: 44 } }}>
-                  {enrolment ? <FormControlLabel value={plan.code} control={<Radio />} label={`Select ${plan.name}`} disabled={working || (plan.billing_type !== "free" && !canChoosePaidPlan(plan))} />
+                  {enrolment ? <FormControlLabel value={plan.code} control={<Radio />} label={`Select ${plan.name}`} disabled={working || (plan.billing_type !== "free" && !canChoosePaidPlan(plan) && !canResumePlan(plan))} />
                     : current ? <>
                       <Button component={Link} to="/radar/subscription#billing" variant="outlined">Review Subscription</Button>
                       {choice && <Button variant="outlined" disabled={unavailable || working} onClick={() => changes.choose(choice)}>{choiceLabel(choice)}</Button>}
@@ -177,8 +209,11 @@ function PlansContent({ enrolment, workspace, embedded = false, subscription }: 
                     </> : plan.billing_type === "free" ? <Button component={Link} to={user ? "/radar/subscription#billing" : "/radar/register"} variant="outlined">
                       {user ? "Review Subscription" : "Create a free account"}
                     </Button> : !user && !isInitializing ? <Button component={Link} to="/radar/login" variant="outlined">Sign in to continue</Button>
-                    : billing?.resume_allowed ? <Button component={Link} to="/radar/subscription#billing" variant="outlined">Resume existing checkout</Button>
-                    : <Button variant="contained" disabled={!canChoosePaidPlan(plan)} onClick={() => setSelection({ plan, interval })}>
+                    : resume && pendingAttempt?.id ? <>
+                      <Button variant="outlined" disabled={!canResumePlan(plan)} onClick={() => void resumeCheckout(pendingAttempt.id!)}>Resume Checkout</Button>
+                      <Typography variant="caption" color="text.secondary">Saved checkout: {savedCheckoutLabel(pendingAttempt)}.
+                        {pendingAttempt.revision !== plan.revision && " Its earlier terms differ from this published card."}</Typography>
+                    </> : <Button variant="contained" disabled={!canChoosePaidPlan(plan)} onClick={() => setSelection(selectCheckout(plan, interval, billing))}>
                       {access?.billing_type === "free" ? `Upgrade to ${plan.name}` : `Choose ${plan.name}`}
                     </Button>}
                 </Box>
@@ -189,8 +224,9 @@ function PlansContent({ enrolment, workspace, embedded = false, subscription }: 
             <Button variant="contained" size="large" disabled={!canContinue} onClick={() => {
               if (!selectedPlan || !canContinue) return;
               if (selectedPlan.billing_type === "free") navigate("/radar", { replace: true });
-              else setSelection({ plan: selectedPlan, interval });
-            }}>{selectedPlan?.billing_type === "free" ? "Continue with Free" : "Continue to Payment"}</Button>
+              else if (canResumePlan(selectedPlan) && pendingAttempt?.id) void resumeCheckout(pendingAttempt.id);
+              else setSelection(selectCheckout(selectedPlan, interval, billing));
+            }}>{selectedPlan?.billing_type === "free" ? "Continue with Free" : selectedPlan && checkoutMatches(selectedPlan, interval, billing) ? "Resume Checkout" : "Continue to Payment"}</Button>
             <Typography variant="body2" color="text.secondary">Choosing a paid plan opens checkout. Your Free access remains until payment is verified.
               If you cancel checkout, you can continue using Free from Subscription and usage.</Typography>
           </Stack>}
@@ -221,10 +257,18 @@ function PlansContent({ enrolment, workspace, embedded = false, subscription }: 
             {selection && <Typography id={`${id}-payment-description`}>{selection.plan.name}: {money(selection.plan, selection.interval)} per {selection.interval === "annual" ? "year" : "month"}, tax included.
               This subscription renews until canceled. Access starts after invoice verification.
               {catalogue.data?.sandbox && " Use test payment details only."}</Typography>}
+            {selection?.source && <Alert severity="info" sx={{ mt: 2 }}>
+              Continuing replaces your unfinished checkout for {savedCheckoutLabel(selection.source)} with this selection.
+              The old payment link will stop working after expiration is confirmed. Your current plan remains unchanged until payment is verified.
+              Cancel leaves the existing checkout unchanged.
+            </Alert>}
+            {selection && !checkoutStillAvailable(selection, snapshot) && <Alert severity="warning" sx={{ mt: 2 }}>
+              Checkout or billing status has changed. Cancel and review the latest options before continuing.
+            </Alert>}
           </DialogContent>
           <DialogActions>
             <Button disabled={working} onClick={() => setSelection(null)}>Cancel</Button>
-            <Button variant="contained" color="success" disabled={working || unavailable || !billing?.checkout_allowed || access?.billing_type === "stripe"} onClick={() => void checkout()}>Continue to Payment</Button>
+            <Button variant="contained" color="success" disabled={working || unavailable || !checkoutStillAvailable(selection, snapshot)} onClick={() => void checkout()}>Continue to Payment</Button>
           </DialogActions>
         </Dialog>
         {changes.dialog}

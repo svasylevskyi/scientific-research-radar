@@ -26,6 +26,10 @@ class PublicPlansRead(BaseModel):
 
 
 class BillingAttemptRead(BaseModel):
+    # Local attempt identity binds resume/replace consent, not a Stripe secret.
+    id: UUID | None = None
+    price: str | None = None
+    currency: str | None = None
     plan_name: str
     code: str
     revision: int
@@ -34,7 +38,20 @@ class BillingAttemptRead(BaseModel):
     subscription_status: str | None
 
 
+class PendingCheckoutReplacementRead(BaseModel):
+    id: UUID
+    source_attempt_id: UUID
+    code: str
+    revision: int
+    plan_name: str
+    interval: str
+    price: str
+    currency: str
+
+
 class BillingStatusRead(BaseModel):
+    replace_allowed: bool = False
+    replacement: PendingCheckoutReplacementRead | None = None
     sandbox: bool
     checkout_allowed: bool
     resume_allowed: bool

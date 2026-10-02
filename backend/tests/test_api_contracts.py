@@ -15,7 +15,7 @@ def test_contracted_route_modules_declare_success_models():
     assert {
         route.endpoint.__module__.split(".")[-1] for route in routes
     } == CONTRACT_MODULES
-    assert len(routes) == 75
+    assert len(routes) == 76
     for route in routes:
         assert route.response_model is not None, route.path
         if route.endpoint.__module__ not in {"app.api.routes.contact", "app.api.routes.research_quality", "app.api.routes.benchmark_review", "app.api.routes.claim_reviews", "app.api.routes.account_closure"}:
