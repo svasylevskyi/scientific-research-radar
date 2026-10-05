@@ -1,4 +1,4 @@
-name: Prepare public content API contract
+name: Finalize public content API contract
 
 on:
   push:
@@ -6,13 +6,16 @@ on:
       - feature/admin-public-content
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: feature/admin-public-content
+          fetch-depth: 0
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: 22
@@ -29,8 +32,12 @@ jobs:
         working-directory: frontend
       - run: npm run contracts:generate
         working-directory: frontend
-      - uses: actions/upload-artifact@v7.0.1
-        with:
-          name: public-content-api-contract
-          path: frontend/src/types/api.generated.ts
-          retention-days: 1
+      - name: Commit generated contract and remove temporary workflow
+        run: |
+          rm .github/workflows/prepare-public-content-contract.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/types/api.generated.ts .github/workflows/prepare-public-content-contract.yml
+          git diff --cached --check
+          git commit -m "Generate public content API contract"
+          git push origin HEAD:feature/admin-public-content
