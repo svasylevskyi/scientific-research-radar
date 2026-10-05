@@ -190,8 +190,11 @@ requests before reopening service.
 
 The approved policy retains complete database snapshots for **35 days**. Independent
 closure checkpoints use **65 days**: the same 35-day restorable-backup window plus
-a 30-day recovery safety margin. Cumulative marker content is also filtered to
-that 65-day window when a new checkpoint is written.
+a 30-day recovery safety margin. Marker content is not removed merely because 65 days elapsed. The retention
+command first prunes database snapshots, re-reads the surviving database inventory,
+and drops an old marker only when its 65-day horizon has passed **and** no surviving
+database snapshot predating that closure request remains. If retention has fallen
+behind, the marker is kept fail-safe.
 
 Retention is an explicit command, separate from backup success. It invokes Restic
 `forget --prune` with the exact environment host, separate `radar-database` and

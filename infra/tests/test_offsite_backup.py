@@ -168,18 +168,35 @@ class BundleTests(unittest.TestCase):
         recent = MARKER_A | {"requested_at": "2026-10-01T10:00:00Z"}
         expired = MARKER_B | {"requested_at": "2026-09-30T09:59:59Z"}
         self.assertEqual(backup.CLOSURE_RETENTION_DAYS, backup.DATABASE_RETENTION_DAYS + 30)
-        self.assertEqual(backup.retained_markers([recent, expired], current), [recent])
+        no_old_snapshots = [backup.parse_time("2026-10-02T00:00:00Z")]
+        self.assertEqual(backup.retained_markers([recent, expired], no_old_snapshots, current), [recent])
+        preclosure_survives = [backup.parse_time("2026-09-29T00:00:00Z")]
+        self.assertEqual(backup.retained_markers([expired], preclosure_survives, current), [expired])
 
-    def test_retention_is_tag_scoped_and_uses_approved_windows(self):
+    def test_retention_prunes_database_before_proving_marker_disposal(self):
         restic = backup.Restic(VALUES)
-        with patch.object(restic, "run", return_value=b"") as run:
+        recent_db = [{"id": "d" * 64, "hostname": "radar-production", "tags": ["radar-database"],
+                      "time": "2026-10-02T00:00:00Z"}]
+        with patch.object(restic, "forget") as forget, \
+                patch.object(restic, "snapshots", return_value=recent_db) as snapshots, \
+                patch.object(backup, "saved_markers", return_value=([MARKER_A], "c" * 64)), \
+                patch.object(restic, "upload", return_value="e" * 64) as upload:
             backup.apply_retention(restic, ENVIRONMENT)
-        self.assertEqual(run.call_count, 2)
-        first, second = [call.args for call in run.call_args_list]
-        self.assertEqual(first, ("forget", "--host", "radar-production", "--tag", "radar-database",
-                                 "--group-by", "host,tags", "--keep-within", "35d", "--prune"))
-        self.assertEqual(second, ("forget", "--host", "radar-production", "--tag", "radar-closures",
-                                  "--group-by", "host,tags", "--keep-within", "65d", "--prune"))
+        self.assertEqual(forget.call_args_list[0].args, (ENVIRONMENT, "database", 35))
+        snapshots.assert_called_once_with(ENVIRONMENT, "database")
+        self.assertEqual(forget.call_args_list[-1].args, (ENVIRONMENT, "closures", 65))
+        upload.assert_not_called()
+
+    def test_old_marker_is_republished_without_unsafe_history_before_closure_prune(self):
+        restic = backup.Restic(VALUES)
+        old_marker = MARKER_A | {"requested_at": "2026-01-01T00:00:00Z"}
+        recent_db = [{"id": "d" * 64, "hostname": "radar-production", "tags": ["radar-database"],
+                      "time": "2026-10-02T00:00:00Z"}]
+        with patch.object(restic, "forget"), patch.object(restic, "snapshots", return_value=recent_db), \
+                patch.object(backup, "saved_markers", return_value=([old_marker], "c" * 64)), \
+                patch.object(restic, "upload", return_value="e" * 64) as upload:
+            backup.apply_retention(restic, ENVIRONMENT)
+        upload.assert_called_once()
 
     def test_partial_upload_reports_failure_not_success(self):
         for command, key in (("backup", "RADAR_OFFSITE_PING_URL"), ("closures", "RADAR_CLOSURE_PING_URL")):

@@ -34,9 +34,11 @@ returns the message to ordinary retention based on its existing review timestamp
 ## Closure recovery markers
 
 The restoration manifest exists to stop an older backup from reviving a closed
-account. Once a closure request is older than 65 days, no pre-closure database
-snapshot should remain under the approved 35-day backup policy, including the
-30-day safety margin. New cumulative manifests therefore omit older markers.
+account. A marker becomes eligible for disposal only after its 65-day horizon. The
+retention command then verifies the post-prune database snapshot inventory and
+removes the marker only when no surviving snapshot predating that closure request
+can still be restored. A failed or delayed backup-retention cycle therefore keeps
+the marker rather than trusting elapsed time alone.
 
 This does **not** reactivate or reopen the live closed-account row. The application
 continues to keep the minimum inactive-account guard required to make closure

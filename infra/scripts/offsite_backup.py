@@ -108,7 +108,7 @@ class Restic:
             raise BackupError(f"Restic {arguments[0]} failed (exit {result.returncode}); no successful completion recorded.")
         return result.stdout
 
-    def latest(self, environment: str, kind: str) -> str | None:
+    def snapshots(self, environment: str, kind: str) -> list[dict]:
         data = json.loads(self.run("snapshots", "--json", "--host", f"radar-{environment}",
                                    "--tag", f"radar-{kind}"))
         if not isinstance(data, list):
@@ -118,6 +118,11 @@ class Restic:
                     or f"radar-{kind}" not in snapshot.get("tags", [])
                     or not SHA.fullmatch(snapshot.get("id", ""))):
                 raise BackupError("Unexpected snapshot identity; recovery selection refused.")
+            parse_time(snapshot.get("time", ""))
+        return data
+
+    def latest(self, environment: str, kind: str) -> str | None:
+        data = self.snapshots(environment, kind)
         return max(data, key=lambda item: parse_time(item["time"]))["id"] if data else None
 
     def forget(self, environment: str, kind: str, days: int) -> None:
@@ -180,11 +185,22 @@ def merge_markers(*groups: list[dict[str, str]]) -> list[dict[str, str]]:
     return [merged[identifier] for identifier in sorted(merged)]
 
 
-def retained_markers(markers: list[dict[str, str]], current: datetime | None = None) -> list[dict[str, str]]:
-    """Keep recovery markers only while pre-closure database snapshots can still be restored, plus the approved safety margin."""
+def retained_markers(
+    markers: list[dict[str, str]],
+    database_snapshot_times: list[datetime],
+    current: datetime | None = None,
+) -> list[dict[str, str]]:
+    """Drop a marker only after its 65-day horizon and after every pre-closure DB snapshot is gone."""
     current = current or datetime.now(timezone.utc)
     cutoff = current.timestamp() - CLOSURE_RETENTION_DAYS * 86400
-    return [marker for marker in markers if parse_time(marker["requested_at"]).timestamp() >= cutoff]
+    retained = []
+    for marker in markers:
+        requested = parse_time(marker["requested_at"])
+        age_requires_marker = requested.timestamp() >= cutoff
+        restorable_preclosure = any(snapshot_time <= requested for snapshot_time in database_snapshot_times)
+        if age_requires_marker or restorable_preclosure:
+            retained.append(marker)
+    return retained
 
 
 def write_json(path: Path, value: object) -> None:
@@ -271,7 +287,7 @@ def backup(restic: Restic, environment: str, kind: str) -> str:
         directory = Path(temporary)
         stage(directory, environment, kind)
         current = parse_markers((directory / "closure-manifest.json").read_bytes())
-        markers = retained_markers(merge_markers(previous, current))
+        markers = merge_markers(previous, current)
         write_json(directory / "closure-manifest.json", markers)
         # Commit the independent closure checkpoint before the database snapshot.
         with tempfile.TemporaryDirectory(prefix="radar-closure-upload-") as closure_temporary:
@@ -286,9 +302,19 @@ def backup(restic: Restic, environment: str, kind: str) -> str:
 
 
 def apply_retention(restic: Restic, environment: str) -> None:
-    # Database snapshots carry potentially identifiable live data for 35 days.
-    # Closure checkpoints remain for an additional 30-day restore-safety margin.
+    # First prune database snapshots. Marker disposal is allowed only after the
+    # post-prune inventory proves that no surviving pre-closure database snapshot
+    # can resurrect that account, and after the approved additional safety margin.
     restic.forget(environment, "database", DATABASE_RETENTION_DAYS)
+    database_times = [parse_time(item["time"]) for item in restic.snapshots(environment, "database")]
+    markers, _ = saved_markers(restic, environment)
+    retained = retained_markers(markers, database_times)
+    if retained != markers:
+        with tempfile.TemporaryDirectory(prefix="radar-retention-closure-") as temporary:
+            directory = Path(temporary)
+            write_json(directory / "closure-manifest.json", retained)
+            describe_bundle(directory, environment, "closures")
+            restic.upload(directory, environment, "closures")
     restic.forget(environment, "closures", CLOSURE_RETENTION_DAYS)
 
 
