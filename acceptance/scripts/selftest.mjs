@@ -57,7 +57,10 @@ try {
         // Do not add equivalent page/session logging to the real-development runner.
         console.error('Loopback diagnostic:', JSON.stringify({ scenario: scenario.name, viewport,
           errors, violations: guard.violations, requests: calls.slice(-20),
-          title: await page.title(), body: (await page.locator('body').innerText()).slice(0, 1500),
+          title: await page.title(), layout: await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
+            overflow: [...document.querySelectorAll('body *')].map(element => { const rect = element.getBoundingClientRect();
+              return { tag: element.tagName, role: element.getAttribute('role'), text: element.textContent?.slice(0, 80), left: rect.left, right: rect.right, width: rect.width };
+            }).filter(rect => rect.right > innerWidth + 1 || rect.left < -1).slice(-20) })), body: (await page.locator('body').innerText()).slice(0, 1500),
         }));
         throw error;
       } finally { await context.close(); }

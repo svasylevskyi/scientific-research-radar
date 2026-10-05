@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test';
 export async function noOverflow(page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'No horizontal page overflow').toBe(true);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
+    { message: 'No horizontal page overflow after layout settles' }).toBeLessThanOrEqual(1);
 }
 export async function sampleNavigation(page) {
   await page.goto('/');
