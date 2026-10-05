@@ -24,7 +24,7 @@ jobs:
           # of GitHub's changed-file API limits. No PR metadata enters a shell.
           fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
           persist-credentials: false
-      - name: Select checks from the complete PR diff
+      - name: Select CI checks from the complete PR diff
         id: select
         run: python3 infra/scripts/ci_policy.py select
   deployment-config:
@@ -134,6 +134,18 @@ jobs:
         run: npm run contracts:check
       - run: node --test tests/*.test.mjs
       - run: npm run build
+      - name: Install isolated browser acceptance tooling
+        run: npm ci --prefix ../acceptance
+      - name: Check acceptance configuration, request fences, and scenario discovery
+        run: |
+          npm test --prefix ../acceptance
+          npm run check --prefix ../acceptance
+      - name: Install Chromium for loopback-only tooling validation
+        run: npx playwright install --with-deps chromium
+        working-directory: acceptance
+      - name: Validate browser guard and public journeys against a synthetic loopback service
+        run: npm run selftest
+        working-directory: acceptance
   containers:
     needs: changes
     if: needs.changes.outputs.profile == 'full' || needs.changes.outputs.profile == 'frontend'

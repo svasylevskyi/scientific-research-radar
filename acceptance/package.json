@@ -1,0 +1,20 @@
+{
+  "name": "radar-development-acceptance",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "auth": "node scripts/run.mjs auth",
+    "smoke": "node scripts/run.mjs smoke",
+    "list": "node scripts/run.mjs list",
+    "selftest": "node scripts/selftest.mjs",
+    "check": "node scripts/check.mjs"
+  }
+}
