@@ -103,7 +103,7 @@ export function HeroSampleGallery({ samples = heroSamples }: { samples?: readonl
           </Stack>
           {/* Keep position announcements for screen readers without a visible counter. */}
           <Typography component="span" role="status" aria-live="polite" aria-atomic="true"
-            sx={{ position: "absolute", width: 1, height: 1, p: 0, m: -1,
+            sx={{ position: "absolute", width: "1px", height: "1px", p: 0, m: "-1px",
               overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}>
             Sample {index + 1} of {samples.length}
           </Typography>

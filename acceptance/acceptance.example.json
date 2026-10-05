@@ -1,0 +1,12 @@
+{
+  "environment": "development",
+  "baseURL": "https://dev.example.invalid",
+  "allowedOrigin": "https://dev.example.invalid",
+  "releaseCommit": "REPLACE_WITH_THE_DEPLOYED_40_CHARACTER_COMMIT",
+  "userEmail": "acceptance-user@example.invalid",
+  "adminEmail": null,
+  "digestId": null,
+  "runId": null,
+  "allowDigestWrites": false,
+  "captureDiagnostics": false
+}

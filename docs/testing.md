@@ -126,3 +126,17 @@ All JavaScript Actions in CI and deployment use releases declaring `node24`.
 This is the Actions runner runtime, independent of the application's Node 22
 frontend build. GitHub-hosted runners provide it; no deployment-server Node.js
 installation or warning-suppression variable is needed.
+
+## Operator browser acceptance
+
+The separate `acceptance/` package contains development-targeted browser smoke
+checks and origin/request safeguards. Run it against an explicitly configured
+development website, not against production or a backend test database. The
+[development acceptance guide](development-acceptance.md) documents local Node/
+Chromium setup, private account sessions, optional one-record CRUD and the manual
+[release checklist](release-acceptance-template.md).
+
+The frontend CI job validates the harness and shared public-browser scenarios
+against a loopback static build with synthetic provider/account responses. It
+never runs the remote suite against shared dev. These checks are part of the
+existing frontend job and aggregate gate; no branch-protection change is needed.
