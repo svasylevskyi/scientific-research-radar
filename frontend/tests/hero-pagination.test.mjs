@@ -44,7 +44,9 @@ test("counter remains only as a visually hidden, polite position announcement", 
   assert.equal(attribute(status, "hidden"), undefined);
   const styles = value(status, "sx");
   assert.match(styles, /position: "absolute"/);
-  assert.match(styles, /width: 1, height: 1/);
+  // MUI sx maps numeric 1 to 100%, not 1px, which can overflow the page.
+  assert.match(styles, /width: "1px", height: "1px"/);
+  assert.match(styles, /m: "-1px"/);
   assert.match(styles, /overflow: "hidden", clip: "rect\(0, 0, 0, 0\)"/);
   assert.doesNotMatch(styles, /display: "none"|visibility: "hidden"/);
   assert.equal((source.match(/Sample \{index \+ 1\} of \{samples\.length\}/g) ?? []).length, 1);
