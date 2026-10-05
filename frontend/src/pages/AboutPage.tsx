@@ -1,6 +1,9 @@
 import { Box, Button, Container, Link, Paper, Stack, Typography } from "@mui/material";
+import { useEffect, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { MarketingHeader } from "../components/MarketingHeader";
+import { BasicMarkdown } from "../components/BasicMarkdown";
+import { loadPublicContent, type PublicContentRevision } from "../content/publicContent";
 
 const sections = [
   {
@@ -52,40 +55,77 @@ const sections = [
   },
 ];
 
+const intro = "Radar helps researchers, technical teams, educators, and curious readers turn a topic into a focused reading list and a source-linked briefing. Use it to prioritize reading, prepare a discussion, or keep up with an area without starting your search from scratch each time.";
+const limitation = "AI can miss relevant work or misinterpret findings. A run may find fewer papers than requested, and summaries may rely on abstracts or metadata rather than full text. Check source and summary-basis notes and verify important claims in the original papers. Radar is not an exhaustive literature review or a substitute for qualified professional advice.";
+const support = "Refund requests and unusable or held research are reviewed manually. Email [support@getresearchradar.com](mailto:support@getresearchradar.com). There is no automatic refund or allowance restoration; statutory rights remain unchanged.";
+const legal = "For data handling and service conditions, see the [Privacy notice](/privacy) and [Terms of use](/terms). Both are currently marked as drafts pending remaining identity details, operational safeguards and legal review.";
+
+export const aboutDefaultContent = {
+  title: "About Scientific Research Radar",
+  body_markdown: [
+    "**Less time sorting papers. More time understanding what matters.**",
+    intro,
+    ...sections.flatMap(({ title, paragraphs }) => [`## ${title}`, ...paragraphs]),
+    "## A starting point for understanding",
+    limitation,
+    "[Subscription Plans](/plans) · [Review Subscription](/radar/subscription) · [Contact us](/contact)",
+    support,
+    legal,
+  ].join("\n\n"),
+};
+
 export function AboutPage() {
+  const [published, setPublished] = useState<PublicContentRevision | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadPublicContent("about", controller.signal).then((value) => {
+      if (value) setPublished(value);
+    }).catch(() => {});
+    return () => controller.abort();
+  }, []);
+
   return (
     <Box>
       <MarketingHeader />
       <Container component="main" maxWidth="md" sx={{ py: { xs: 4, md: 7 } }}>
         <Box data-page-column="centered" sx={{ width: "100%", maxWidth: 800, minWidth: 0, mx: "auto" }}>
-          <Typography component="h1" variant="h3" gutterBottom>About Scientific Research Radar</Typography>
-          <Typography variant="h6" color="text.secondary" sx={{ mb: 3 }}>Less time sorting papers. More time understanding what matters.</Typography>
-          <Typography sx={{ mb: 4 }}>Radar helps researchers, technical teams, educators, and curious readers turn a topic into a focused reading list and a source-linked briefing. Use it to prioritize reading, prepare a discussion, or keep up with an area without starting your search from scratch each time.</Typography>
-          <Stack spacing={3}>
-            {sections.map(({ id, title, paragraphs }) => (
-              <Box component="section" key={id} aria-labelledby={`about-${id}`}>
-                <Typography id={`about-${id}`} component="h2" variant="h6" gutterBottom>{title}</Typography>
-                <Stack spacing={1.5}>
-                  {paragraphs.map(paragraph => <Typography key={paragraph} color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{paragraph}</Typography>)}
-                </Stack>
-              </Box>
-            ))}
-          </Stack>
-          <Paper component="section" aria-labelledby="about-limitations" variant="outlined" sx={{ p: { xs: 2, sm: 3 }, my: 4 }}>
-            <Typography id="about-limitations" component="h2" variant="h6" gutterBottom>A starting point for understanding</Typography>
-            <Typography>AI can miss relevant work or misinterpret findings. A run may find fewer papers than requested, and summaries may rely on abstracts or metadata rather than full text. Check source and summary-basis notes and verify important claims in the original papers. Radar is not an exhaustive literature review or a substitute for qualified professional advice.</Typography>
-          </Paper>
-          <Stack direction="row" gap={2} flexWrap="wrap">
-            <Button component={RouterLink} to="/plans" variant="contained">Subscription Plans</Button>
-            <Button component={RouterLink} to="/radar/subscription">Review Subscription</Button>
-            <Button component={RouterLink} to="/contact">Contact us</Button>
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, overflowWrap: "anywhere" }}>
-            Refund requests and unusable or held research are reviewed manually. Email <Link href="mailto:support@getresearchradar.com">support@getresearchradar.com</Link>. There is no automatic refund or allowance restoration; statutory rights remain unchanged.
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            For data handling and service conditions, see the <Link component={RouterLink} to="/privacy">Privacy notice</Link> and <Link component={RouterLink} to="/terms">Terms of use</Link>. Both are currently marked as drafts pending remaining identity details, operational safeguards and legal review.
-          </Typography>
+          {published ? (
+            <>
+              <Typography component="h1" variant="h3" gutterBottom>{published.title}</Typography>
+              <BasicMarkdown markdown={published.body_markdown} />
+            </>
+          ) : (
+            <>
+              <Typography component="h1" variant="h3" gutterBottom>About Scientific Research Radar</Typography>
+              <Typography variant="h6" color="text.secondary" sx={{ mb: 3 }}>Less time sorting papers. More time understanding what matters.</Typography>
+              <Typography sx={{ mb: 4 }}>{intro}</Typography>
+              <Stack spacing={3}>
+                {sections.map(({ id, title, paragraphs }) => (
+                  <Box component="section" key={id} aria-labelledby={`about-${id}`}>
+                    <Typography id={`about-${id}`} component="h2" variant="h6" gutterBottom>{title}</Typography>
+                    <Stack spacing={1.5}>
+                      {paragraphs.map(paragraph => <Typography key={paragraph} color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{paragraph}</Typography>)}
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+              <Paper component="section" aria-labelledby="about-limitations" variant="outlined" sx={{ p: { xs: 2, sm: 3 }, my: 4 }}>
+                <Typography id="about-limitations" component="h2" variant="h6" gutterBottom>A starting point for understanding</Typography>
+                <Typography>{limitation}</Typography>
+              </Paper>
+              <Stack direction="row" gap={2} flexWrap="wrap">
+                <Button component={RouterLink} to="/plans" variant="contained">Subscription Plans</Button>
+                <Button component={RouterLink} to="/radar/subscription">Review Subscription</Button>
+                <Button component={RouterLink} to="/contact">Contact us</Button>
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2, overflowWrap: "anywhere" }}>
+                Refund requests and unusable or held research are reviewed manually. Email <Link href="mailto:support@getresearchradar.com">support@getresearchradar.com</Link>. There is no automatic refund or allowance restoration; statutory rights remain unchanged.
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                For data handling and service conditions, see the <Link component={RouterLink} to="/privacy">Privacy notice</Link> and <Link component={RouterLink} to="/terms">Terms of use</Link>. Both are currently marked as drafts pending remaining identity details, operational safeguards and legal review.
+              </Typography>
+            </>
+          )}
         </Box>
       </Container>
     </Box>

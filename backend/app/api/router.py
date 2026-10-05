@@ -2,6 +2,7 @@ from app.api.routes import admin_subscriptions, contact, account_closure
 from app.api.routes import research_quality
 from app.api.routes import benchmark_review
 from app.api.routes import claim_reviews
+from app.api.routes import public_content, admin_content
 from fastapi import APIRouter, Depends
 from app.api.security import guard_request
 
@@ -12,6 +13,8 @@ api_router.include_router(account_closure.router, tags=["account closure"])
 api_router.include_router(claim_reviews.router, prefix="/admin/research-quality/claim-reviews", tags=["administration", "research quality"])
 api_router.include_router(benchmark_review.router, prefix="/admin/research-quality/benchmarks", tags=["administration", "research quality"])
 api_router.include_router(research_quality.router, prefix="/admin/research-quality", tags=["administration", "research quality"])
+api_router.include_router(public_content.router, prefix="/content", tags=["content"])
+api_router.include_router(admin_content.router, prefix="/admin/content-pages", tags=["administration", "content"])
 api_router.include_router(contact.router, prefix="/contact", tags=["contact"])
 api_router.include_router(contact.admin_router, prefix="/admin/messages", tags=["administration", "contact"])
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])

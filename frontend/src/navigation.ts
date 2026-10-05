@@ -27,6 +27,7 @@ const pages = [
   ["/admin/digests/:digestId", "Digest details · Admin", "/admin/digests"],
   ["/admin/digests/:digestId/runs", "Digest run history · Admin", "/admin/digests"],
   ["/admin/messages", "Contact messages · Admin", "/admin/messages"],
+  ["/admin/content-pages", "Site content · Admin", "/admin/content-pages"],
   ["/admin/research-quality", "Research quality · Admin", "/admin/research-quality"],
   ["/admin/subscription-plans", "Plan management", "/admin/subscription-plans"],
   ["/admin/subscription-plans/new", "Create a plan", "/admin/subscription-plans"],

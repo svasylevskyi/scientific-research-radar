@@ -28,6 +28,7 @@ from app.models.source_verification import SourceMetadataCache, SourceProviderSt
 from app.models.user import User, UserRole
 from app.models.account_closure import AccountClosure
 from app.models.email_verification import EmailVerification
+from app.models.public_content import PublicContentRevision
 
 __all__ = [
     "AuthSession",
@@ -47,6 +48,7 @@ __all__ = [
     "TargetAudience",
     "User",
     "UserRole",
+    "PublicContentRevision",
 ]
 from app.models.subscription_observation import ObservationAccount, ObservationAssignment, ObservedRunUsage
 from app.models.billing_sync import BillingSyncJob, BillingSyncHeartbeat

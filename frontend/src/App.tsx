@@ -2,6 +2,7 @@ import { AboutPage } from "./pages/AboutPage";
 import { PageNavigation } from "./components/PageNavigation";
 import { ContactPage } from "./pages/ContactPage";
 import { AdminMessagesPage } from "./pages/AdminMessagesPage";
+import { AdminContentPagesPage } from "./pages/AdminContentPagesPage";
 import { AdminResearchQualityPage } from "./pages/AdminResearchQualityPage";
 import { AdminSubscriptionPlanEditPage } from "./pages/AdminSubscriptionPlanEditPage";
 import { AdminPricingEditPage } from "./pages/AdminPricingEditPage";
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/radar/contact" element={<RequireAuth><ContactPage workspace /></RequireAuth>} />
           <Route path="/admin/messages" element={<RequireAuth><RequireAdmin><AdminMessagesPage /></RequireAdmin></RequireAuth>} />
+          <Route path="/admin/content-pages" element={<RequireAuth><RequireAdmin superAdmin><AdminContentPagesPage /></RequireAdmin></RequireAuth>} />
           <Route path="/admin/research-quality" element={<RequireAuth><RequireAdmin><AdminResearchQualityPage /></RequireAdmin></RequireAuth>} />
           <Route path="/plans" element={<PlansPage />} />
           <Route path="/radar/plans" element={<RequireAuth><PlansPage workspace /></RequireAuth>} />
