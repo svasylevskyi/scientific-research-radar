@@ -21,3 +21,9 @@ test("privacy fallback documents the approved Radar-controlled retention windows
   assert.match(legal, /host operational logs use 30 daily rotations/);
   assert.match(legal, /not automatically deleted by these application rules/);
 });
+
+test("privacy distinguishes ordinary account erasure from explicit legal-case retention holds", () => {
+  assert.match(legal, /Ordinary linked contact messages are removed with owned data/);
+  assert.match(legal, /explicitly placed on retention hold is detached from the closed account/);
+  assert.match(legal, /manual legal\/accounting retention decision/);
+});

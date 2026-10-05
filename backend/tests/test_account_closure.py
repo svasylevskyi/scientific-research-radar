@@ -53,6 +53,37 @@ def test_closure_revokes_access_and_erases_owned_data(client, db_session_factory
     assert not closure.process_one(db_session_factory, get_settings())
 
 
+def test_retention_hold_survives_closure_without_blocking_completion(client, db_session_factory):
+    uid, headers = member(client)
+    assert client.post("/api/v1/contact", headers=headers, json={
+        "name": "Member", "email": "closing@example.com", "message": "Ordinary support"
+    }).status_code == 201
+    assert client.post("/api/v1/contact", headers=headers, json={
+        "name": "Member", "email": "closing@example.com", "message": "Privacy request"
+    }).status_code == 201
+    with db_session_factory() as db:
+        held = db.scalar(select(ContactMessage).where(ContactMessage.message == "Privacy request"))
+        held.retention_hold = True
+        held_id = held.id
+        db.commit()
+
+    assert request(client, headers).status_code == 202
+    assert closure.process_one(db_session_factory, get_settings())
+
+    with db_session_factory() as db:
+        row = db.get(AccountClosure, uid)
+        held = db.get(ContactMessage, held_id)
+        assert row.state == "completed"
+        assert held is not None
+        assert held.user_id is None
+        assert held.retention_hold is True
+        assert held.email == "closing@example.com"
+        assert held.message == "Privacy request"
+        assert db.scalar(select(func.count()).select_from(ContactMessage).where(
+            ContactMessage.message == "Ordinary support"
+        )) == 0
+
+
 def test_password_confirmation_and_super_admin_protection(client, db_session_factory):
     uid, headers = member(client)
     for body in ({"current_password": "incorrect", "confirmation": "CLOSE"}, {"current_password": PASSWORD, "confirmation": "yes"}):

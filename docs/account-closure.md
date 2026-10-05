@@ -63,7 +63,7 @@ idempotent requests, webhook reconciliation and audit/retention requirements.
 |---|---|
 | Profile, credentials, sessions, recovery/verification tokens | Revoke immediately; erase once work is quiescent. Replace the profile with an inactive technical tombstone and an unreachable random password. |
 | Digests, schedules, results, feedback, per-run costs, source evidence, AI reviews of owned runs | Delete through ownership FKs. Historical spending totals can decrease when per-run evidence is erased. Shared bibliographic metadata remains. |
-| Authenticated contact submissions | Owned by account and deleted automatically, including submissions using a different reply address. |
+| Authenticated contact submissions | Ordinary owned messages are deleted with the account. Messages explicitly marked **Retention hold** are detached from the account and preserved under the manual legal/accounting policy. |
 | Historical/anonymous contacts matching the verified email | Require admin ownership review; delete confirmed owned messages, explicitly exclude messages belonging to someone else. Do not infer authorship from an email match alone. |
 | Shared admin review/settings attribution | Remove user FKs and saved author names; replace structured reviewer names. Privacy redaction changes affected publication hashes and invalidates dependent AI comparisons; scientific findings remain. Free-text mentions in shared records require manual privacy review. |
 | Local billing records | Remove unnecessary data without waiting for Stripe availability. Retain saved checkout/customer/subscription IDs and actionable issue references while needed for cancellation; erase them on successful closure. |
