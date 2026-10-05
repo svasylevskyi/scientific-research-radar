@@ -80,8 +80,11 @@ export function AboutPage() {
             <Button component={RouterLink} to="/radar/subscription">Review Subscription</Button>
             <Button component={RouterLink} to="/contact">Contact us</Button>
           </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, overflowWrap: "anywhere" }}>
+            Refund requests and unusable or held research are reviewed manually. Email <Link href="mailto:support@getresearchradar.com">support@getresearchradar.com</Link>. There is no automatic refund or allowance restoration; statutory rights remain unchanged.
+          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            For data handling and service conditions, see the <Link component={RouterLink} to="/privacy">Privacy notice</Link> and <Link component={RouterLink} to="/terms">Terms of use</Link>. Both are currently marked as drafts pending final operator details and review.
+            For data handling and service conditions, see the <Link component={RouterLink} to="/privacy">Privacy notice</Link> and <Link component={RouterLink} to="/terms">Terms of use</Link>. Both are currently marked as drafts pending remaining identity details, operational safeguards and legal review.
           </Typography>
         </Box>
       </Container>
