@@ -18,6 +18,7 @@ from app.services.email_service import EmailDeliveryError
 from app.services.email_verification_service import VerificationError, cleanup_expired
 from app.services.password_recovery_service import cleanup_recovery
 from app.services.rate_limit_service import RateLimitExceeded, cleanup_rate_limits
+from app.services.retention_service import cleanup_retained_records
 
 settings = get_settings()
 
@@ -28,6 +29,7 @@ async def verification_cleanup_loop():
             cleanup_expired(db)
             cleanup_recovery(db)
             cleanup_rate_limits(db)
+            cleanup_retained_records(db)
     while True:
         try:
             await asyncio.to_thread(clean)

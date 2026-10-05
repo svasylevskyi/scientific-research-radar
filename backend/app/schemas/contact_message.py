@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 class ContactMessageCreate(BaseModel):
@@ -28,6 +28,7 @@ class ContactMessageRead(BaseModel):
     message: str
     created_at: datetime
     reviewed_at: datetime | None
+    retention_hold: bool
 
 
 class ContactMessageList(BaseModel):
@@ -38,4 +39,11 @@ class ContactMessageList(BaseModel):
 
 
 class ContactMessageReview(BaseModel):
-    reviewed: bool
+    reviewed: bool | None = None
+    retention_hold: bool | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_change(self) -> "ContactMessageReview":
+        if self.reviewed is None and self.retention_hold is None:
+            raise ValueError("Choose a review or retention change.")
+        return self

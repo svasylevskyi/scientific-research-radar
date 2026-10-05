@@ -68,14 +68,15 @@ idempotent requests, webhook reconciliation and audit/retention requirements.
 | Shared admin review/settings attribution | Remove user FKs and saved author names; replace structured reviewer names. Privacy redaction changes affected publication hashes and invalidates dependent AI comparisons; scientific findings remain. Free-text mentions in shared records require manual privacy review. |
 | Local billing records | Remove unnecessary data without waiting for Stripe availability. Retain saved checkout/customer/subscription IDs and actionable issue references while needed for cancellation; erase them on successful closure. |
 | Closure emails | Retry with a stable Message-ID; SMTP is at-least-once. Remove recipient on successful completion notice or seven days after request. After expiry, support follows up manually. Email delivery failure never reopens the account or undoes erasure. |
-| Closure record/tombstone | Retain UUID, status and timestamps to prevent resurrection and support restore reconciliation. No original name, email, password or billing payload remains after completion/notification expiry. This is pseudonymous operational data, not a claim of total anonymity. |
+| Closure record/tombstone | Keep the live inactive-account guard needed to make closure irreversible. Recovery manifests retain UUID/request time for 65 days (35-day backup window + 30-day safety margin), then omit older markers. No original name, email, password or billing payload remains after completion/notification expiry. |
 | Stripe, OpenAI, logs, off-site backups and exported files | Outside the live database eraser. Apply the approved provider/log/backup policies and privacy-request process. Already-submitted provider requests cannot be recalled by this workflow. |
 
 These are implementation rules, not a jurisdiction-specific legal retention
-schedule. Before paid launch, approve refund policy, accounting/provider retention,
-the purpose and lifetime of closure markers, log/backup expiry, human privacy
-review responsibilities and response deadlines. The app does not invent a legal
-retention period or delete Stripe financial records. Inspect closure issues daily.
+schedule. Radar-controlled recovery markers now use the operator-approved 65-day
+window; local/off-site backup and ordinary support retention are documented in
+[data retention](data-retention.md). Accounting/provider/legal-case retention,
+human privacy-review responsibilities and response deadlines remain adviser-led.
+The app does not delete Stripe financial records. Inspect closure issues daily.
 
 ## Deployment and acceptance
 

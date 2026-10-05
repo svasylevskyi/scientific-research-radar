@@ -188,21 +188,34 @@ production settings over the running deployment or start its old schedules.
 If closure records since the last checkpoint may be missing, investigate those
 requests before reopening service.
 
-This helper deliberately performs no `forget` or `prune`. Approve a backup expiry
-policy before paid launch, including the closure-marker retention window and
-privacy-request process. Until then, snapshots accumulate; monitor bucket size
-and do not describe this as a finite retention policy. Keep the newest cumulative
-closure checkpoint for as long as any restorable backup may contain those users.
+The approved policy retains complete database snapshots for **35 days**. Independent
+closure checkpoints use **65 days**: the same 35-day restorable-backup window plus
+a 30-day recovery safety margin. Cumulative marker content is also filtered to
+that 65-day window when a new checkpoint is written.
 
-When a policy is agreed, use Restic's `forget --dry-run` with explicit
-`--host radar-production` and separate `--tag radar-database` / `--tag radar-closures`
-selections, inspect the exact removals, then schedule reviewed retention. Avoid
-default path grouping: private staging paths change between runs, so specify
-`--group-by host,tags`. Never delete snapshots or pack files directly in R2. Run
-retention under the same off-site lock, with its own failure monitoring; it is not
-part of the daily success signal. Run `check --read-data` regularly and before
-recovery, then perform an actual restore drill. A checksum alone does not establish
-application-level recoverability.
+Retention is an explicit command, separate from backup success. It invokes Restic
+`forget --prune` with the exact environment host, separate `radar-database` and
+`radar-closures` tags, and `--group-by host,tags`. Never delete R2 objects or
+Restic pack files directly.
+
+Create a separate Healthchecks.io check for retention, add its base ping URL as
+`RADAR_RETENTION_PING_URL`, verify it manually, then schedule daily after the
+normal backup window:
+
+```bash
+sudo env RADAR_ENVIRONMENT=production python3 infra/scripts/offsite_backup.py retention
+```
+
+```cron
+17 4 * * * /usr/bin/env RADAR_ENVIRONMENT=production /usr/bin/python3 /opt/radar/source/infra/scripts/offsite_backup.py retention >> /var/log/radar-offsite.log 2>&1
+```
+
+The command runs under the same off-site lock and has its own success/failure
+heartbeat. A failed retention run does not falsify the earlier backup success and
+must be investigated. Restic's keep-window semantics favor recoverability if no
+new snapshot is produced, so monitoring remains part of enforcement. Continue to
+run `check --read-data` regularly and before recovery, and perform actual restore
+drills. A checksum alone does not establish application-level recoverability.
 
 References: [Restic S3 repository setup](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html),
 [repository checking](https://restic.readthedocs.io/en/stable/045_working_with_repos.html),

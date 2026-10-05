@@ -1,8 +1,8 @@
 """Encrypted off-site recovery bundles. Host-only; no application or provider writes.
 
 Restic credentials are read as literal data and passed only to restic, never to
-Docker, logs, or the uploaded bundle. Repository retention is an explicit operator
-decision; this tool never forgets snapshots or prunes data.
+Docker, logs, or the uploaded bundle. Approved retention is enforced only by the
+explicit retention command under the same host lock as backup and recovery.
 """
 import argparse
 from contextlib import contextmanager
@@ -29,7 +29,9 @@ SHA = re.compile(r"[0-9a-f]{64}")
 ENVIRONMENT = re.compile(r"[a-z][a-z0-9-]*")
 RESTIC_KEYS = {"RESTIC_REPOSITORY", "RESTIC_PASSWORD", "AWS_ACCESS_KEY_ID",
                "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION"}
-ALERT_KEYS = {"RADAR_OFFSITE_PING_URL", "RADAR_CLOSURE_PING_URL"}
+ALERT_KEYS = {"RADAR_OFFSITE_PING_URL", "RADAR_CLOSURE_PING_URL", "RADAR_RETENTION_PING_URL"}
+DATABASE_RETENTION_DAYS = 35
+CLOSURE_RETENTION_DAYS = DATABASE_RETENTION_DAYS + 30
 FILES = {
     "closures": {"closure-manifest.json"},
     "database": {"database.dump", "application.env", "release", "image-digests",
@@ -118,6 +120,16 @@ class Restic:
                 raise BackupError("Unexpected snapshot identity; recovery selection refused.")
         return max(data, key=lambda item: parse_time(item["time"]))["id"] if data else None
 
+    def forget(self, environment: str, kind: str, days: int) -> None:
+        self.run(
+            "forget",
+            "--host", f"radar-{environment}",
+            "--tag", f"radar-{kind}",
+            "--group-by", "host,tags",
+            "--keep-within", f"{days}d",
+            "--prune",
+        )
+
     def upload(self, directory: Path, environment: str, kind: str) -> str:
         output = self.run("backup", "--json", "--host", f"radar-{environment}",
                           "--tag", f"radar-{kind}", ".", cwd=directory)
@@ -166,6 +178,13 @@ def merge_markers(*groups: list[dict[str, str]]) -> list[dict[str, str]]:
             if previous is None or parse_time(marker["requested_at"]) < parse_time(previous["requested_at"]):
                 merged[marker["user_id"]] = marker
     return [merged[identifier] for identifier in sorted(merged)]
+
+
+def retained_markers(markers: list[dict[str, str]], current: datetime | None = None) -> list[dict[str, str]]:
+    """Keep recovery markers only while pre-closure database snapshots can still be restored, plus the approved safety margin."""
+    current = current or datetime.now(timezone.utc)
+    cutoff = current.timestamp() - CLOSURE_RETENTION_DAYS * 86400
+    return [marker for marker in markers if parse_time(marker["requested_at"]).timestamp() >= cutoff]
 
 
 def write_json(path: Path, value: object) -> None:
@@ -252,7 +271,7 @@ def backup(restic: Restic, environment: str, kind: str) -> str:
         directory = Path(temporary)
         stage(directory, environment, kind)
         current = parse_markers((directory / "closure-manifest.json").read_bytes())
-        markers = merge_markers(previous, current)
+        markers = retained_markers(merge_markers(previous, current))
         write_json(directory / "closure-manifest.json", markers)
         # Commit the independent closure checkpoint before the database snapshot.
         with tempfile.TemporaryDirectory(prefix="radar-closure-upload-") as closure_temporary:
@@ -264,6 +283,13 @@ def backup(restic: Restic, environment: str, kind: str) -> str:
             return closure_id
         describe_bundle(directory, environment, kind)
         return restic.upload(directory, environment, kind)
+
+
+def apply_retention(restic: Restic, environment: str) -> None:
+    # Database snapshots carry potentially identifiable live data for 35 days.
+    # Closure checkpoints remain for an additional 30-day restore-safety margin.
+    restic.forget(environment, "database", DATABASE_RETENTION_DAYS)
+    restic.forget(environment, "closures", CLOSURE_RETENTION_DAYS)
 
 
 def fetch(restic: Restic, environment: str, target: Path, snapshot_id: str | None) -> str:
@@ -307,7 +333,7 @@ def operation_lock(environment: str):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("validate", "backup", "closures", "check", "fetch"))
+    parser.add_argument("command", choices=("validate", "backup", "closures", "retention", "check", "fetch"))
     parser.add_argument("--environment", default=os.environ.get("RADAR_ENVIRONMENT", "development"))
     parser.add_argument("--target", type=Path)
     parser.add_argument("--snapshot", help="Full database snapshot ID; defaults to latest for this environment")
@@ -329,10 +355,14 @@ def main() -> int:
         if args.command == "validate":
             print("Off-site configuration is valid; no remote requests made.")
             return 0
-        if args.command in {"backup", "closures"}:
-            key = "RADAR_OFFSITE_PING_URL" if args.command == "backup" else "RADAR_CLOSURE_PING_URL"
+        if args.command in {"backup", "closures", "retention"}:
+            key = {
+                "backup": "RADAR_OFFSITE_PING_URL",
+                "closures": "RADAR_CLOSURE_PING_URL",
+                "retention": "RADAR_RETENTION_PING_URL",
+            }[args.command]
             if key not in values:
-                raise BackupError("Configure a separate closure-checkpoint alert before scheduling closures.")
+                raise BackupError(f"Configure {key} before scheduling {args.command}.")
             alert = values[key]
         with operation_lock(args.environment):
             restic = Restic(values)
@@ -340,6 +370,9 @@ def main() -> int:
                 kind = "database" if args.command == "backup" else "closures"
                 snapshot_id = backup(restic, args.environment, kind)
                 print(f"Saved complete {kind} snapshot: {snapshot_id}")
+            elif args.command == "retention":
+                apply_retention(restic, args.environment)
+                print(f"Applied retention: database {DATABASE_RETENTION_DAYS} days; closure checkpoints {CLOSURE_RETENTION_DAYS} days.")
             elif args.command == "check":
                 restic.run("check", "--read-data")
                 print("Remote repository structure and encrypted data verified.")

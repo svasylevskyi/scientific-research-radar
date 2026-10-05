@@ -27,6 +27,7 @@ VALUES = {
     "AWS_DEFAULT_REGION": "auto",
     "RADAR_OFFSITE_PING_URL": "https://hc-ping.com/00000000-0000-0000-0000-000000000001",
     "RADAR_CLOSURE_PING_URL": "https://hc-ping.com/00000000-0000-0000-0000-000000000002",
+    "RADAR_RETENTION_PING_URL": "https://hc-ping.com/00000000-0000-0000-0000-000000000003",
 }
 MARKER_A = {"user_id": "00000000-0000-0000-0000-000000000001", "requested_at": "2026-09-29T10:00:00Z"}
 MARKER_B = {"user_id": "00000000-0000-0000-0000-000000000002", "requested_at": "2026-09-29T11:00:00Z"}
@@ -83,6 +84,7 @@ class ConfigTests(unittest.TestCase):
             {"RESTIC_PASSWORD": "short"},
             {"RADAR_OFFSITE_PING_URL": "http://localhost/secret"},
             {"RADAR_CLOSURE_PING_URL": VALUES["RADAR_OFFSITE_PING_URL"]},
+            {"RADAR_RETENTION_PING_URL": VALUES["RADAR_OFFSITE_PING_URL"]},
             {"RESTIC_PASSWORD_COMMAND": "echo secret"},
         ]
         for changes in cases:
@@ -161,6 +163,24 @@ class BundleTests(unittest.TestCase):
                 backup.backup(None, ENVIRONMENT, "database")
             stage.assert_not_called()
 
+    def test_marker_retention_is_backup_window_plus_safety_margin(self):
+        current = backup.parse_time("2026-12-04T10:00:00Z")
+        recent = MARKER_A | {"requested_at": "2026-10-01T10:00:00Z"}
+        expired = MARKER_B | {"requested_at": "2026-09-30T09:59:59Z"}
+        self.assertEqual(backup.CLOSURE_RETENTION_DAYS, backup.DATABASE_RETENTION_DAYS + 30)
+        self.assertEqual(backup.retained_markers([recent, expired], current), [recent])
+
+    def test_retention_is_tag_scoped_and_uses_approved_windows(self):
+        restic = backup.Restic(VALUES)
+        with patch.object(restic, "run", return_value=b"") as run:
+            backup.apply_retention(restic, ENVIRONMENT)
+        self.assertEqual(run.call_count, 2)
+        first, second = [call.args for call in run.call_args_list]
+        self.assertEqual(first, ("forget", "--host", "radar-production", "--tag", "radar-database",
+                                 "--group-by", "host,tags", "--keep-within", "35d", "--prune"))
+        self.assertEqual(second, ("forget", "--host", "radar-production", "--tag", "radar-closures",
+                                  "--group-by", "host,tags", "--keep-within", "65d", "--prune"))
+
     def test_partial_upload_reports_failure_not_success(self):
         for command, key in (("backup", "RADAR_OFFSITE_PING_URL"), ("closures", "RADAR_CLOSURE_PING_URL")):
             with self.subTest(command=command), patch.object(sys, "argv", ["offsite_backup.py", command, "--environment", ENVIRONMENT]), \
@@ -170,6 +190,16 @@ class BundleTests(unittest.TestCase):
                     contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(backup.main(), 1)
                 ping.assert_called_once_with(VALUES[key], failed=True)
+
+    def test_retention_has_separate_heartbeat(self):
+        with patch.object(sys, "argv", ["offsite_backup.py", "retention", "--environment", ENVIRONMENT]), \
+                patch.object(backup.os, "geteuid", return_value=0), patch.object(backup, "load_config", return_value=VALUES), \
+                patch.object(backup, "operation_lock", return_value=contextlib.nullcontext()), \
+                patch.object(backup, "apply_retention") as retention, patch.object(backup, "ping", return_value=True) as ping, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(backup.main(), 0)
+            retention.assert_called_once()
+            ping.assert_called_once_with(VALUES["RADAR_RETENTION_PING_URL"])
 
     def test_check_and_fetch_do_not_refresh_backup_heartbeat(self):
         for command in ("check", "fetch"):
