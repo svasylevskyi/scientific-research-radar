@@ -229,13 +229,15 @@ test("immediate closure is not instant erasure and backups are not claimed to be
   assert.match(privacyText, /do not mean closed-account information instantly disappears/);
   assert.match(termsText, /Erasure can wait for active work or required reviews/);
 });
-test("lack of dormant accounts does not become an invented retention policy", () => {
+test("approved technical retention stays distinct from inactivity and legal-case retention", () => {
   assert.match(privacyText, /no approved inactivity-based retention policy/);
   assert.match(privacyText, /simply not signing in is not a request for closure/);
   assert.match(privacyText, /Closed accounts are not kept as usable dormant accounts/);
-  assert.match(privacyText, /A complete retention schedule has not yet been approved/);
-  assert.match(privacyText, /periods or meaningful review\/deletion criteria must be set/);
-  assert.doesNotMatch(privacyText, /retained for (30|90|365) days|backups (expire|deleted) after \d+ days|retain.*indefinitely/i);
+  assert.match(privacyText, /off-site database snapshots for 35 days/);
+  assert.match(privacyText, /closure recovery checkpoints for 65 days/);
+  assert.match(privacyText, /contact messages are deleted 12 months after they are marked reviewed/);
+  assert.match(privacyText, /host operational logs use 30 daily rotations/);
+  assert.match(privacyText, /not automatically deleted by these application rules/);
 });
 test("no blanket 18+ rule does not mean child eligibility or consent has been verified", () => {
   assert.match(termsText, /does not impose a blanket 18\+ account restriction/);

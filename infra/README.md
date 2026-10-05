@@ -505,3 +505,26 @@ Follow [the Stripe deployment guide](../docs/stripe-deployment.md) for mode sele
 credentials, live catalogue mapping, webhook events, and acceptance checks.
 Migration `20260915_0026` binds each database to one Stripe mode. Production requires
 its own database; existing sandbox checkout records cannot be promoted to live.
+
+
+## Approved retention operations
+
+Radar-controlled host logs in `radar-backup.logrotate` rotate daily with 30
+retained rotations. Container stdout/stderr remains bounded by the Compose
+`local` logging driver at 3 × 10 MB per container.
+
+The off-site Restic policy is enforced separately from backup success:
+
+- database snapshots: 35 days,
+- closure checkpoints: 65 days,
+- local PostgreSQL dumps: existing 7-day cleanup.
+
+After configuring a distinct `RADAR_RETENTION_PING_URL`, run and schedule:
+
+```bash
+sudo env RADAR_ENVIRONMENT=production python3 infra/scripts/offsite_backup.py retention
+```
+
+See [data retention](../docs/data-retention.md) and
+[off-site backups](../docs/offsite-backups.md) for the policy and recovery
+boundary.

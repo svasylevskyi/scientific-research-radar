@@ -1,8 +1,8 @@
 """Encrypted off-site recovery bundles. Host-only; no application or provider writes.
 
 Restic credentials are read as literal data and passed only to restic, never to
-Docker, logs, or the uploaded bundle. Repository retention is an explicit operator
-decision; this tool never forgets snapshots or prunes data.
+Docker, logs, or the uploaded bundle. Approved retention is enforced only by the
+explicit retention command under the same host lock as backup and recovery.
 """
 import argparse
 from contextlib import contextmanager
@@ -29,7 +29,9 @@ SHA = re.compile(r"[0-9a-f]{64}")
 ENVIRONMENT = re.compile(r"[a-z][a-z0-9-]*")
 RESTIC_KEYS = {"RESTIC_REPOSITORY", "RESTIC_PASSWORD", "AWS_ACCESS_KEY_ID",
                "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION"}
-ALERT_KEYS = {"RADAR_OFFSITE_PING_URL", "RADAR_CLOSURE_PING_URL"}
+ALERT_KEYS = {"RADAR_OFFSITE_PING_URL", "RADAR_CLOSURE_PING_URL", "RADAR_RETENTION_PING_URL"}
+DATABASE_RETENTION_DAYS = 35
+CLOSURE_RETENTION_DAYS = DATABASE_RETENTION_DAYS + 30
 FILES = {
     "closures": {"closure-manifest.json"},
     "database": {"database.dump", "application.env", "release", "image-digests",
@@ -85,7 +87,7 @@ def load_config(path: Path) -> dict[str, str]:
 def clean_environment() -> dict[str, str]:
     # Avoid inherited provider credentials/options affecting either restic or Docker.
     return {key: value for key, value in os.environ.items()
-            if not key.startswith(("RESTIC_", "AWS_", "B2_", "RADAR_OFFSITE_", "RADAR_CLOSURE_"))}
+            if not key.startswith(("RESTIC_", "AWS_", "B2_", "RADAR_OFFSITE_", "RADAR_CLOSURE_", "RADAR_RETENTION_"))}
 
 
 class Restic:
@@ -106,7 +108,7 @@ class Restic:
             raise BackupError(f"Restic {arguments[0]} failed (exit {result.returncode}); no successful completion recorded.")
         return result.stdout
 
-    def latest(self, environment: str, kind: str) -> str | None:
+    def snapshots(self, environment: str, kind: str) -> list[dict]:
         data = json.loads(self.run("snapshots", "--json", "--host", f"radar-{environment}",
                                    "--tag", f"radar-{kind}"))
         if not isinstance(data, list):
@@ -116,7 +118,22 @@ class Restic:
                     or f"radar-{kind}" not in snapshot.get("tags", [])
                     or not SHA.fullmatch(snapshot.get("id", ""))):
                 raise BackupError("Unexpected snapshot identity; recovery selection refused.")
+            parse_time(snapshot.get("time", ""))
+        return data
+
+    def latest(self, environment: str, kind: str) -> str | None:
+        data = self.snapshots(environment, kind)
         return max(data, key=lambda item: parse_time(item["time"]))["id"] if data else None
+
+    def forget(self, environment: str, kind: str, days: int) -> None:
+        self.run(
+            "forget",
+            "--host", f"radar-{environment}",
+            "--tag", f"radar-{kind}",
+            "--group-by", "host,tags",
+            "--keep-within", f"{days}d",
+            "--prune",
+        )
 
     def upload(self, directory: Path, environment: str, kind: str) -> str:
         output = self.run("backup", "--json", "--host", f"radar-{environment}",
@@ -166,6 +183,24 @@ def merge_markers(*groups: list[dict[str, str]]) -> list[dict[str, str]]:
             if previous is None or parse_time(marker["requested_at"]) < parse_time(previous["requested_at"]):
                 merged[marker["user_id"]] = marker
     return [merged[identifier] for identifier in sorted(merged)]
+
+
+def retained_markers(
+    markers: list[dict[str, str]],
+    database_snapshot_times: list[datetime],
+    current: datetime | None = None,
+) -> list[dict[str, str]]:
+    """Drop a marker only after its 65-day horizon and after every pre-closure DB snapshot is gone."""
+    current = current or datetime.now(timezone.utc)
+    cutoff = current.timestamp() - CLOSURE_RETENTION_DAYS * 86400
+    retained = []
+    for marker in markers:
+        requested = parse_time(marker["requested_at"])
+        age_requires_marker = requested.timestamp() >= cutoff
+        restorable_preclosure = any(snapshot_time <= requested for snapshot_time in database_snapshot_times)
+        if age_requires_marker or restorable_preclosure:
+            retained.append(marker)
+    return retained
 
 
 def write_json(path: Path, value: object) -> None:
@@ -266,6 +301,23 @@ def backup(restic: Restic, environment: str, kind: str) -> str:
         return restic.upload(directory, environment, kind)
 
 
+def apply_retention(restic: Restic, environment: str) -> None:
+    # First prune database snapshots. Marker disposal is allowed only after the
+    # post-prune inventory proves that no surviving pre-closure database snapshot
+    # can resurrect that account, and after the approved additional safety margin.
+    restic.forget(environment, "database", DATABASE_RETENTION_DAYS)
+    database_times = [parse_time(item["time"]) for item in restic.snapshots(environment, "database")]
+    markers, _ = saved_markers(restic, environment)
+    retained = retained_markers(markers, database_times)
+    if retained != markers:
+        with tempfile.TemporaryDirectory(prefix="radar-retention-closure-") as temporary:
+            directory = Path(temporary)
+            write_json(directory / "closure-manifest.json", retained)
+            describe_bundle(directory, environment, "closures")
+            restic.upload(directory, environment, "closures")
+    restic.forget(environment, "closures", CLOSURE_RETENTION_DAYS)
+
+
 def fetch(restic: Restic, environment: str, target: Path, snapshot_id: str | None) -> str:
     if (not target.is_absolute() or any(char in str(target) for char in "\n\r\\")
             or target.exists() or target.is_symlink()):
@@ -307,7 +359,7 @@ def operation_lock(environment: str):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("validate", "backup", "closures", "check", "fetch"))
+    parser.add_argument("command", choices=("validate", "backup", "closures", "retention", "check", "fetch"))
     parser.add_argument("--environment", default=os.environ.get("RADAR_ENVIRONMENT", "development"))
     parser.add_argument("--target", type=Path)
     parser.add_argument("--snapshot", help="Full database snapshot ID; defaults to latest for this environment")
@@ -329,10 +381,14 @@ def main() -> int:
         if args.command == "validate":
             print("Off-site configuration is valid; no remote requests made.")
             return 0
-        if args.command in {"backup", "closures"}:
-            key = "RADAR_OFFSITE_PING_URL" if args.command == "backup" else "RADAR_CLOSURE_PING_URL"
+        if args.command in {"backup", "closures", "retention"}:
+            key = {
+                "backup": "RADAR_OFFSITE_PING_URL",
+                "closures": "RADAR_CLOSURE_PING_URL",
+                "retention": "RADAR_RETENTION_PING_URL",
+            }[args.command]
             if key not in values:
-                raise BackupError("Configure a separate closure-checkpoint alert before scheduling closures.")
+                raise BackupError(f"Configure {key} before scheduling {args.command}.")
             alert = values[key]
         with operation_lock(args.environment):
             restic = Restic(values)
@@ -340,6 +396,9 @@ def main() -> int:
                 kind = "database" if args.command == "backup" else "closures"
                 snapshot_id = backup(restic, args.environment, kind)
                 print(f"Saved complete {kind} snapshot: {snapshot_id}")
+            elif args.command == "retention":
+                apply_retention(restic, args.environment)
+                print(f"Applied retention: database {DATABASE_RETENTION_DAYS} days; closure checkpoints {CLOSURE_RETENTION_DAYS} days.")
             elif args.command == "check":
                 restic.run("check", "--read-data")
                 print("Remote repository structure and encrypted data verified.")

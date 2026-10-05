@@ -22,7 +22,7 @@ def test_submission_and_access(client, db_session_factory):
     assert set(response.json()) == {"message"}
     with db_session_factory() as db:
         stored = db.scalar(select(ContactMessage))
-        assert (stored.name, stored.message, stored.reviewed_at) == ("Reader", "A question", None)
+        assert (stored.name, stored.message, stored.reviewed_at, stored.retention_hold) == ("Reader", "A question", None, False)
     assert client.get("/api/v1/admin/messages").status_code == 401
     assert client.patch(f"/api/v1/admin/messages/{uuid4()}", json={"reviewed": True}).status_code == 401
 
@@ -46,6 +46,10 @@ def test_review_and_pagination(client, db_session_factory):
     reviewed = client.patch(path, headers=headers, json={"reviewed": True})
     assert reviewed.status_code == 200 and reviewed.json()["reviewed_at"]
     assert client.patch(path, headers=headers, json={"reviewed": True}).json()["reviewed_at"] == reviewed.json()["reviewed_at"]
+    held = client.patch(path, headers=headers, json={"retention_hold": True})
+    assert held.status_code == 200 and held.json()["retention_hold"] is True
+    assert client.patch(path, headers=headers, json={"retention_hold": False}).json()["retention_hold"] is False
+    assert client.patch(path, headers=headers, json={}).status_code == 422
     assert client.patch(path, headers=headers, json={"reviewed": False}).json()["reviewed_at"] is None
     assert client.patch(f"/api/v1/admin/messages/{uuid4()}", headers=headers, json={"reviewed": True}).status_code == 404
     assert client.get("/api/v1/admin/messages?limit=101", headers=headers).status_code == 422

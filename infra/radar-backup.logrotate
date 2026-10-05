@@ -1,6 +1,6 @@
 /var/log/radar-backup.log /var/log/radar-monitor.log /var/log/radar-offsite.log /var/log/radar-closures.log {
-    weekly
-    rotate 4
+    daily
+    rotate 30
     compress
     missingok
     notifempty

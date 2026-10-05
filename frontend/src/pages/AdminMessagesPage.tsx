@@ -81,6 +81,31 @@ export function AdminMessagesPage() {
       void resource.refresh();
     }
   }
+  async function toggleRetentionHold() {
+    if (!selected || locked.current || resource.error) return;
+    const item = selected;
+    locked.current = true;
+    revision.current += 1;
+    setSaving(true); setNotice(null);
+    try {
+      const updated = await contactApi.setRetentionHold(item.id, !item.retention_hold);
+      revision.current += 1;
+      const writeRevision = revision.current;
+      setPatches(current => ({ ...current, [updated.id]: { item: updated, revision: writeRevision } }));
+      if (selectedRef.current === item.id) setNotice({ id: item.id, severity: "success",
+        text: updated.retention_hold
+          ? "Retention hold enabled. Automatic 12-month cleanup will not delete this case."
+          : "Retention hold removed. Ordinary reviewed-message retention applies." });
+    } catch (caught) {
+      if (selectedRef.current === item.id) setNotice({ id: item.id, severity: "error", focus: true,
+        text: caught instanceof ApiError ? caught.message : "Could not update the retention hold. Refresh and check it before trying again." });
+    } finally {
+      locked.current = false;
+      setSaving(false);
+      void resource.refresh();
+    }
+  }
+
   async function copyEmail() {
     if (!selected) return;
     const item = selected;
@@ -93,8 +118,11 @@ export function AdminMessagesPage() {
         text: "Could not copy automatically. Select and copy the email address shown above." });
     }
   }
-  const status = (item: ContactMessage) => <Chip size="small" label={item.reviewed_at ? "Reviewed" : "New"}
-    color={item.reviewed_at ? "default" : "info"} variant="outlined" />;
+  const status = (item: ContactMessage) => <Stack direction="row" gap={0.75} useFlexGap flexWrap="wrap">
+    <Chip size="small" label={item.reviewed_at ? "Reviewed" : "New"}
+      color={item.reviewed_at ? "default" : "info"} variant="outlined" />
+    {item.retention_hold && <Chip size="small" label="Retention hold" color="warning" variant="outlined" />}
+  </Stack>;
   const reviewButton = (item: ContactMessage) => <Button onClick={() => open(item)}
     aria-label={`Review message from ${item.name}`}>Review message</Button>;
   return <Box><AppHeader /><Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
@@ -153,6 +181,9 @@ export function AdminMessagesPage() {
           <Typography sx={{ whiteSpace: "pre-wrap" }}>{selected.message}</Typography></Box>
         <Box>{status(selected)}<Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           {selected.reviewed_at ? `Reviewed ${adminDate(selected.reviewed_at)}` : "Not yet reviewed"}. Review status does not record a reply or resolution.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+          Ordinary reviewed messages are deleted automatically after 12 months. Use retention hold for complaints, refunds, privacy requests, disputes, or other records that must follow a manual legal/accounting retention decision.
         </Typography></Box>
         {resource.error && <Alert severity="warning">The message list could not refresh. Review actions are paused; close this dialog and retry the read.</Alert>}
         {activeNotice && <Alert ref={noticeRef} tabIndex={-1} severity={activeNotice.severity}
@@ -160,6 +191,10 @@ export function AdminMessagesPage() {
       </Stack>}</DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5, flexWrap: "wrap", gap: 1 }}>
         <Button autoFocus disabled={saving} onClick={close}>Close</Button>
+        <Button color={selected?.retention_hold ? "warning" : "inherit"} disabled={saving || !!resource.error || !selected}
+          onClick={() => void toggleRetentionHold()}>
+          {selected?.retention_hold ? "Remove retention hold" : "Retain as legal/financial case"}
+        </Button>
         <Button variant="contained" disabled={saving || !!resource.error || !selected} onClick={() => void toggleReview()}>
           {saving ? "Saving…" : selected?.reviewed_at ? "Mark as new" : "Mark reviewed"}
         </Button>

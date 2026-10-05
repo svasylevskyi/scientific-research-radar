@@ -67,8 +67,12 @@ def request_closure(db, *, target_id: UUID, actor: User, password: str) -> Accou
         notification_email=target.email, notification_deadline=stamp + timedelta(days=7),
         notice_state="pending", notice_attempts=0, notice_next_at=stamp)
     closure.billing_issues = [{"kind": "contact_review", "reference": str(message_id)} for message_id in db.scalars(
-        select(ContactMessage.id).where(ContactMessage.user_id.is_(None), ContactMessage.email == target.email,
-                                        ContactMessage.created_at <= stamp))]
+        select(ContactMessage.id).where(
+            ContactMessage.user_id.is_(None),
+            ContactMessage.retention_hold.is_(False),
+            ContactMessage.email == target.email,
+            ContactMessage.created_at <= stamp,
+        ))]
     target.closure_requested_at, target.is_active = stamp, False
     target.auth_version += 1
     db.add(closure)
@@ -134,10 +138,13 @@ def anonymous_contacts(db, user_id):
     # authenticated submissions have an owner FK and are erased automatically.
     saved_ids = [UUID(item["reference"]) for item in row.billing_issues if item["kind"] == "contact_review"]
     identity_match = (ContactMessage.email == row.notification_email) if row.notification_email else False
-    return list(db.scalars(select(ContactMessage).where(ContactMessage.user_id.is_(None),
+    return list(db.scalars(select(ContactMessage).where(
+        ContactMessage.user_id.is_(None),
+        ContactMessage.retention_hold.is_(False),
         ContactMessage.id.not_in([UUID(value) for value in row.unrelated_contact_ids]),
-        or_(identity_match, ContactMessage.id.in_(saved_ids)), ContactMessage.created_at <= row.requested_at)
-        .order_by(ContactMessage.created_at, ContactMessage.id)))
+        or_(identity_match, ContactMessage.id.in_(saved_ids)),
+        ContactMessage.created_at <= row.requested_at,
+    ).order_by(ContactMessage.created_at, ContactMessage.id)))
 
 
 def erase_personal_data(db, row):
@@ -152,6 +159,14 @@ def erase_personal_data(db, row):
     # as attribution columns. Preserve the scientific review using a pseudonym.
     from app.services.account_closure_redaction import redact_admin_history
     redact_admin_history(db, uid)
+    # Explicit retention holds represent complaint/refund/privacy/dispute or other
+    # adviser-controlled cases. Detach those records from the closing account before
+    # the generic ownership cascade; ordinary owned contact messages are still erased.
+    db.execute(
+        update(ContactMessage)
+        .where(ContactMessage.user_id == uid, ContactMessage.retention_hold.is_(True))
+        .values(user_id=None)
+    )
     # Foreign-key ownership is the authoritative inventory; children cascade.
     # The queue and saved checkout IDs are needed until Stripe is resolved.
     retained = {"account_closures", "sandbox_checkouts", "sandbox_billing_accounts", "subscription_observation_accounts"}

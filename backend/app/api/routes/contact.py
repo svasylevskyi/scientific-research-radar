@@ -49,10 +49,13 @@ def review_message(
     message = db.get(ContactMessage, message_id)
     if message is None:
         raise HTTPException(404, "Contact message not found.")
-    if payload.reviewed:
-        message.reviewed_at = message.reviewed_at or datetime.now(UTC)
-    else:
-        message.reviewed_at = None
+    if payload.reviewed is not None:
+        if payload.reviewed:
+            message.reviewed_at = message.reviewed_at or datetime.now(UTC)
+        else:
+            message.reviewed_at = None
+    if payload.retention_hold is not None:
+        message.retention_hold = payload.retention_hold
     db.commit()
     db.refresh(message)
     return ContactMessageRead.model_validate(message)

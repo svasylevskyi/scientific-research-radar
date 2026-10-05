@@ -3034,6 +3034,8 @@ export interface components {
             message: string;
             /** Name */
             name: string;
+            /** Retention Hold */
+            retention_hold: boolean;
             /** Reviewed At */
             reviewed_at: string | null;
         };
@@ -3044,8 +3046,10 @@ export interface components {
         };
         /** ContactMessageReview */
         ContactMessageReview: {
+            /** Retention Hold */
+            retention_hold?: boolean | null;
             /** Reviewed */
-            reviewed: boolean;
+            reviewed?: boolean | null;
         };
         /** Criteria */
         Criteria: {

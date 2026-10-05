@@ -82,22 +82,21 @@ are introduced here. The inventory must include deployed scripts outside Git.
 
 ## Retention worksheet — requires approved periods and enforcement
 
-The absence of dormant accounts does not settle retention of all other data.
-Use periods or criteria specific enough for a person to assess their own case;
-“as long as necessary” alone is not a finished schedule. **The following observed
-technical rules are not adopted legal retention periods.** Do not invent 30-day,
-90-day, seven-year or indefinite policies and publish them before approval.
+The operator approved the Radar-controlled technical retention policy on
+**5 October 2026**. The periods below are now implementation requirements.
+Statutory/accounting/provider records remain subject to adviser and provider rules;
+the technical policy must not be presented as overriding those obligations.
 
 | Data | Current implementation / known handling | Decision and action needed |
 | --- | --- | --- |
 | Unverified registrations | 24-hour attempt expiry; cleanup processing removes expired attempts | Verify worker cadence; include backups/provider mail copies separately. Expiry is not proof all copies vanished at exactly 24 hours. |
-| Open accounts, digests, history, feedback | Retained for ongoing use; closure deletes owned live data | Approve inactive-account review/deletion criteria, history lifetime and any retention limits. Do not equate non-use with closure. |
+| Open accounts, digests, history, feedback | Retained for ongoing use; closure deletes owned live data | Approved: no inactivity expiry. Keep while the account remains open unless the user deletes data. |
 | Active closure | Sessions revoked immediately; outstanding work/billing/ownership review can delay completion | Assign an owner and review cadence for stuck closures; document exceptions and follow-up. |
 | Closure notice address | Removed after successful completion notice or seven days after request | Confirm this technical limit in the final notice and support handoff. |
-| Tombstones/closure manifests | Minimal account IDs, statuses and dates remain to prevent reactivation | Approve lifetime covering restore/late-event risk and a safe eventual purge rule; not claimed anonymous. |
-| Contact form and external support messages | Owned contact rows deleted with closure; anonymous/shared references need ownership review; mailbox copies are separate | Approve case retention, complaint/privacy request evidence, identity checks, mailbox deletion and manual reviews. |
-| Security/application/monitoring logs | Fields and actual expiry not confirmed | Inventory rotation/settings, choose justified retention and make it executable. |
-| Backups and exported bundles | Retained separately; recovery must reapply closure evidence | Confirm existing local/Hetzner/Restic periods, pruning schedule, exported drill-copy handling and access restrictions. |
+| Closure recovery manifests | Minimal account IDs and request dates prevent restoration from reviving closed accounts | Approved: 65-day marker window (35-day backup retention plus 30-day safety margin). Live inactive-account guards remain so closure cannot be reversed. |
+| Contact form and external support messages | Owned contact rows deleted with closure; anonymous/shared references need ownership review; mailbox copies are separate | Approved ordinary in-app retention: 12 months after review. Admin retention hold excludes complaint/refund/privacy/dispute cases from automatic deletion. External mailbox/legal-case periods remain adviser-controlled. |
+| Security/application/monitoring logs | Radar host operational files and Docker local-driver logs | Approved: host operational logs use 30 daily rotations. Container logs remain size-bounded at 3 × 10 MB per container and can expire sooner under volume; confirm any provider-side monitoring history separately. |
+| Backups and exported bundles | Local dumps already expire after 7 days; recovery reapplies closure evidence | Approved: off-site database snapshots 35 days; closure checkpoints 65 days. Retention runs separately with Restic forget/prune and its own monitoring. Decrypted restore-drill copies remain delete-after-review artifacts. |
 | Stripe, invoices, accounting and disputes | Outside Radar's live-data eraser; external financial records remain | Accountant/lawyer specifies statutory trigger, period, any hold and eventual disposal; no fictional all-data erasure. |
 | Other provider copies | Subject to actual service settings and contracts | Verify retention, deletion/export capability and rights-request routing. |
 
