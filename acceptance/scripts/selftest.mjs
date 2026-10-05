@@ -52,6 +52,14 @@ try {
       try {
         await scenario(page); guard.assertSafe(); assert.deepEqual(errors, []);
         console.log(`PASS isolated built-UI ${scenario.name} ${viewport.width}px`);
+      } catch (error) {
+        // This process serves only a local public build and synthetic anonymous records.
+        // Do not add equivalent page/session logging to the real-development runner.
+        console.error('Loopback diagnostic:', JSON.stringify({ scenario: scenario.name, viewport,
+          errors, violations: guard.violations, requests: calls.slice(-20),
+          title: await page.title(), body: (await page.locator('body').innerText()).slice(0, 1500),
+        }));
+        throw error;
       } finally { await context.close(); }
     }
   }
