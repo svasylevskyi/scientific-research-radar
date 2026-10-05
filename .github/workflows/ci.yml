@@ -144,8 +144,17 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: acceptance
       - name: Validate browser guard and public journeys against a synthetic loopback service
-        run: npm run selftest
+        shell: bash
+        run: npm run selftest 2>&1 | tee "$RUNNER_TEMP/acceptance-loopback.log"
         working-directory: acceptance
+      - name: Retain synthetic loopback diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: acceptance-loopback-diagnostics
+          path: ${{ runner.temp }}/acceptance-loopback.log
+          retention-days: 3
+          if-no-files-found: ignore
   containers:
     needs: changes
     if: needs.changes.outputs.profile == 'full' || needs.changes.outputs.profile == 'frontend'
