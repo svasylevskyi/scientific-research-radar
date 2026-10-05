@@ -354,7 +354,7 @@ test("mobile workspace menu groups icon links under Admin and Profile and closes
   ], adminItems: [
     { label: "Users", to: "/admin/users" }, { label: "Digests", to: "/admin/digests" },
     { label: "Plans", to: "/admin/subscription-plans" }, { label: "Pricing", to: "/admin/pricing" },
-    { label: "Messages", to: "/admin/messages" },
+    { label: "Site content", to: "/admin/content-pages" }, { label: "Messages", to: "/admin/messages" },
   ], profileMenu: { icon: "avatar", fullName, items: [
     { label: "Profile", to: "/radar/profile", icon: "person", mobileLabel: fullName, mobileIcon: "avatar" },
     { label: "Sign out", icon: "logout", onClick: () => { signedOut = true; } },
@@ -363,7 +363,7 @@ test("mobile workspace menu groups icon links under Admin and Profile and closes
   elements.find((element) => element.type === "IconButton").props.onClick({ currentTarget: "button" });
   elements = menu.render();
   const items = elements.filter((element) => element.type === "MenuItem");
-  assert.deepEqual(items.map(menuItemLabel), ["Workspace", "Subscription and usage", "Contact", "Users", "Digests", "Plans", "Pricing", "Messages", fullName, "Sign out"]);
+  assert.deepEqual(items.map(menuItemLabel), ["Workspace", "Subscription and usage", "Contact", "Users", "Digests", "Plans", "Pricing", "Site content", "Messages", fullName, "Sign out"]);
   assert.deepEqual(elements.filter((element) => element.type === "ListSubheader").map((element) => element.props.children), ["Admin", "Profile"]);
   assert.equal(elements.filter((element) => element.type === "Divider").length, 2);
   assert.deepEqual(elements.filter((element) => element.type === "ListItemIcon").map((element) => element.props.children), ["research", "publication", "mail", "avatar", "logout"]);

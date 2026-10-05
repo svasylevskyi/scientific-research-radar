@@ -51,6 +51,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/content-pages/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Content */
+        get: operations["get_content_api_v1_admin_content_pages__slug__get"];
+        /** Update Content */
+        put: operations["update_content_api_v1_admin_content_pages__slug__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/content-pages/{slug}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get History */
+        get: operations["get_history_api_v1_admin_content_pages__slug__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/digests": {
         parameters: {
             query?: never;
@@ -1045,6 +1080,23 @@ export interface paths {
         put?: never;
         /** Submit Message */
         post: operations["submit_message_api_v1_contact_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Public Content */
+        get: operations["get_public_content_api_v1_content__slug__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4012,6 +4064,51 @@ export interface components {
             /** Warnings */
             warnings: string[];
         };
+        /** PublicContentHistory */
+        PublicContentHistory: {
+            /** Items */
+            items: components["schemas"]["PublicContentRead"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** PublicContentRead */
+        PublicContentRead: {
+            /** Body Markdown */
+            body_markdown: string;
+            /** Change Note */
+            change_note: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Slug
+             * @enum {string}
+             */
+            slug: "about" | "privacy" | "terms";
+            /** Title */
+            title: string;
+        };
+        /** PublicContentUpdate */
+        PublicContentUpdate: {
+            /** Body Markdown */
+            body_markdown: string;
+            /** Change Note */
+            change_note: string;
+            /** Expected Revision */
+            expected_revision: number;
+            /** Title */
+            title: string;
+        };
         /** PublicPlanRead */
         PublicPlanRead: {
             /** Annual Price */
@@ -5208,6 +5305,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InvoiceReviewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_content_api_v1_admin_content_pages__slug__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: "about" | "privacy" | "terms";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicContentRead"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_content_api_v1_admin_content_pages__slug__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: "about" | "privacy" | "terms";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicContentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicContentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_history_api_v1_admin_content_pages__slug__history_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                slug: "about" | "privacy" | "terms";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicContentHistory"];
                 };
             };
             /** @description Validation Error */
@@ -7478,6 +7675,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContactMessageReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_content_api_v1_content__slug__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: "about" | "privacy" | "terms";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicContentRead"] | null;
                 };
             };
             /** @description Validation Error */

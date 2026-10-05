@@ -1,7 +1,9 @@
 import { Alert, Box, Container, Link, Stack, Typography } from "@mui/material";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { MarketingHeader } from "../components/MarketingHeader";
+import { BasicMarkdown } from "../components/BasicMarkdown";
+import { loadPublicContent, type PublicContentRevision } from "../content/publicContent";
 
 interface Section { title: string; paragraphs: string[] }
 
@@ -16,7 +18,7 @@ function withSupportLink(paragraph: string) {
   ));
 }
 
-const privacy: Section[] = [
+export const privacySections: Section[] = [
   { title: "Who is responsible for your information", paragraphs: [
     "This notice covers accounts, research preferences and results, feedback, service communications, payment administration, and information used to operate Scientific Research Radar. The sole proprietor identified below is the data controller for Radar’s processing.",
     "Scientific Research Radar is the service name. The service is provided by a sole proprietor registered in Poland (jednoosobowa działalność gospodarcza). Registered proprietor: [legal name including the proprietor’s first name and surname — to be confirmed]. Polish tax identification number (NIP): 8992779679.",
@@ -66,7 +68,7 @@ const privacy: Section[] = [
   ] },
 ];
 
-const terms: Section[] = [
+export const termsSections: Section[] = [
   { title: "The service and its operator", paragraphs: [
     "These review-draft Terms describe Scientific Research Radar, an AI-assisted service for discovering papers, assessing relevance, summarizing findings, exploring trends, and keeping research briefings and feedback.",
     "Scientific Research Radar is the service name. The service is provided by a sole proprietor registered in Poland (jednoosobowa działalność gospodarcza). Registered proprietor: [legal name including the proprietor’s first name and surname — to be confirmed]. Polish tax identification number (NIP): 8992779679.",
@@ -124,35 +126,76 @@ const terms: Section[] = [
   ] },
 ];
 
-export function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
+function sectionsMarkdown(sections: Section[]): string {
+  return sections.flatMap((section, index) => [
+    `## ${index + 1}. ${section.title}`,
+    ...section.paragraphs,
+  ]).join("\n\n");
+}
+
+export function legalDefaultContent(kind: "privacy" | "terms") {
   const title = kind === "privacy" ? "Privacy notice" : "Terms of use";
-  const sections = kind === "privacy" ? privacy : terms;
+  const sections = kind === "privacy" ? privacySections : termsSections;
+  const counterpart = kind === "privacy"
+    ? "[Read the draft Terms of use](/terms)"
+    : "[Read the draft Privacy notice](/privacy)";
+  return {
+    title,
+    body_markdown: [
+      "**Draft for review · Updated 5 October 2026 · Effective date not yet set**",
+      "> Draft only. Confirmed operator contacts and providers are included. The registered proprietor’s full name, geographic business address, retention rules, younger-user safeguards and consumer procedures still need confirmation and review. This is not a finalized legal notice or agreement, and it does not limit rights that apply by law.",
+      sectionsMarkdown(sections),
+      `${counterpart} · [Contact us](/contact) · [Email support](mailto:${supportEmail})`,
+    ].join("\n\n"),
+  };
+}
+
+export function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
+  const builtIn = legalDefaultContent(kind);
+  const sections = kind === "privacy" ? privacySections : termsSections;
+  const [published, setPublished] = useState<PublicContentRevision | null>(null);
+
   useEffect(() => {
     const previous = document.title;
-    document.title = `${title} — Scientific Research Radar`;
+    document.title = `${published?.title ?? builtIn.title} — Scientific Research Radar`;
     window.scrollTo(0, 0);
     return () => { document.title = previous; };
-  }, [title]);
+  }, [builtIn.title, published?.title]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadPublicContent(kind, controller.signal).then((value) => {
+      if (value) setPublished(value);
+    }).catch(() => {});
+    return () => controller.abort();
+  }, [kind]);
+
   return (
     <Box>
       <MarketingHeader />
       <Container component="main" maxWidth="md" sx={{ py: { xs: 5, md: 8 } }}>
         <Box data-page-column="centered" sx={{ width: "100%", maxWidth: 800, minWidth: 0, mx: "auto" }}>
           <Typography variant="overline" color="primary" fontWeight={800}>Transparency & trust</Typography>
-          <Typography component="h1" variant="h2" sx={{ mt: 1, mb: 2 }}>{title}</Typography>
-          <Typography color="text.secondary" sx={{ mb: 3 }}>Draft for review · Updated 5 October 2026 · Effective date not yet set</Typography>
-          <Alert severity="warning" sx={{ mb: 4 }}>Draft only. Confirmed operator contacts and providers are included. The registered proprietor’s full name, geographic business address, retention rules, younger-user safeguards and consumer procedures still need confirmation and review. This is not a finalized legal notice or agreement, and it does not limit rights that apply by law.</Alert>
-          <Stack spacing={4}>
-            {sections.map((section, index) => <Box component="section" key={section.title} aria-labelledby={`${kind}-${index}`}>
-              <Typography id={`${kind}-${index}`} component="h2" variant="h6" sx={{ mb: 1.5 }}>{index + 1}. {section.title}</Typography>
-              {section.paragraphs.map((paragraph) => <Typography key={paragraph} sx={{ mb: 1.5, overflowWrap: "anywhere" }}>{withSupportLink(paragraph)}</Typography>)}
-            </Box>)}
-          </Stack>
-          <Stack direction="row" gap={2} flexWrap="wrap">
-            <Link component={RouterLink} to={kind === "privacy" ? "/terms" : "/privacy"}>{kind === "privacy" ? "Read the draft Terms of use" : "Read the draft Privacy notice"}</Link>
-            <Link component={RouterLink} to="/contact">Contact us</Link>
-            <Link href={`mailto:${supportEmail}`}>Email support</Link>
-          </Stack>
+          <Typography component="h1" variant="h2" sx={{ mt: 1, mb: 2 }}>{published?.title ?? builtIn.title}</Typography>
+          {published ? (
+            <BasicMarkdown markdown={published.body_markdown} />
+          ) : (
+            <>
+              <Typography color="text.secondary" sx={{ mb: 3 }}>Draft for review · Updated 5 October 2026 · Effective date not yet set</Typography>
+              <Alert severity="warning" sx={{ mb: 4 }}>Draft only. Confirmed operator contacts and providers are included. The registered proprietor’s full name, geographic business address, retention rules, younger-user safeguards and consumer procedures still need confirmation and review. This is not a finalized legal notice or agreement, and it does not limit rights that apply by law.</Alert>
+              <Stack spacing={4}>
+                {sections.map((section, index) => <Box component="section" key={section.title} aria-labelledby={`${kind}-${index}`}>
+                  <Typography id={`${kind}-${index}`} component="h2" variant="h6" sx={{ mb: 1.5 }}>{index + 1}. {section.title}</Typography>
+                  {section.paragraphs.map((paragraph) => <Typography key={paragraph} sx={{ mb: 1.5, overflowWrap: "anywhere" }}>{withSupportLink(paragraph)}</Typography>)}
+                </Box>)}
+              </Stack>
+              <Stack direction="row" gap={2} flexWrap="wrap">
+                <Link component={RouterLink} to={kind === "privacy" ? "/terms" : "/privacy"}>{kind === "privacy" ? "Read the draft Terms of use" : "Read the draft Privacy notice"}</Link>
+                <Link component={RouterLink} to="/contact">Contact us</Link>
+                <Link href={`mailto:${supportEmail}`}>Email support</Link>
+              </Stack>
+            </>
+          )}
         </Box>
       </Container>
     </Box>

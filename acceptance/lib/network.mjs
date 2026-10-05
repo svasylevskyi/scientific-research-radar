@@ -4,7 +4,7 @@ import { uuidPattern } from './config.mjs';
 const id = '[0-9a-fA-F-]{36}';
 const publicPages = /^\/(?:|about|contact|privacy|terms|plans|radar(?:\/.*)?|admin(?:\/.*)?)$/;
 const reads = [
-  /^\/api\/v1\/(?:users\/me|subscription(?:\/plans|\/enrolment-plans|\/free-digests|\/billing(?:\/changes|\/upgrades|\/active-digests|\/notifications)?)?|digest-runs\/active)$/,
+  /^\/api\/v1\/(?:users\/me|content\/(?:about|privacy|terms)|subscription(?:\/plans|\/enrolment-plans|\/free-digests|\/billing(?:\/changes|\/upgrades|\/active-digests|\/notifications)?)?|digest-runs\/active)$/,
   new RegExp(`^/api/v1/digests(?:/${id}(?:/runs(?:/${id})?|/schedule/preview)?)?$`),
   new RegExp(`^/api/v1/subscription/digests/${id}$`),
 ];

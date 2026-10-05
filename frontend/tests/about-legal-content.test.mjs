@@ -18,7 +18,9 @@ async function renderPage(name, props = {}) {
     "@mui/material": Object.fromEntries(["Alert", "Box", "Button", "Container", "Link", "Paper", "Stack", "Typography"].map(name => [name, name])),
     "react-router-dom": { Link: "RouterLink" },
     "../components/MarketingHeader": { MarketingHeader: "MarketingHeader" },
-    react: { useEffect: () => {} },
+    "../components/BasicMarkdown": { BasicMarkdown: "BasicMarkdown" },
+    "../content/publicContent": { loadPublicContent: async () => null },
+    react: { useEffect: () => {}, useState: (value) => [value, () => {}] },
   };
   vm.runInNewContext(result.outputText, { module, exports: module.exports, require(name) {
     assert.ok(name in dependencies, `Unexpected dependency: ${name}`);

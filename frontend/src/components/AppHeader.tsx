@@ -1,6 +1,7 @@
 import { Alert } from "@mui/material";
 import AdminPanelSettingsRoundedIcon from "@mui/icons-material/AdminPanelSettingsRounded";
 import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
+import ArticleRoundedIcon from "@mui/icons-material/ArticleRounded";
 import LibraryBooksRoundedIcon from "@mui/icons-material/LibraryBooksRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
@@ -38,7 +39,10 @@ export function AppHeader() {
       { label: "Digests", to: "/admin/digests", icon: <LibraryBooksRoundedIcon /> },
       { label: "Plans", to: "/admin/subscription-plans", icon: <SubscriptionsRoundedIcon /> },
     ] : []),
-    ...(user?.is_super_admin ? [{ label: "Pricing", to: "/admin/pricing", icon: <PaymentsRoundedIcon /> }] : []),
+    ...(user?.is_super_admin ? [
+      { label: "Pricing", to: "/admin/pricing", icon: <PaymentsRoundedIcon /> },
+      { label: "Site content", to: "/admin/content-pages", icon: <ArticleRoundedIcon /> },
+    ] : []),
     ...(user?.role === "admin" ? [{ label: "Messages", to: "/admin/messages", icon: <MailOutlineRoundedIcon /> }] : []),
     ...(user?.role === "admin" ? [{ label: "Research quality", to: "/admin/research-quality", icon: <FactCheckRoundedIcon /> }] : []),
   ];
