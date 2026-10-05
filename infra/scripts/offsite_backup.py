@@ -87,7 +87,7 @@ def load_config(path: Path) -> dict[str, str]:
 def clean_environment() -> dict[str, str]:
     # Avoid inherited provider credentials/options affecting either restic or Docker.
     return {key: value for key, value in os.environ.items()
-            if not key.startswith(("RESTIC_", "AWS_", "B2_", "RADAR_OFFSITE_", "RADAR_CLOSURE_"))}
+            if not key.startswith(("RESTIC_", "AWS_", "B2_", "RADAR_OFFSITE_", "RADAR_CLOSURE_", "RADAR_RETENTION_"))}
 
 
 class Restic:
