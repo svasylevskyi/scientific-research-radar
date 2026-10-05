@@ -1,0 +1,37 @@
+name: Acceptance dependency preparation
+on:
+  push:
+    branches: [feature/development-acceptance-smoke]
+    paths: [.github/workflows/acceptance-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '22'
+      - name: Resolve pinned browser tooling in a separate development-only package
+        run: |
+          mkdir -p acceptance
+          cat > acceptance/package.json <<'JSON'
+          {"name":"radar-development-acceptance","version":"0.1.0","private":true,"type":"module","engines":{"node":">=22"},"devDependencies":{"@playwright/test":"1.63.0"}}
+          JSON
+          npm install --ignore-scripts --no-audit --no-fund
+        working-directory: .
+      - name: Install acceptance and frontend tooling
+        run: |
+          npm install --prefix acceptance --ignore-scripts --no-audit --no-fund
+          npm ci --prefix frontend
+      - name: Package only repository source and development dependencies
+        run: tar --exclude=.git -czf /tmp/acceptance-workbench.tgz .
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: acceptance-workbench
+          path: /tmp/acceptance-workbench.tgz
+          retention-days: 1
