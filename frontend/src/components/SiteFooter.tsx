@@ -28,13 +28,11 @@ export function SiteFooter() {
             aria-label="Footer navigation"
             direction="row"
             alignItems="center"
-            flexWrap="nowrap"
+            flexWrap="wrap"
+            rowGap={1}
             sx={{
               minWidth: 0,
-              overflowX: "auto",
               whiteSpace: "nowrap",
-              pb: 0.5,
-              scrollbarWidth: "thin",
             }}
           >
             {links.map((item, index) => (
