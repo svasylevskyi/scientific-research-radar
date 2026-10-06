@@ -51,7 +51,7 @@ jobs:
             git show --check --format= HEAD
           fi
       - name: Verify CI selection and aggregate-gate policy
-        run: python3 -m unittest infra.tests.test_ci_policy -v
+        run: python3 -m unittest discover -s infra/tests -p 'test_ci_policy.py' -v
 
   deployment-config:
     needs: changes

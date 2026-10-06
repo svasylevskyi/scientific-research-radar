@@ -46,4 +46,7 @@ runs:
         CI_RUN_ATTEMPT: ${{ steps.ci.outputs.run_attempt }}
       run: |
         set -Eeuo pipefail
-        python3 infra/scripts/ci_release.py validate           --release-sha "$RELEASE_SHA"           --manifest "$RUNNER_TEMP/verified-release/verified-release.json"           --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT"
+        python3 infra/scripts/ci_release.py validate \
+          --release-sha "$RELEASE_SHA" \
+          --manifest "$RUNNER_TEMP/verified-release/verified-release.json" \
+          --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT"

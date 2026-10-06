@@ -46,6 +46,7 @@ jobs:
             echo "Selected development release: $GITHUB_SHA ($MODE)"
             echo "Backend: $BACKEND_DIGEST"
             echo "Web: $WEB_DIGEST"
+            echo "Manual fallback: sudo bash infra/scripts/deploy.sh $GITHUB_SHA $MODE $BACKEND_DIGEST $WEB_DIGEST"
             if [[ "$DEPLOY_ENABLED" != true ]]; then
               echo "Development SSH deployment is disabled. No server will be contacted."
             fi

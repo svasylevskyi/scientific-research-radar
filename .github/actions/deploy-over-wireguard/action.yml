@@ -123,7 +123,9 @@ runs:
         WEB_DIGEST: ${{ inputs.web-digest }}
       run: |
         set -Eeuo pipefail
-        ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15           -o ServerAliveInterval=15 -o ServerAliveCountMax=3           "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA $MODE $BACKEND_DIGEST $WEB_DIGEST"
+        ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+          -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+          "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA $MODE $BACKEND_DIGEST $WEB_DIGEST"
     - name: Verify public website and API
       id: health
       shell: bash
@@ -132,9 +134,11 @@ runs:
       run: |
         set -Eeuo pipefail
         base="${PUBLIC_URL%/}"
-        website_status=$(curl --fail --silent --show-error --output /dev/null --write-out '%{http_code}'           --retry 5 --retry-connrefused --retry-delay 3 --max-time 15 "$base/")
+        website_status=$(curl --fail --silent --show-error --output /dev/null --write-out '%{http_code}' \
+          --retry 5 --retry-connrefused --retry-delay 3 --max-time 15 "$base/")
         [[ "$website_status" == 200 ]] || { echo "Unexpected website HTTP status: $website_status" >&2; exit 1; }
-        api_status=$(curl --fail --silent --show-error --output "$RUNNER_TEMP/deployment-health.json" --write-out '%{http_code}'           --retry 5 --retry-connrefused --retry-delay 3 --max-time 15 "$base/health")
+        api_status=$(curl --fail --silent --show-error --output "$RUNNER_TEMP/deployment-health.json" --write-out '%{http_code}' \
+          --retry 5 --retry-connrefused --retry-delay 3 --max-time 15 "$base/health")
         [[ "$api_status" == 200 ]] || { echo "Unexpected API HTTP status: $api_status" >&2; exit 1; }
         python3 - <<'PY'
         import json, os
@@ -155,7 +159,7 @@ runs:
       run: |
         {
           echo "Deployment environment: $DEPLOY_ENVIRONMENT"
-          echo "Production mode: $MODE"
+          echo "Deployment mode: $MODE"
           echo "Server deployment: ${SSH_OUTCOME:-not started}"
           echo "Public website/API checks: ${HEALTH_OUTCOME:-not started}"
         } >> "$GITHUB_STEP_SUMMARY"
