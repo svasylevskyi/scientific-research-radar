@@ -9,10 +9,15 @@ import sys
 from typing import NamedTuple
 
 
-VALIDATION_JOBS = ("deployment-config", "backend-static", "backend", "frontend", "containers")
+VALIDATION_JOBS = (
+    "repository-policy", "deployment-config", "backend-static", "backend",
+    "frontend", "browser-acceptance", "containers",
+)
 REQUIRED_JOBS = {
-    "docs": frozenset({"deployment-config"}),
-    "frontend": frozenset({"deployment-config", "frontend", "containers"}),
+    "docs": frozenset({"repository-policy"}),
+    "frontend": frozenset({
+        "repository-policy", "deployment-config", "frontend", "browser-acceptance", "containers",
+    }),
     "full": frozenset(VALIDATION_JOBS),
 }
 DOCUMENTATION_FILES = frozenset({

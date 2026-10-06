@@ -2,7 +2,9 @@
 
 The public `/about` and `/contact` pages are linked from the marketing header and site footer. The About page describes the existing research workflow without promising exhaustive coverage or verified AI output.
 
-The Contact form accepts a name (up to 120 characters), email address, and message (up to 1,000 characters). Signed-in visitors receive editable name/email defaults, including after session restoration. Submission is public and the sender details are self-reported; they are not proof of account ownership.
+The Contact form accepts a name (up to 120 characters), email address, and message (up to 1,000 characters). Signed-in visitors receive editable name/email defaults, including after session restoration. Submission is public and the sender details are self-reported; they are not proof of account ownership. The form links directly to the Privacy Notice before submission so a visitor can review how the message is handled.
+
+The Contact form deliberately does **not** require acceptance of the service Terms or a privacy-consent checkbox. Sending a support or pre-contract inquiry does not create a Radar service contract, and the Privacy Notice is transparency information rather than a blanket consent mechanism. Any processing that genuinely requires consent must obtain that consent separately.
 
 Messages are stored in the application database and delivered to **Admin → Messages** (`/admin/messages`). All administrators can read them and explicitly mark them reviewed or new. Opening a message does not mark it reviewed. There is no outgoing email notification or in-app reply workflow in this increment. Administrators can use the supplied address to respond through their normal support channel.
 

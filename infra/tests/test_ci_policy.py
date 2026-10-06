@@ -29,6 +29,7 @@ class ClassificationTests(unittest.TestCase):
             "README.md", "SECURITY_REVIEW.md", "backend/EMAIL.md", "infra/README.md",
             "docs/testing.md", "docs/nested/guide.md",
         ]), "docs")
+        self.assertEqual(policy.REQUIRED_JOBS["docs"], {"repository-policy"})
 
     def test_ui_assets_tests_and_optional_docs_select_frontend(self):
         for path in ("frontend/src/App.tsx", "frontend/public/logo.svg", "frontend/tests/api.test.mjs",

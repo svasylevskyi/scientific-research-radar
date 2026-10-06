@@ -11,27 +11,55 @@ concurrency:
   group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
   # Superseded PR checks can stop; merged commits must finish publication.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   changes:
     name: Select CI checks
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     outputs:
       profile: ${{ steps.select.outputs.profile }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Full history makes fork PRs and merge-base comparisons independent
-          # of GitHub's changed-file API limits. No PR metadata enters a shell.
           fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
           persist-credentials: false
       - name: Select CI checks from the complete PR diff
         id: select
         run: python3 infra/scripts/ci_policy.py select
-  deployment-config:
+
+  repository-policy:
+    name: repository-policy
     needs: changes
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject whitespace errors in the reviewed change
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -Eeuo pipefail
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            git diff --check "$BASE_SHA" "$HEAD_SHA"
+          else
+            git show --check --format= HEAD
+          fi
+      - name: Verify CI selection and aggregate-gate policy
+        run: python3 -m unittest infra.tests.test_ci_policy -v
+
+  deployment-config:
+    needs: changes
+    if: needs.changes.outputs.profile != 'docs'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Restic for encrypted backup recovery tests
         run: |
           sudo apt-get update -qq
@@ -40,18 +68,20 @@ jobs:
       - run: python3 -m unittest discover -s infra/tests -v
       - name: Validate local PostgreSQL Compose configuration
         run: docker compose -f infra/compose.local.yaml --profile tests config --quiet
+
   backend-static:
     needs: changes
     if: needs.changes.outputs.profile == 'full'
     runs-on: ubuntu-26.04
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
     env:
       ENVIRONMENT: test
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
           cache: pip
@@ -61,11 +91,13 @@ jobs:
         run: python -m mypy
       - name: Validate draft research benchmark structure
         run: python -m app.evaluation validate --benchmark evaluation/benchmarks/research_support_v1.json
+
   backend:
     name: backend (postgres)
     needs: changes
     if: needs.changes.outputs.profile == 'full'
     runs-on: ubuntu-26.04
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:17-bookworm
@@ -85,8 +117,8 @@ jobs:
       DATABASE_URL: postgresql+psycopg://radar:ci-only-password@localhost:5432/radar_test
       TEST_DATABASE_URL: postgresql+psycopg://radar:ci-only-password@localhost:5432/radar_test
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
           cache: pip
@@ -102,28 +134,30 @@ jobs:
       - name: Summarize test and fixture timings
         if: always()
         run: python scripts/summarize_tests.py test-results.xml "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: postgres-test-results
           path: backend/test-results.xml
           retention-days: 7
           if-no-files-found: ignore
+
   frontend:
     needs: changes
     if: needs.changes.outputs.profile == 'full' || needs.changes.outputs.profile == 'frontend'
     runs-on: ubuntu-26.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-node@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - uses: actions/setup-python@v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
           cache: pip
@@ -134,36 +168,90 @@ jobs:
         run: npm run contracts:check
       - run: node --test tests/*.test.mjs
       - run: npm run build
-      - name: Install isolated browser acceptance tooling
-        run: npm ci --prefix ../acceptance
+      - name: Share the exact frontend build with browser acceptance
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 1
+          if-no-files-found: error
+
+  browser-acceptance:
+    name: browser-acceptance
+    needs: [changes, frontend]
+    if: needs.changes.outputs.profile == 'full' || needs.changes.outputs.profile == 'frontend'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    defaults:
+      run:
+        working-directory: acceptance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: acceptance/package-lock.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - run: npm ci
       - name: Check acceptance configuration, request fences, and scenario discovery
         run: |
-          npm test --prefix ../acceptance
-          npm run check --prefix ../acceptance
-      - name: Install Chromium for loopback-only tooling validation
-        run: npx playwright install --with-deps chromium
-        working-directory: acceptance
+          npm test
+          npm run check
       - name: Validate browser guard and public journeys against a synthetic loopback service
         shell: bash
         run: npm run selftest 2>&1 | tee "$RUNNER_TEMP/acceptance-loopback.log"
-        working-directory: acceptance
       - name: Retain synthetic loopback diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: acceptance-loopback-diagnostics
           path: ${{ runner.temp }}/acceptance-loopback.log
           retention-days: 3
           if-no-files-found: ignore
+
   containers:
     needs: changes
     if: needs.changes.outputs.profile == 'full' || needs.changes.outputs.profile == 'frontend'
     runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      packages: read
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Resolve verified backend from the PR base
+        if: needs.changes.outputs.profile == 'frontend'
+        id: base-release
+        uses: ./.github/actions/verified-release
+        with:
+          release-sha: ${{ github.event.pull_request.base.sha }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Reuse verified backend image from main
+        if: needs.changes.outputs.profile == 'frontend'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_DIGEST: ${{ steps.base-release.outputs.backend-digest }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -Eeuo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          repository="${GITHUB_REPOSITORY,,}"
+          image="ghcr.io/$repository-backend@$BACKEND_DIGEST"
+          docker pull "$image"
+          docker tag "$image" radar-ci-backend
+          revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' radar-ci-backend)
+          [[ "$revision" == "$BASE_SHA" ]] || { echo "Verified base backend revision mismatch." >&2; exit 1; }
       - name: Build backend image
-        uses: docker/build-push-action@v7.4.0
+        if: needs.changes.outputs.profile == 'full'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: backend
           load: true
@@ -172,7 +260,7 @@ jobs:
           cache-from: type=gha,scope=radar-backend
           cache-to: type=gha,scope=radar-backend,mode=max
       - name: Build web image
-        uses: docker/build-push-action@v7.4.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: frontend
           load: true
@@ -185,7 +273,7 @@ jobs:
       - name: Save verified images for publication
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         run: docker save radar-ci-backend radar-ci-web | gzip -1 > "$RUNNER_TEMP/radar-images.tar.gz"
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         with:
           name: tested-images-${{ github.sha }}
@@ -194,31 +282,33 @@ jobs:
           overwrite: true
           retention-days: 7
           if-no-files-found: error
+
   ci-passed:
     name: CI passed
-    needs: [changes, deployment-config, backend-static, backend, frontend, containers]
-    # An expected skip must not skip this gate; failed/cancelled prerequisites
-    # must reach the verifier as well.
+    needs: [changes, repository-policy, deployment-config, backend-static, backend, frontend, browser-acceptance, containers]
     if: always()
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Require every selected check to succeed
         env:
           CI_NEEDS_JSON: ${{ toJSON(needs) }}
         run: python3 infra/scripts/ci_policy.py verify
+
   publish:
     needs: [ci-passed, containers]
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-26.04
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: tested-images-${{ github.sha }}
           path: ${{ runner.temp }}/tested-images
@@ -228,7 +318,7 @@ jobs:
         run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
       - name: Publish the tested images and record their digests
         run: bash infra/scripts/publish-images.sh "$RUNNER_TEMP/tested-images/radar-images.tar.gz" "$RUNNER_TEMP/verified-release.json"
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: verified-release-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/verified-release.json

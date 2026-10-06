@@ -71,20 +71,33 @@ def output(values):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["find", "write", "validate"])
+    parser.add_argument("command", choices=["find", "find-sha", "write", "validate"])
+    parser.add_argument("--release-sha", help="Explicit already-merged main SHA for verified-image reuse")
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--run-id", type=int)
     parser.add_argument("--run-attempt", type=int)
     parser.add_argument("--backend-digest")
     parser.add_argument("--web-digest")
     args = parser.parse_args()
-    repository, sha = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_SHA"]
-    validate_identity(repository, sha)
+    repository = os.environ["GITHUB_REPOSITORY"]
     if args.command == "find":
+        sha = os.environ["GITHUB_SHA"]
+        validate_identity(repository, sha)
         if os.environ.get("GITHUB_REF") != "refs/heads/main":
             raise ValueError("Deployment must be dispatched from main.")
-        # Both push CI and explicit recovery runs may publish this exact commit.
-        # select_run still rejects PRs, other workflows, branches and repositories.
+    elif args.command == "find-sha":
+        if not args.release_sha:
+            parser.error("find-sha requires --release-sha")
+        sha = args.release_sha
+        validate_identity(repository, sha)
+    else:
+        sha = args.release_sha or os.environ["GITHUB_SHA"]
+        validate_identity(repository, sha)
+        if args.command == "write" and args.release_sha:
+            parser.error("write always records the current CI commit; omit --release-sha")
+    if args.command in {"find", "find-sha"}:
+        # Only successful full CI on main can authorize deployment or image reuse.
+        # select_run rejects PRs, other workflows, branches and repositories.
         query = urlencode(dict(head_sha=sha, branch="main", per_page=100))
         data = github_json(f"repos/{repository}/actions/workflows/ci.yml/runs?{query}", os.environ["GH_TOKEN"])
         run = select_run(data["workflow_runs"], repository, sha)

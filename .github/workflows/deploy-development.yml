@@ -12,117 +12,67 @@ permissions:
 concurrency:
   group: deploy-development
   cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
       contents: read
       actions: read
     outputs:
-      backend_digest: ${{ steps.manifest.outputs.backend_digest }}
-      web_digest: ${{ steps.manifest.outputs.web_digest }}
+      backend_digest: ${{ steps.release.outputs.backend-digest }}
+      web_digest: ${{ steps.release.outputs.web-digest }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - name: Require main
+        run: '[[ "$GITHUB_REF" == refs/heads/main ]]'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Find successful CI for this exact main commit
-        id: ci
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 infra/scripts/ci_release.py find
-      - name: Download its verified release manifest
-        uses: actions/download-artifact@v8.0.1
+      - name: Resolve verified CI release
+        id: release
+        uses: ./.github/actions/verified-release
         with:
-          name: ${{ steps.ci.outputs.artifact }}
-          path: ${{ runner.temp }}/verified-release
+          release-sha: ${{ github.sha }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ steps.ci.outputs.run_id }}
-      - name: Validate release identity and image digests
-        id: manifest
-        env:
-          CI_RUN_ID: ${{ steps.ci.outputs.run_id }}
-          CI_RUN_ATTEMPT: ${{ steps.ci.outputs.run_attempt }}
-        run: |
-          python3 infra/scripts/ci_release.py validate \
-            --manifest "$RUNNER_TEMP/verified-release/verified-release.json" \
-            --run-id "$CI_RUN_ID" --run-attempt "$CI_RUN_ATTEMPT"
-      - name: Deployment command
+      - name: Record selected release
         env:
           MODE: ${{ inputs.mode }}
-          BACKEND_DIGEST: ${{ steps.manifest.outputs.backend_digest }}
-          WEB_DIGEST: ${{ steps.manifest.outputs.web_digest }}
+          BACKEND_DIGEST: ${{ steps.release.outputs.backend-digest }}
+          WEB_DIGEST: ${{ steps.release.outputs.web-digest }}
+          DEPLOY_ENABLED: ${{ vars.DEV_SSH_DEPLOY_ENABLED }}
         run: |
           {
-            echo "Reusing verified CI images for $GITHUB_SHA"
-            echo 'Run on server from /opt/radar/source (update the checkout first):'
-            echo "sudo bash infra/scripts/deploy.sh $GITHUB_SHA $MODE $BACKEND_DIGEST $WEB_DIGEST"
+            echo "Selected development release: $GITHUB_SHA ($MODE)"
+            echo "Backend: $BACKEND_DIGEST"
+            echo "Web: $WEB_DIGEST"
+            if [[ "$DEPLOY_ENABLED" != true ]]; then
+              echo "Development SSH deployment is disabled. No server will be contacted."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+
   deploy:
     needs: release
-    # Enable only after configuring WireGuard and the development environment.
     if: vars.DEV_SSH_DEPLOY_ENABLED == 'true'
     environment: development
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install WireGuard
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wireguard-tools
-      - name: Connect deployment tunnel
-        env:
-          WG_PRIVATE_KEY: ${{ secrets.DEV_WG_PRIVATE_KEY }}
-          WG_SERVER_PUBLIC_KEY: ${{ vars.DEV_WG_SERVER_PUBLIC_KEY }}
-          WG_ENDPOINT: ${{ vars.DEV_WG_ENDPOINT }}
-          DEPLOY_HOST: ${{ vars.DEV_SSH_HOST }}
-        run: |
-          python3 infra/scripts/wireguard_config.py "$RUNNER_TEMP/radar-wireguard.conf"
-          sudo install -d -m 700 /etc/wireguard
-          sudo install -m 600 "$RUNNER_TEMP/radar-wireguard.conf" /etc/wireguard/wg-radar.conf
-          rm -f "$RUNNER_TEMP/radar-wireguard.conf"
-          sudo wg-quick up wg-radar
-          python3 - <<'PY'
-          import socket, time
-          for attempt in range(10):
-              try:
-                  with socket.create_connection(("10.77.0.1", 22), timeout=2):
-                      break
-              except OSError:
-                  if attempt == 9:
-                      raise SystemExit("SSH is unreachable through WireGuard; check UDP 51820, peer keys, and server firewall.")
-                  time.sleep(1)
-          PY
-      - name: Configure SSH
-        env:
-          DEPLOY_KEY: ${{ secrets.DEV_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DEV_SSH_KNOWN_HOSTS }}
-        run: |
-          test -n "$DEPLOY_KEY" && test -n "$KNOWN_HOSTS"
-          umask 077
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-      - name: Request deployment
-        env:
-          BACKEND_DIGEST: ${{ needs.release.outputs.backend_digest }}
-          WEB_DIGEST: ${{ needs.release.outputs.web_digest }}
-          DEPLOY_HOST: ${{ vars.DEV_SSH_HOST }}
-          DEPLOY_USER: ${{ vars.DEV_SSH_USER }}
-          MODE: ${{ inputs.mode }}
-        run: |
-          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ && "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
-            -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
-            "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA $MODE $BACKEND_DIGEST $WEB_DIGEST"
-      - name: Remove deployment credentials and tunnel
-        if: always()
-        run: |
-          rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts "$RUNNER_TEMP/radar-wireguard.conf"
-          if sudo ip link show wg-radar > /dev/null 2>&1; then
-            sudo wg-quick down wg-radar || sudo ip link delete wg-radar
-          fi
-          sudo rm -f /etc/wireguard/wg-radar.conf
+      - name: Deploy and verify development
+        uses: ./.github/actions/deploy-over-wireguard
+        with:
+          environment: development
+          mode: ${{ inputs.mode }}
+          deploy-host: ${{ vars.DEV_SSH_HOST }}
+          deploy-user: ${{ vars.DEV_SSH_USER }}
+          wg-endpoint: ${{ vars.DEV_WG_ENDPOINT }}
+          wg-server-public-key: ${{ vars.DEV_WG_SERVER_PUBLIC_KEY }}
+          wg-private-key: ${{ secrets.DEV_WG_PRIVATE_KEY }}
+          ssh-key: ${{ secrets.DEV_SSH_KEY }}
+          known-hosts: ${{ secrets.DEV_SSH_KNOWN_HOSTS }}
+          backend-digest: ${{ needs.release.outputs.backend_digest }}
+          web-digest: ${{ needs.release.outputs.web_digest }}
+          public-url: ${{ vars.DEV_PUBLIC_URL }}

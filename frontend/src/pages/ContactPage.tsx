@@ -1,6 +1,6 @@
-import { Alert, Box, Button, Container, Paper, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Container, Link, Paper, Stack, TextField, Typography } from "@mui/material";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Link as RouterLink, Navigate, useLocation } from "react-router-dom";
 import { contactApi } from "../api/contact";
 import { useAuth } from "../auth/AuthContext";
 import { AppHeader } from "../components/AppHeader";
@@ -55,7 +55,11 @@ export function ContactPage({ workspace = false }: { workspace?: boolean }) {
               <TextField label="Your name" required autoComplete="name" value={name} disabled={formDisabled} inputProps={{ maxLength: 120 }} onChange={(event) => { edited.current.name = true; setName(event.target.value); setNotice(null); }} />
               <TextField label="Email address" required type="email" autoComplete="email" value={email} disabled={formDisabled} inputProps={{ maxLength: 320 }} onChange={(event) => { edited.current.email = true; setEmail(event.target.value); setNotice(null); }} />
               <TextField label="Message" required multiline minRows={6} value={message} disabled={formDisabled} inputProps={{ maxLength: 1000 }} helperText={`${message.length} / 1000 characters`} onChange={(event) => { setMessage(event.target.value); setNotice(null); }} />
-              <Typography variant="body2" color="text.secondary">Your name, email, and message will be visible to Radar administrators. Please do not include passwords or payment details.</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Your name, email, and message will be visible to Radar administrators. See the{" "}
+                <Link component={RouterLink} to="/privacy" target="_blank" rel="noreferrer">Privacy Notice</Link>
+                {" "}for how contact messages are handled. Please do not include passwords or payment details.
+              </Typography>
               {notice && <Alert severity={notice.severity} role={notice.severity === "success" ? "status" : "alert"}>{notice.text}</Alert>}
               <Button type="submit" variant="contained" disabled={formDisabled}>{sending ? "Sending…" : "Send message"}</Button>
             </Stack>
