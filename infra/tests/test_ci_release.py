@@ -82,6 +82,29 @@ class ReleaseTests(unittest.TestCase):
                 release.main()
             self.assertEqual(output.read_text(), f'run_id=124\nrun_attempt=2\nartifact=verified-release-{SHA}-2\n')
 
+
+    def test_find_sha_allows_pr_ci_to_reuse_only_an_exact_successful_main_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'outputs'
+            env = dict(GITHUB_REPOSITORY=REPO, GITHUB_SHA='f' * 40, GITHUB_REF='refs/pull/12/merge',
+                       GH_TOKEN='test-only', GITHUB_OUTPUT=str(output))
+            with patch.dict(os.environ, env), patch('sys.argv', [
+                    'ci_release.py', 'find-sha', '--release-sha', SHA]), \
+                    patch.object(release, 'github_json', return_value={'workflow_runs': [successful_run()]}) as request:
+                release.main()
+            self.assertIn('head_sha=' + SHA, request.call_args.args[0])
+            self.assertEqual(output.read_text(), f'run_id=123\nrun_attempt=1\nartifact=verified-release-{SHA}-1\n')
+
+    def test_find_sha_still_rejects_non_main_or_failed_ci(self):
+        env = dict(GITHUB_REPOSITORY=REPO, GITHUB_SHA='f' * 40, GITHUB_REF='refs/pull/12/merge',
+                   GH_TOKEN='test-only', GITHUB_OUTPUT=os.devnull)
+        for changes in ({'head_branch': 'feature/test'}, {'event': 'pull_request'}, {'conclusion': 'failure'}):
+            with self.subTest(changes=changes), patch.dict(os.environ, env), patch('sys.argv', [
+                    'ci_release.py', 'find-sha', '--release-sha', SHA]), \
+                    patch.object(release, 'github_json', return_value={'workflow_runs': [successful_run(**changes)]}), \
+                    self.assertRaises(ValueError):
+                release.main()
+
     def test_missing_main_ci_explains_recovery_and_never_exports_a_release(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'outputs'

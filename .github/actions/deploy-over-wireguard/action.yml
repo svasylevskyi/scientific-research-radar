@@ -1,0 +1,178 @@
+name: Deploy verified release over WireGuard
+description: Open the environment-specific deployment tunnel, request the pinned release, verify public health, and clean up credentials.
+inputs:
+  environment:
+    description: development or production
+    required: true
+  mode:
+    description: Deployment mode.
+    required: true
+  deploy-host:
+    required: true
+  deploy-user:
+    required: true
+  wg-endpoint:
+    required: true
+  wg-server-public-key:
+    required: true
+  wg-private-key:
+    required: true
+  ssh-key:
+    required: true
+  known-hosts:
+    required: true
+  backend-digest:
+    required: true
+  web-digest:
+    required: true
+  public-url:
+    description: HTTPS public origin to verify after deployment.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Validate deployment inputs
+      shell: bash
+      env:
+        DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+        MODE: ${{ inputs.mode }}
+        DEPLOY_HOST: ${{ inputs.deploy-host }}
+        DEPLOY_USER: ${{ inputs.deploy-user }}
+        PUBLIC_URL: ${{ inputs.public-url }}
+        SSH_KEY: ${{ inputs.ssh-key }}
+        KNOWN_HOSTS: ${{ inputs.known-hosts }}
+      run: |
+        set -Eeuo pipefail
+        [[ "$DEPLOY_ENVIRONMENT" == development || "$DEPLOY_ENVIRONMENT" == production ]]
+        [[ "$MODE" == base || "$MODE" == research || "$MODE" == scheduled ]]
+        if [[ "$DEPLOY_ENVIRONMENT" == production ]]; then
+          [[ "$MODE" == scheduled && "$DEPLOY_HOST" == 10.78.0.1 && "$DEPLOY_USER" == radar-deploy ]]
+        else
+          [[ "$DEPLOY_HOST" == 10.77.0.1 && "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+        fi
+        [[ -n "$SSH_KEY" && -n "$KNOWN_HOSTS" ]]
+        python3 - "$PUBLIC_URL" <<'PY'
+        import sys
+        from urllib.parse import urlsplit
+        value = sys.argv[1]
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            raise SystemExit("PUBLIC_URL must be an HTTPS origin without credentials.")
+        if parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+            raise SystemExit("PUBLIC_URL must not contain a path, query, or fragment.")
+        PY
+    - name: Install WireGuard
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        sudo apt-get update -qq
+        sudo apt-get install -y wireguard-tools
+    - name: Connect deployment tunnel
+      shell: bash
+      env:
+        DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+        WG_PRIVATE_KEY: ${{ inputs.wg-private-key }}
+        WG_SERVER_PUBLIC_KEY: ${{ inputs.wg-server-public-key }}
+        WG_ENDPOINT: ${{ inputs.wg-endpoint }}
+        DEPLOY_HOST: ${{ inputs.deploy-host }}
+      run: |
+        set -Eeuo pipefail
+        if [[ "$DEPLOY_ENVIRONMENT" == production ]]; then
+          interface=wg-radar-prod
+        else
+          interface=wg-radar
+        fi
+        config="$RUNNER_TEMP/$interface.conf"
+        python3 infra/scripts/wireguard_config.py "$config" --environment "$DEPLOY_ENVIRONMENT"
+        sudo install -d -m 700 /etc/wireguard
+        sudo install -m 600 "$config" "/etc/wireguard/$interface.conf"
+        rm -f "$config"
+        sudo wg-quick up "$interface"
+        python3 - "$DEPLOY_HOST" <<'PY'
+        import socket, sys, time
+        host = sys.argv[1]
+        for attempt in range(10):
+            try:
+                with socket.create_connection((host, 22), timeout=2):
+                    break
+            except OSError:
+                if attempt == 9:
+                    raise SystemExit("SSH is unreachable through WireGuard; check peer keys, UDP 51820, and server firewall.")
+                time.sleep(1)
+        PY
+    - name: Configure deployment SSH
+      shell: bash
+      env:
+        DEPLOY_KEY: ${{ inputs.ssh-key }}
+        KNOWN_HOSTS: ${{ inputs.known-hosts }}
+      run: |
+        set -Eeuo pipefail
+        umask 077
+        install -d -m 700 ~/.ssh
+        printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+    - name: Request deployment
+      id: ssh
+      shell: bash
+      env:
+        DEPLOY_HOST: ${{ inputs.deploy-host }}
+        DEPLOY_USER: ${{ inputs.deploy-user }}
+        MODE: ${{ inputs.mode }}
+        BACKEND_DIGEST: ${{ inputs.backend-digest }}
+        WEB_DIGEST: ${{ inputs.web-digest }}
+      run: |
+        set -Eeuo pipefail
+        ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+          -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+          "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA $MODE $BACKEND_DIGEST $WEB_DIGEST"
+    - name: Verify public website and API
+      id: health
+      shell: bash
+      env:
+        PUBLIC_URL: ${{ inputs.public-url }}
+      run: |
+        set -Eeuo pipefail
+        base="${PUBLIC_URL%/}"
+        website_status=$(curl --fail --silent --show-error --output /dev/null --write-out '%{http_code}' \
+          --retry 5 --retry-connrefused --retry-delay 3 --max-time 15 "$base/")
+        [[ "$website_status" == 200 ]] || { echo "Unexpected website HTTP status: $website_status" >&2; exit 1; }
+        api_status=$(curl --fail --silent --show-error --output "$RUNNER_TEMP/deployment-health.json" --write-out '%{http_code}' \
+          --retry 5 --retry-connrefused --retry-delay 3 --max-time 15 "$base/health")
+        [[ "$api_status" == 200 ]] || { echo "Unexpected API HTTP status: $api_status" >&2; exit 1; }
+        python3 - <<'PY'
+        import json, os
+        from pathlib import Path
+        health = json.loads((Path(os.environ["RUNNER_TEMP"]) / "deployment-health.json").read_text())
+        if not isinstance(health, dict) or health.get("status") != "ok":
+            raise SystemExit("The public API did not report a healthy status.")
+        print("Public website and API checks passed.")
+        PY
+    - name: Report deployment outcome
+      if: always()
+      shell: bash
+      env:
+        DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+        MODE: ${{ inputs.mode }}
+        SSH_OUTCOME: ${{ steps.ssh.outcome }}
+        HEALTH_OUTCOME: ${{ steps.health.outcome }}
+      run: |
+        {
+          echo "Deployment environment: $DEPLOY_ENVIRONMENT"
+          echo "Deployment mode: $MODE"
+          echo "Server deployment: ${SSH_OUTCOME:-not started}"
+          echo "Public website/API checks: ${HEALTH_OUTCOME:-not started}"
+        } >> "$GITHUB_STEP_SUMMARY"
+    - name: Remove deployment credentials and tunnel
+      if: always()
+      shell: bash
+      env:
+        DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+      run: |
+        rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts "$RUNNER_TEMP/deployment-health.json"
+        if [[ "$DEPLOY_ENVIRONMENT" == production ]]; then interface=wg-radar-prod; else interface=wg-radar; fi
+        rm -f "$RUNNER_TEMP/$interface.conf"
+        if sudo ip link show "$interface" > /dev/null 2>&1; then
+          sudo wg-quick down "$interface" || sudo ip link delete "$interface"
+        fi
+        sudo rm -f "/etc/wireguard/$interface.conf"

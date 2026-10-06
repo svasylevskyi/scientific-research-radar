@@ -146,9 +146,11 @@ deployment only reads Actions artifacts and no longer writes packages.
   PRs select checks by changed files; main pushes retain full validation and
   publication gates. Require the aggregate **CI passed** check in branch rules;
   see [selection rules and the one-time setup](../docs/testing.md#ci-and-github-actions).
-- Buildx caches backend and web layers separately. The backend dependency layer
-  changes with `pyproject.toml`, not with every application edit. A cache miss
-  performs a normal build; cached images still pass the full smoke checks.
+- Buildx caches backend and web layers separately. On frontend-only PRs, CI reuses
+  the backend digest from the PR base commit's verified main release instead of
+  rebuilding an unchanged backend; the pulled image's revision label must match
+  that exact base SHA. Main CI and full PRs still build both images, and every
+  combination still passes the same stack/backup/restore smoke test.
 - The tested image archive is retained for 7 days. The small verified release
   manifest is retained for 90 days (subject to repository retention policy);
   retain the corresponding GHCR images for releases you may redeploy.
@@ -339,6 +341,7 @@ Configure these environment variables:
 | `DEV_SSH_USER` | `radar-deploy` |
 | `DEV_WG_ENDPOINT` | Server public IPv4 or hostname followed by `:51820` |
 | `DEV_WG_SERVER_PUBLIC_KEY` | Server WireGuard public key |
+| `DEV_PUBLIC_URL` | Development site's HTTPS origin, for example `https://radar-dev.example.com`; no path/query/fragment |
 
 Obtain the known-hosts entry over your existing trusted admin SSH connection:
 
@@ -350,12 +353,15 @@ Do not confuse the SSH host key, SSH deployment key, and WireGuard peer keys.
 Never commit private keys or paste them into logs or pull requests.
 Enable the **repository** variable `DEV_SSH_DEPLOY_ENABLED=true` only after these
 settings and server firewall rules are ready and this workflow is merged. The job
-condition cannot use an environment-only variable for this switch. Dispatch
-Deploy development from `main`, choosing `scheduled` to retain recurring runs.
-The workflow resolves the successful main CI release and deploys its exact image
-digests. It does not repeat CI or publication. Failures before
-SSH leave the running application unchanged. Active runs still block deployment
-safely; wait for them to finish before trying again.
+condition cannot use an environment-only variable for this switch. Set
+`DEV_PUBLIC_URL` before enabling deployment: the workflow now performs the same
+post-deploy public landing-page and `/health` checks as production, and fails if
+the configured origin is not HTTPS or does not become healthy. Dispatch Deploy
+development from `main`, choosing `scheduled` to retain recurring runs. The
+workflow resolves the successful main CI release and deploys its exact image
+digests. It does not repeat CI or publication. Failures before SSH leave the
+running application unchanged. Active runs still block deployment safely; wait
+for them to finish before trying again.
 
 ## Healthchecks.io monitoring
 

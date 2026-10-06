@@ -82,9 +82,9 @@ GitHub file-list response.
 
 | Changed files | Required PR jobs |
 | --- | --- |
-| Allowlisted documentation only | Deployment/configuration tests and local Compose validation |
-| Frontend source, public assets, tests, or `index.html`, optionally with documentation | Deployment/configuration checks, frontend tests/build and API contract verification, container smoke/backup/restore checks |
-| Backend, dependencies, build configuration, infrastructure, workflows, or unknown paths | All validation jobs, including PostgreSQL regressions, migrations, type checks, and benchmark validation |
+| Allowlisted documentation only | Lightweight repository-policy checks: changed-text whitespace validation and CI selection/gate unit tests |
+| Frontend source, public assets, tests, or `index.html`, optionally with documentation | Repository policy, deployment/configuration checks, frontend tests/build and API contract verification, isolated browser acceptance, and container smoke/backup/restore |
+| Backend, dependencies, build configuration, infrastructure, workflows, or unknown paths | All validation jobs, including PostgreSQL regressions, migrations, type checks, benchmark validation, browser acceptance, and full container validation |
 
 Documentation means `docs/**/*.md`, root `README.md` and `SECURITY_REVIEW.md`,
 `backend/EMAIL.md`, and `infra/README.md`. Runtime prompts and test fixtures are
@@ -120,12 +120,14 @@ neither PostgreSQL nor third-party Python packages.
 When adding a validation job, update the policy's job list, the profiles that
 require it, and the aggregate gate's `needs` list together.
 
-### Action runtimes
+### Action runtimes and pinning
 
-All JavaScript Actions in CI and deployment use releases declaring `node24`.
-This is the Actions runner runtime, independent of the application's Node 22
-frontend build. GitHub-hosted runners provide it; no deployment-server Node.js
-installation or warning-suppression variable is needed.
+Third-party GitHub Actions are pinned to full commit SHAs, with the reviewed
+release version kept in an adjacent comment for readability. Dependabot checks
+the `github-actions` ecosystem weekly so upgrades arrive as reviewable PRs rather
+than mutable tag movement. The pinned releases currently use the Actions runner's
+supported JavaScript runtime; this remains independent of the application's Node
+22 frontend build.
 
 ## Operator browser acceptance
 
@@ -136,7 +138,10 @@ development website, not against production or a backend test database. The
 Chromium setup, private account sessions, optional one-record CRUD and the manual
 [release checklist](release-acceptance-template.md).
 
-The frontend CI job validates the harness and shared public-browser scenarios
-against a loopback static build with synthetic provider/account responses. It
-never runs the remote suite against shared dev. These checks are part of the
-existing frontend job and aggregate gate; no branch-protection change is needed.
+The frontend job builds the application once and uploads that exact static build
+for the separate `browser-acceptance` job. Browser acceptance runs in the official
+Playwright image matching `acceptance/package.json`, so CI no longer downloads
+Chromium and its OS dependencies on every frontend run. It validates the harness
+and shared public-browser scenarios against a loopback service with synthetic
+provider/account responses and never points CI at shared development. Both jobs
+remain behind the aggregate gate; no branch-protection change is needed.
