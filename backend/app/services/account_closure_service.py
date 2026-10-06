@@ -184,6 +184,9 @@ def erase_personal_data(db, row):
     user.full_name = "Closed account"
     user.email = f"closed-{uid.hex}@accounts.example.com"
     user.password_hash = hash_password(secrets.token_urlsafe(48))
+    user.legal_agreement_at = None
+    user.terms_version = None
+    user.privacy_version = None
     user.role = "user"
     for attempt in db.scalars(select(SandboxCheckout).where(SandboxCheckout.user_id == uid)):
         attempt.parameters = {key: value for key, value in attempt.parameters.items() if key.startswith("metadata[") or key == "expires_at"}

@@ -24,6 +24,7 @@ export interface RegisterInput {
   email: string;
   password: string;
   password_confirmation: string;
+  legal_agreement: boolean;
 }
 
 export interface LoginInput {

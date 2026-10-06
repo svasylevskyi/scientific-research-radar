@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -53,6 +54,9 @@ class UserRepository:
         password_hash: str,
         role: UserRole = UserRole.USER,
         is_super_admin: bool = False,
+        legal_agreement_at: datetime | None = None,
+        terms_version: str | None = None,
+        privacy_version: str | None = None,
     ) -> User:
         user = User(
             id=uuid4(),
@@ -61,6 +65,9 @@ class UserRepository:
             password_hash=password_hash,
             role=role,
             is_super_admin=is_super_admin,
+            legal_agreement_at=legal_agreement_at,
+            terms_version=terms_version,
+            privacy_version=privacy_version,
         )
         self.db.add(user)
         self.db.flush()

@@ -32,6 +32,9 @@ class User(Base):
     auth_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     closure_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    legal_agreement_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    terms_version: Mapped[str | None] = mapped_column(String(64))
+    privacy_version: Mapped[str | None] = mapped_column(String(64))
     role: Mapped[UserRole] = mapped_column(
         String(16),
         nullable=False,

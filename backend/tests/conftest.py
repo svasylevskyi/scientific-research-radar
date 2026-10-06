@@ -31,7 +31,7 @@ class VerifiedTestClient(TestClient):
     outbox: list
 
     def register_verified(self, *, json, legacy_account=True):
-        pending = self.post("/api/v1/auth/register", json=json)
+        pending = self.post("/api/v1/auth/register", json={"legal_agreement": True, **json})
         if pending.status_code != 202:
             return pending
         challenge = pending.json()

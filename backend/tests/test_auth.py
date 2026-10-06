@@ -6,6 +6,7 @@ REGISTER_PAYLOAD = {
     "full_name": "Ada Researcher",
     "password": "Correct-horse-battery-staple1",
     "password_confirmation": "Correct-horse-battery-staple1",
+    "legal_agreement": True,
 }
 
 

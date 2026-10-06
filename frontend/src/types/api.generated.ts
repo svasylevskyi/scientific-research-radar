@@ -4440,6 +4440,11 @@ export interface components {
             email: string;
             /** Full Name */
             full_name: string;
+            /**
+             * Legal Agreement
+             * @constant
+             */
+            legal_agreement: true;
             /** Password */
             password: string;
             /** Password Confirmation */

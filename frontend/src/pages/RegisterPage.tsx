@@ -5,6 +5,9 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
+  FormControlLabel,
+  FormHelperText,
   IconButton,
   InputAdornment,
   Link,
@@ -41,6 +44,8 @@ export function RegisterPage() {
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [confirmationTouched, setConfirmationTouched] = useState(false);
+  const [legalAgreement, setLegalAgreement] = useState(false);
+  const [legalAgreementTouched, setLegalAgreementTouched] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +60,8 @@ export function RegisterPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setConfirmationTouched(true);
-    if (!passwordIsValid || !passwordsMatch) return;
+    setLegalAgreementTouched(true);
+    if (!passwordIsValid || !passwordsMatch || !legalAgreement) return;
     setError(null);
     setIsSubmitting(true);
     try {
@@ -64,6 +70,7 @@ export function RegisterPage() {
         email,
         password,
         password_confirmation: passwordConfirmation,
+        legal_agreement: legalAgreement,
       });
       rememberChallenge(pending);
       setPassword(""); setPasswordConfirmation("");
@@ -179,11 +186,34 @@ export function RegisterPage() {
             },
           }}
         />
+        <Box>
+          <FormControlLabel
+            sx={{ alignItems: "flex-start", m: 0 }}
+            control={<Checkbox
+              checked={legalAgreement}
+              onChange={(event) => { setLegalAgreement(event.target.checked); setLegalAgreementTouched(true); }}
+              inputProps={{ "aria-describedby": legalAgreementTouched && !legalAgreement ? "legal-agreement-error" : undefined }}
+              required
+              sx={{ mt: -0.75, ml: -1 }}
+            />}
+            label={<Typography variant="body2" color="text.secondary">
+              I agree to the{" "}
+              <Link component={RouterLink} to="/terms" target="_blank" rel="noreferrer"
+                onClick={(event) => event.stopPropagation()} fontWeight={700}>Terms of Use</Link>
+              {" "}and acknowledge that I have read the{" "}
+              <Link component={RouterLink} to="/privacy" target="_blank" rel="noreferrer"
+                onClick={(event) => event.stopPropagation()} fontWeight={700}>Privacy Notice</Link>.
+            </Typography>}
+          />
+          {legalAgreementTouched && !legalAgreement && <FormHelperText id="legal-agreement-error" error sx={{ ml: 4 }}>
+            You must agree to the Terms of Use and acknowledge the Privacy Notice to register.
+          </FormHelperText>}
+        </Box>
         <Button
           type="submit"
           variant="contained"
           size="large"
-          disabled={isSubmitting || !fullName || !email || !passwordIsValid || !passwordsMatch}
+          disabled={isSubmitting || !fullName || !email || !passwordIsValid || !passwordsMatch || !legalAgreement}
           endIcon={<ArrowForwardRoundedIcon />}
           sx={{ minHeight: 52 }}
         >
