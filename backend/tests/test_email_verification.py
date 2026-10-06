@@ -13,7 +13,7 @@ from app.core.config import Settings
 
 
 PAYLOAD = dict(email="verify@example.com", full_name="Verify User",
-               password="Password1!", password_confirmation="Password1!")
+               password="Password1!", password_confirmation="Password1!", legal_agreement=True)
 
 
 def latest_code(client):
@@ -50,6 +50,69 @@ def test_registration_requires_email_and_code_is_one_time(client, db_session_fac
     path = f"/api/v1/auth/register/{challenge_id}/confirm"
     assert client.post(path, json={"code": code}).status_code == 201
     assert client.post(path, json={"code": code}).status_code == 410
+
+
+
+def test_registration_requires_explicit_legal_agreement(client):
+    missing = {key: value for key, value in PAYLOAD.items() if key != "legal_agreement"}
+    assert client.post("/api/v1/auth/register", json=missing).status_code == 422
+    assert client.post("/api/v1/auth/register", json={**PAYLOAD, "legal_agreement": False}).status_code == 422
+    assert client.post("/api/v1/auth/register", json=PAYLOAD).status_code == 202
+
+
+def test_registration_records_current_legal_versions(client, db_session_factory):
+    from app.models.public_content import PublicContentRevision
+
+    with db_session_factory() as db:
+        for slug, title in (("terms", "Terms of use"), ("privacy", "Privacy notice")):
+            db.add(PublicContentRevision(
+                slug=slug, revision=1, title=title, body_markdown="Reviewed legal copy",
+                change_note="Registration acceptance fixture", created_by_name="Test publisher",
+            ))
+        db.commit()
+
+    pending = client.post("/api/v1/auth/register", json=PAYLOAD)
+    assert pending.status_code == 202
+    challenge_id = UUID(pending.json()["id"])
+    with db_session_factory() as db:
+        challenge = db.get(EmailVerification, challenge_id)
+        assert challenge.legal_agreement_at is not None
+        assert challenge.terms_version == "published:1"
+        assert challenge.privacy_version == "published:1"
+
+    confirmed = client.post(
+        f"/api/v1/auth/register/{challenge_id}/confirm",
+        json={"code": latest_code(client)},
+    )
+    assert confirmed.status_code == 201
+    with db_session_factory() as db:
+        user = db.scalar(select(User).where(User.email == PAYLOAD["email"]))
+        assert user.legal_agreement_at is not None
+        assert user.terms_version == "published:1"
+        assert user.privacy_version == "published:1"
+
+
+def test_registration_restarts_if_legal_documents_change_during_verification(client, db_session_factory):
+    from app.models.public_content import PublicContentRevision
+
+    pending = client.post("/api/v1/auth/register", json=PAYLOAD)
+    assert pending.status_code == 202
+    challenge_id = UUID(pending.json()["id"])
+    code = latest_code(client)
+
+    with db_session_factory() as db:
+        db.add(PublicContentRevision(
+            slug="terms", revision=1, title="Updated Terms", body_markdown="Changed terms",
+            change_note="Changed during verification", created_by_name="Test publisher",
+        ))
+        db.commit()
+
+    rejected = client.post(f"/api/v1/auth/register/{challenge_id}/confirm", json={"code": code})
+    assert rejected.status_code == 409
+    assert "changed during registration" in rejected.json()["detail"]
+    with db_session_factory() as db:
+        assert db.get(EmailVerification, challenge_id) is None
+        assert db.scalar(select(User).where(User.email == PAYLOAD["email"])) is None
 
 
 def test_resend_cooldown_and_replacement_preserve_deadline(client, db_session_factory, monkeypatch):
@@ -201,8 +264,12 @@ def test_concurrent_requests_only_apply_once(db_session_factory, monkeypatch, ac
     monkeypatch.setattr(EmailService, "send", lambda self, message: messages.append(message))
     settings = Settings()
     with factory() as db:
+        from app.services.public_content_service import legal_document_version
         challenge = EmailVerificationService(db, settings).start(
             email=PAYLOAD["email"], full_name=PAYLOAD["full_name"], password=PAYLOAD["password"],
+            legal_agreement_at=datetime.now(UTC),
+            terms_version=legal_document_version(db, "terms"),
+            privacy_version=legal_document_version(db, "privacy"),
         )
         challenge_id = challenge.id
         if action == "resend":

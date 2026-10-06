@@ -22,3 +22,6 @@ class EmailVerification(Base):
     code_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    legal_agreement_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    terms_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    privacy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)

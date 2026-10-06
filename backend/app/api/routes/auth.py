@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, status
 from sqlalchemy.orm import sessionmaker
@@ -5,6 +6,7 @@ from fastapi.responses import JSONResponse
 from app.services.rate_limit_service import RECOVERY_POLICIES, allowed, enforce
 from app.schemas.password_reset import PasswordRecoveryRequest, PasswordResetRequest
 from app.services.password_recovery_service import send_recovery, reset_password, notify_password_reset, RECOVERY_MESSAGE
+from app.services.public_content_service import legal_document_version
 
 from app.api.dependencies import AppSettings, AuthServiceDep, DbSession
 from app.schemas.email_verification import VerificationRead, VerificationCode
@@ -52,8 +54,12 @@ def register(
     db: DbSession,
     settings: AppSettings,
 ) -> VerificationRead:
+    accepted_at = datetime.now(UTC)
     challenge = EmailVerificationService(db, settings).start(
-        **payload.model_dump(exclude={"password_confirmation"})
+        **payload.model_dump(exclude={"password_confirmation", "legal_agreement"}),
+        legal_agreement_at=accepted_at,
+        terms_version=legal_document_version(db, "terms"),
+        privacy_version=legal_document_version(db, "privacy"),
     )
     return VerificationRead.model_validate(challenge)
 

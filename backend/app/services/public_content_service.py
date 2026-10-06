@@ -8,6 +8,9 @@ from app.models.user import User
 from app.schemas.public_content import PublicContentRead, PublicContentSlug, PublicContentUpdate
 
 
+BUILTIN_LEGAL_VERSION = "builtin:2026-10-05"
+
+
 def current_content(db: Session, slug: PublicContentSlug) -> PublicContentRevision | None:
     return db.scalar(
         select(PublicContentRevision)
@@ -15,6 +18,14 @@ def current_content(db: Session, slug: PublicContentSlug) -> PublicContentRevisi
         .order_by(PublicContentRevision.revision.desc())
         .limit(1)
     )
+
+
+def legal_document_version(db: Session, slug: PublicContentSlug) -> str:
+    """Stable registration reference for the legal document the user saw."""
+    if slug not in {"terms", "privacy"}:
+        raise ValueError("Only Terms and Privacy have registration agreement versions.")
+    row = current_content(db, slug)
+    return f"published:{row.revision}" if row else BUILTIN_LEGAL_VERSION
 
 
 def serialize(row: PublicContentRevision) -> PublicContentRead:

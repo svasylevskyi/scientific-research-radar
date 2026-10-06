@@ -16,6 +16,7 @@ from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService, _as_utc
 from app.services.email_service import EmailService, OutgoingEmail
+from app.services.public_content_service import legal_document_version
 
 
 class VerificationError(Exception):
@@ -58,8 +59,11 @@ class EmailVerificationService:
                   "If you did not request this, you can ignore this message."),
         ))
 
-    def start(self, *, email: str, full_name: str | None = None, password: str | None = None,
-              user: User | None = None) -> EmailVerification:
+    def start(
+        self, *, email: str, full_name: str | None = None, password: str | None = None,
+        user: User | None = None, legal_agreement_at: datetime | None = None,
+        terms_version: str | None = None, privacy_version: str | None = None,
+    ) -> EmailVerification:
         # Also releases expired email reservations when the periodic cleaner is offline.
         cleanup_expired(self.db)
         if user:
@@ -74,9 +78,17 @@ class EmailVerificationService:
             same_owner = user is not None and pending.user_id == user.id
             same_registration = (user is None and pending.user_id is None and password is not None
                                  and verify_password(password, pending.password_hash))
-            if same_owner or same_registration:
+            if same_owner:
                 return pending
-            raise VerificationError("This email has a pending verification. Complete it or try again after 24 hours.", 409)
+            if same_registration:
+                # A registration can be resumed only for the same legal-document
+                # versions. If Terms/Privacy changed, require a fresh affirmative act.
+                if pending.terms_version == terms_version and pending.privacy_version == privacy_version:
+                    return pending
+                self.db.delete(pending)
+                self.db.flush()
+            else:
+                raise VerificationError("This email has a pending verification. Complete it or try again after 24 hours.", 409)
         now = datetime.now(UTC)
         if user:
             previous = self.db.scalar(select(EmailVerification).where(EmailVerification.user_id == user.id))
@@ -91,6 +103,9 @@ class EmailVerificationService:
             full_name=full_name, password_hash=hash_password(password) if password else None,
             code_hash="", sent_at=now, code_expires_at=now + timedelta(hours=24),
             expires_at=now + timedelta(hours=24), attempts=0,
+            legal_agreement_at=legal_agreement_at,
+            terms_version=terms_version,
+            privacy_version=privacy_version,
         )
         self.db.add(challenge)
         try:
@@ -153,6 +168,18 @@ class EmailVerificationService:
                 or not hmac.compare_digest(challenge.code_hash, self._hash(challenge.id, code))):
             self.db.commit()  # Persist the failed attempt even though the API returns an error.
             raise VerificationError("The code is incorrect or expired. Use the latest code sent to your email.")
+        if user is None:
+            current_terms = legal_document_version(self.db, "terms")
+            current_privacy = legal_document_version(self.db, "privacy")
+            if (challenge.legal_agreement_at is None
+                    or challenge.terms_version != current_terms
+                    or challenge.privacy_version != current_privacy):
+                self.db.delete(challenge)
+                self.db.commit()
+                raise VerificationError(
+                    "Terms or Privacy Notice changed during registration. Start again to review the current documents.",
+                    409,
+                )
         try:
             if self.users.get_by_email(challenge.email):
                 raise VerificationError("An account with this email already exists", 409)
@@ -160,8 +187,14 @@ class EmailVerificationService:
                 user.email = challenge.email
                 result = user
             else:
-                created = self.users.create(email=challenge.email, full_name=challenge.full_name,
-                                            password_hash=challenge.password_hash)
+                created = self.users.create(
+                    email=challenge.email,
+                    full_name=challenge.full_name,
+                    password_hash=challenge.password_hash,
+                    legal_agreement_at=challenge.legal_agreement_at,
+                    terms_version=challenge.terms_version,
+                    privacy_version=challenge.privacy_version,
+                )
                 from app.services.free_subscription_service import enroll_registration
                 enroll_registration(self.db, created)
                 result = AuthService(self.db, self.settings)._start_session(created)

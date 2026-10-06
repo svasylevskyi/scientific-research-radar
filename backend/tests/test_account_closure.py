@@ -44,6 +44,7 @@ def test_closure_revokes_access_and_erases_owned_data(client, db_session_factory
         assert row.state == "completed" and row.data_removed_at and row.billing_resolved_at
         user = db.get(User, uid)
         assert user.full_name == "Closed account" and user.email != "closing@example.com" and not user.is_active
+        assert user.legal_agreement_at is None and user.terms_version is None and user.privacy_version is None
         assert db.scalar(select(func.count()).select_from(Digest).where(Digest.owner_id == uid)) == 0
         assert db.scalar(select(func.count()).select_from(ContactMessage)) == 0
     closure.notify_one(db_session_factory, get_settings())
