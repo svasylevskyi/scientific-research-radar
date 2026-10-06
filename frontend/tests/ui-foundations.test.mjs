@@ -45,7 +45,10 @@ test("workspace header avoids double gutters and auth forms retain a readable in
 });
 test("all public and workspace catalogue links use Subscription Plans", async () => {
   let links = 0;
-  for (const name of ["components/SiteFooter", "pages/LandingPage", "pages/AboutPage", "pages/SubscriptionAccessPage", "components/SubscriberBilling"]) {
+  const footer = await readFile(new URL("../src/components/SiteFooter.tsx", import.meta.url), "utf8");
+  assert.match(footer, /\{ label: "Subscription Plans", to: "\/plans" \}/);
+  links++;
+  for (const name of ["pages/LandingPage", "pages/AboutPage", "pages/SubscriptionAccessPage", "components/SubscriberBilling"]) {
     const source = await readFile(new URL(`../src/${name}.tsx`, import.meta.url), "utf8");
     const file = ts.createSourceFile(name + ".tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     function visit(node) {
@@ -60,6 +63,7 @@ test("all public and workspace catalogue links use Subscription Plans", async ()
     }
     visit(file);
   }
+  // The footer is data-driven; the remaining catalogue links are direct JSX.
   // The two former subscription-tab links are replaced by an embedded catalogue.
   assert.equal(links, 5);
   const header = await readFile(new URL("../src/components/MarketingHeader.tsx", import.meta.url), "utf8");
