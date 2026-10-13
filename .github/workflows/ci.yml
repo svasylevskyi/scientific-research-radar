@@ -134,7 +134,7 @@ jobs:
       - name: Summarize test and fixture timings
         if: always()
         run: python scripts/summarize_tests.py test-results.xml "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: postgres-test-results
@@ -152,7 +152,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
           cache: npm
@@ -169,7 +169,7 @@ jobs:
       - run: node --test tests/*.test.mjs
       - run: npm run build
       - name: Share the exact frontend build with browser acceptance
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: frontend-dist
           path: frontend/dist
@@ -189,12 +189,12 @@ jobs:
         working-directory: acceptance
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: acceptance/package-lock.json
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: frontend-dist
           path: frontend/dist
@@ -208,7 +208,7 @@ jobs:
         run: npm run selftest 2>&1 | tee "$RUNNER_TEMP/acceptance-loopback.log"
       - name: Retain synthetic loopback diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: acceptance-loopback-diagnostics
           path: ${{ runner.temp }}/acceptance-loopback.log
@@ -273,7 +273,7 @@ jobs:
       - name: Save verified images for publication
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         run: docker save radar-ci-backend radar-ci-web | gzip -1 > "$RUNNER_TEMP/radar-images.tar.gz"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         with:
           name: tested-images-${{ github.sha }}
@@ -308,7 +308,7 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: tested-images-${{ github.sha }}
           path: ${{ runner.temp }}/tested-images
@@ -318,7 +318,7 @@ jobs:
         run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
       - name: Publish the tested images and record their digests
         run: bash infra/scripts/publish-images.sh "$RUNNER_TEMP/tested-images/radar-images.tar.gz" "$RUNNER_TEMP/verified-release.json"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: verified-release-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/verified-release.json
